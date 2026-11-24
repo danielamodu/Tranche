@@ -14,3 +14,6 @@ dist/
 # OS & editor artifacts
 .DS_Store
 Thumbs.db
+
+# Forge script broadcast / dry-run artifacts
+broadcast/
