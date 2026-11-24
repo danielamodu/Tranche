@@ -1,0 +1,21 @@
+{
+  "name": "@tranche/testnet-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Operational M-of-N oracle signer aggregator, multi-RPC failover transport, keeper, and 72-hour soak harness for Tranche testnet.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/ops.test.ts",
+    "soak": "tsx src/soak-runner.ts"
+  },
+  "dependencies": {
+    "@tranche/sdk": "file:../../sdk",
+    "viem": "^2.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
