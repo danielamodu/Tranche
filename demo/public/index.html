@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tranche — On-Chain Execution Commitments Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">T</div>
+          <div>
+            <h1>Tranche</h1>
+            <p class="subtitle">Inventory-Backed Time-Bounded Execution Commitments (Local E2E Verification)</p>
+          </div>
+        </div>
+        <div class="badges">
+          <span class="badge badge-network" id="networkBadge">Local Anvil Fork/Sim — Zero Mainnet Spend</span>
+          <span class="badge badge-hsp" id="hspBadge" title="LIVE_HSP_CAAS unavailable without partner credentials">
+            LOCAL_EIP712_COMPLIANCE
+          </span>
+          <span class="badge badge-solvency" id="solvencyBadge">INV-1 Solvency: CHECKING...</span>
+        </div>
+      </header>
+
+      <section class="toolbar">
+        <div class="toolbar-left">
+          <button id="runAllBtn" class="btn btn-primary">Run Complete 6-Step Journey</button>
+          <button id="resetBtn" class="btn btn-secondary">Reset</button>
+          <label class="mode-select-label" for="priceModeSelect">
+            Step 1 Price Mode:
+            <select id="priceModeSelect" class="select-input">
+              <option value="FIXED" selected>FIXED (0.08 USDT / WHSK)</option>
+              <option value="FLOATING">FLOATING (Oracle + 50 bps)</option>
+            </select>
+          </label>
+        </div>
+        <div class="toolbar-meta" id="chainMeta">
+          Chain ID: — &middot; Block: — &middot; Timestamp: —
+        </div>
+      </section>
+
+      <div id="statusBanner" class="status-banner hidden"></div>
+
+      <section class="hsp-notice">
+        <strong>HSP Compliance Boundary (INV-8):</strong>
+        Active mode is <code>LOCAL_EIP712_COMPLIANCE</code> via <code>HSPComplianceHook</code>.
+        <span id="liveCaasNote">LIVE_HSP_CAAS is unavailable without institutional HashKey CaaS credentials &amp; facilitator URL.</span>
+        Core settlement, LP withdrawals, and expired ticket reclaims never call external compliance hooks.
+      </section>
+
+      <main class="main-grid">
+        <section class="panel steps-panel">
+          <div class="panel-header">
+            <h2>6-Step Execution Journey</h2>
+            <span class="panel-caption" id="progressCaption">0 / 6 completed</span>
+          </div>
+          <div class="steps-grid" id="stepsGrid"></div>
+        </section>
+
+        <section class="state-column">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>LiquidityVault Accounting Buckets &amp; INV-1</h2>
+              <span class="panel-caption">balanceOf &ge; sum(all buckets)</span>
+            </div>
+            <div class="vault-grid" id="vaultPanel"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Offers</h2>
+              <span class="panel-caption">CommitmentManager</span>
+            </div>
+            <div id="offersPanel" class="table-wrap"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>ExecutionTickets (ERC-721)</h2>
+              <span class="panel-caption">Active &amp; Closed Tickets</span>
+            </div>
+            <div id="ticketsPanel" class="table-wrap"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Actors &amp; Deployed Contracts</h2>
+              <span class="panel-caption">HSP Attestation &amp; Balances</span>
+            </div>
+            <div id="actorsPanel" class="table-wrap"></div>
+            <div id="contractsPanel" class="contracts-grid"></div>
+          </section>
+        </section>
+      </main>
+
+      <section class="panel evidence-panel">
+        <div class="panel-header">
+          <h2>Verifiable On-Chain Evidence Log</h2>
+          <span class="panel-caption">Real Anvil transaction hashes, block numbers, and gas used</span>
+        </div>
+        <div id="evidencePanel" class="table-wrap"></div>
+      </section>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
