@@ -1,0 +1,469 @@
+{
+  "network": {
+    "name": "HashKey Chain Mainnet",
+    "chainId": 177,
+    "rpcUrl": "https://mainnet.hsk.xyz",
+    "nativeCurrency": {
+      "name": "HashKey Platform Token",
+      "symbol": "HSK",
+      "decimals": 18
+    },
+    "verification_status": "VERIFIED",
+    "evidence": {
+      "cast_chain_id": 177,
+      "eth_chainId": "0xb1",
+      "sampled_latest_block": 30582918,
+      "sampled_latest_timestamp": 1795512971,
+      "sampled_block_window": "30582904..30582918 (15 blocks, 14 intervals)",
+      "average_block_time_seconds": 2.0,
+      "long_window_block_time_seconds": "2.0000s across 10,000, 100,000, and 1,000,000 blocks (29582918..30582918)",
+      "rpc_constraints": [
+        "eth_getLogs rejects ranges >= 10000 blocks (HTTP 400: block range too large / query exceeds max block range 100000)",
+        "HTTP 429 rate-limiting on rapid sequential eth_call bursts; Multicall3 batching (<=35 calls/request) succeeds reliably",
+        "Archive state queries (eth_getCode at historical blocks) are supported"
+      ]
+    }
+  },
+  "core_infra": {
+    "Multicall3": {
+      "address": "0xcA11bde05977b3631167028862be2a173976ca11",
+      "source": "Canonical EVM Multicall3 deterministic address verified on https://mainnet.hsk.xyz",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 3809,
+        "cast_code_hex_len": 7618,
+        "getBlockNumber()": 30582867,
+        "aggregate3()": "Verified live across multiple 35-call batches"
+      }
+    },
+    "Permit2": {
+      "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "source": "Canonical Uniswap Permit2 address verified on https://mainnet.hsk.xyz",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "cast_code_hex_len": 18306,
+        "DOMAIN_SEPARATOR()": "0x10622ef06267a8a28d3c5727faac63b08106009c62a10ea521ad32214ffc55a3"
+      }
+    }
+  },
+  "dex_hskswap_v3": {
+    "UniswapV3Factory": {
+      "address": "0x972cA9D1662F5e029cD18327D29026532E84c742",
+      "source": "@hskswap/sdk-core@1.0.3 (CHAIN_TO_ADDRESSES_MAP[177].v3CoreFactoryAddress) & SwapRouter02.factory() / NonfungiblePositionManager.factory()",
+      "verification_status": "VERIFIED",
+      "deployment_block": 17359296,
+      "evidence": {
+        "code_bytes": 24535,
+        "cast_code_hex_len": 49072,
+        "owner()": "0xfbA0676Bbd968738e9AA1c7bDc8E2EF7d80E15dA",
+        "feeAmountTickSpacing": {
+          "100": 1,
+          "500": 10,
+          "3000": 60,
+          "10000": 200
+        },
+        "getPool_verified_count": 12
+      }
+    },
+    "SwapRouter02": {
+      "address": "0x2c16f75b95Cf1390c328aB70e2CEE7f4b80bD8F3",
+      "source": "@hskswap/sdk-core@1.0.3 (CHAIN_TO_ADDRESSES_MAP[177].swapRouter02Address) & github.com/dddgzeth/waypoint-hashkey",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 24497,
+        "cast_code_hex_len": 48996,
+        "factory()": "0x972cA9D1662F5e029cD18327D29026532E84c742",
+        "WETH9()": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "positionManager()": "0xDF0A9b833Db0E4CeEa103A4408f3B68e7FC0cad5",
+        "selectors_in_bytecode": [
+          "0x04e45aaf (exactInputSingle)",
+          "0xb858183f (exactInput)",
+          "0x5023b4df (exactOutputSingle)",
+          "0x09b81346 (exactOutput)",
+          "0xac9650d8 (multicall(bytes[]))",
+          "0x5ae401dc (multicall(uint256,bytes[]))"
+        ]
+      }
+    },
+    "QuoterV2": {
+      "address": "0x603f70466fDdbE3F238220B9a74FFF419a2BbFDD",
+      "source": "@hskswap/sdk-core@1.0.3 (CHAIN_TO_ADDRESSES_MAP[177].quoterAddress)",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "cast_code_hex_len": 16548,
+        "factory()": "0x972cA9D1662F5e029cD18327D29026532E84c742",
+        "WETH9()": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "quoteExactInputSingle_1_WHSK_to_USDT": {
+          "amountOut": "80565",
+          "sqrtPriceX96After": "22521936975710766887491",
+          "initializedTicksCrossed": 1,
+          "gasEstimate": "73916"
+        },
+        "quoteExactInputSingle_0.01_WETH_to_USDT": {
+          "amountOut": "16982411",
+          "gasEstimate": "82496"
+        },
+        "quoteExactInputSingle_0.001_WBTC_to_USDT": {
+          "amountOut": "61561602",
+          "gasEstimate": "82627"
+        }
+      }
+    },
+    "NonfungiblePositionManager": {
+      "address": "0xDF0A9b833Db0E4CeEa103A4408f3B68e7FC0cad5",
+      "source": "@hskswap/sdk-core@1.0.3 (CHAIN_TO_ADDRESSES_MAP[177].nonfungiblePositionManagerAddress) & SwapRouter02.positionManager()",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 24384,
+        "cast_code_hex_len": 48770,
+        "factory()": "0x972cA9D1662F5e029cD18327D29026532E84c742",
+        "WETH9()": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "name()": "Uniswap V3 Positions NFT-V1",
+        "symbol()": "UNI-V3-POS",
+        "totalSupply()": 21,
+        "active_tokenIds": [1, 2, 3, 4, 5, 6, 32, 8, 31, 10, 12, 14, 15, 16, 30, 18, 23, 33, 34, 35, 36],
+        "supportsInterface_ERC721_0x80ac58cd": true,
+        "supportsInterface_ERC721Enumerable_0x780e9d63": true,
+        "selectors_in_bytecode": [
+          "0x095ea7b3 (approve)",
+          "0xa22cb465 (setApprovalForAll)",
+          "0x081812fc (getApproved)",
+          "0xe985e9c5 (isApprovedForAll)",
+          "0x0c49ccbe (decreaseLiquidity)",
+          "0xfc6f7865 (collect)",
+          "0x219f5d17 (increaseLiquidity)",
+          "0x88316456 (mint)",
+          "0x42966c68 (burn)",
+          "0x7ac2ff7b (permit)",
+          "0x23b872dd (transferFrom)",
+          "0x42842e0e (safeTransferFrom)"
+        ]
+      }
+    },
+    "V3Migrator": {
+      "address": "0x4DaA3DaD4fe453767C5aeEFf2e2A15b0e85Fe62D",
+      "source": "@hskswap/sdk-core@1.0.3 (CHAIN_TO_ADDRESSES_MAP[177].v3MigratorAddress)",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "cast_code_hex_len": 15402,
+        "factory()": "0x972cA9D1662F5e029cD18327D29026532E84c742",
+        "nonfungiblePositionManager()": "0xDF0A9b833Db0E4CeEa103A4408f3B68e7FC0cad5"
+      }
+    },
+    "TickLens": {
+      "address": "0x0BA7274A183d9f91a0387d45853613B2d626A590",
+      "source": "@hskswap/sdk-core@1.0.3 (CHAIN_TO_ADDRESSES_MAP[177].tickLensAddress)",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "cast_code_hex_len": 2772,
+        "getPopulatedTicksInWord(0x4ff515761864e7838b0adb8b5b2b8b7a068905dc, -20)": "Returned populated ticks [-294420, -294600, -299340, -301440]"
+      }
+    },
+    "UniswapInterfaceMulticall": {
+      "address": "0x7D0CBa43EbDD69ec2CE3B5AeAD3b0FbC796c565B",
+      "source": "@hskswap/sdk-core@1.0.3 (CHAIN_TO_ADDRESSES_MAP[177].multicallAddress)",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "cast_code_hex_len": 2768,
+        "getCurrentBlockTimestamp()": 1795513225
+      }
+    },
+    "UniversalRouter": {
+      "address": "0x76d86a6e224b19270c2cda31477a4c79b2d56918",
+      "source": "@hskswap/universal_router_sdk@1.0.4 (_CHAIN_CONFIGS[177].routerConfigs.V1_2 / V2_0)",
+      "verification_status": "VERIFIED",
+      "deployment_block": 17363588,
+      "evidence": {
+        "cast_code_hex_len": 43560,
+        "selectors_in_bytecode": [
+          "execute(bytes,bytes[],uint256)",
+          "execute(bytes,bytes[])"
+        ]
+      }
+    }
+  },
+  "tokens": {
+    "WHSK": {
+      "address": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+      "source": "@hskswap/sdk-core@1.0.3 (WETH9[177]) & Factory/Router WETH9()",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 3143,
+        "name()": "Wrapped HSK",
+        "symbol()": "WHSK",
+        "decimals()": 18,
+        "totalSupply()": "5264759224642236968649001",
+        "eip1967_impl": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "proxy_or_restrictions": "None observed (standard WETH9 pattern; owner/paused/isBlacklisted revert)"
+      }
+    },
+    "USDT": {
+      "address": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+      "source": "@hskswap/smart-order-router@1.0.4 (USDT_HASHKEYCHAIN_MAINNET) & NPM positions",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 5076,
+        "name()": "Tether USD",
+        "symbol()": "USDT",
+        "decimals()": 6,
+        "totalSupply()": "1172801280616",
+        "bridge()": "0x4200000000000000000000000000000000000010",
+        "l1Token()": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "remoteToken()": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "eip1967_impl": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "proxy_or_restrictions": "OP Stack OptimismMintableERC20; no pause/blacklist/fee-on-transfer methods observed"
+      }
+    },
+    "USDC.e": {
+      "address": "0x054ed45810DbBAb8B27668922D110669c9D88D0a",
+      "source": "@hskswap/smart-order-router@1.0.4 (USDC_HASHKEYCHAIN_MAINNET) & NPM position #10",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 1852,
+        "name()": "Bridged USDC",
+        "symbol()": "USDC.e",
+        "decimals()": 6,
+        "totalSupply()": "1796543817",
+        "paused()": false,
+        "owner()": "0x7bc37573d5cc18e9c42ac5c48fbe6bbfd95a68b1",
+        "isBlacklisted(0x...01)": false,
+        "implementation()": "0x82f67bdea6cbcc6bd34526073300e619225b22de",
+        "admin()": "0x57d5e36804e46a6ed938aecb300dff222b92f324",
+        "zeppelinos_impl_slot": "0x00000000000000000000000082f67bdea6cbcc6bd34526073300e619225b22de",
+        "zeppelinos_admin_slot": "0x00000000000000000000000057d5e36804e46a6ed938aecb300dff222b92f324",
+        "proxy_or_restrictions": "Upgradeable ZeppelinOS proxy (FiatToken); has paused() and isBlacklisted(address)"
+      }
+    },
+    "oUSDT": {
+      "address": "0x1217BfE6c773EEC6cc4A38b5Dc45B92292B6E189",
+      "source": "HashKey Blockscout indexed token reference verified on https://mainnet.hsk.xyz",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 1167,
+        "name()": "OpenUSDT",
+        "symbol()": "oUSDT",
+        "decimals()": 6,
+        "totalSupply()": "746518",
+        "owner()": "0x072ddfd63f1dcf7819c80a971f6cebff9b0277cc",
+        "eip1967_impl": "0x0000000000000000000000002c04e1403fa092098ef097e9b346cd8e62793d50",
+        "eip1967_admin": "0x00000000000000000000000070e3929ef66ef7beabba3c9aea166b0d184df1f3",
+        "proxy_or_restrictions": "EIP-1967 TransparentUpgradeableProxy"
+      }
+    },
+    "WETH": {
+      "address": "0xefd4bC9afD210517803f293ABABd701CaeeCdfd0",
+      "source": "HashKey Blockscout token reference & NPM positions #30, #35",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "name()": "Wrapped Ether",
+        "symbol()": "WETH",
+        "decimals()": 18,
+        "totalSupply()": "33333316536881291975",
+        "bridge()": "0x4200000000000000000000000000000000000010",
+        "l1Token()": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "eip1967_impl": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "proxy_or_restrictions": "OP Stack OptimismMintableERC20; no pause/blacklist observed"
+      }
+    },
+    "WBTC": {
+      "address": "0x6119CA49a79f5825C8B345F8d7aC36B272565b14",
+      "source": "HashKey Blockscout token reference & NPM position #34",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "name()": "Wrapped BTC",
+        "symbol()": "WBTC",
+        "decimals()": 8,
+        "totalSupply()": "80936599",
+        "bridge()": "0x4200000000000000000000000000000000000010",
+        "l1Token()": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "eip1967_impl": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "proxy_or_restrictions": "OP Stack OptimismMintableERC20; no pause/blacklist observed"
+      }
+    },
+    "stHSK": {
+      "address": "0xD2fdDFf28A534300ae961c5435E16f9465253b76",
+      "source": "HashKey Blockscout token reference verified on https://mainnet.hsk.xyz",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "name()": "Staked HashKeyChain",
+        "symbol()": "stHSK",
+        "decimals()": 18,
+        "totalSupply()": "1456244579286546116165988",
+        "owner()": "0xd30a4ca3b40ea4ff00e81b0471750aa9a94ce9b1",
+        "eip1967_impl": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "LINK": {
+      "address": "0x71052BAe71C25C78E37fD12E5ff1101A71d9018F",
+      "source": "Chainlink official docs (docs.chain.link) verified on https://mainnet.hsk.xyz",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 7756,
+        "name()": "ChainLink Token",
+        "symbol()": "LINK",
+        "decimals()": 18,
+        "totalSupply()": "1999970000",
+        "owner()": "0x8fad117b7b875d3208d49305cebd5bd8c2b4a45a",
+        "eip1967_impl": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  },
+  "pools": {
+    "WHSK_USDT_3000": {
+      "address": "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc",
+      "source": "Factory.getPool(0xB210D2120d57b758EE163cFfb43e73728c471Cf1, 0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029, 3000)",
+      "verification_status": "VERIFIED",
+      "token0": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+      "token1": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "evidence": {
+        "liquidity()": "1475813786831558685",
+        "sqrtPriceX96": "22521941300804983880140",
+        "tick": -301483,
+        "observationIndex": 210,
+        "observationCardinality": 240,
+        "observationCardinalityNext": 240,
+        "unlocked": true,
+        "token0_reserve_balanceOf": "5193022600742010606627978",
+        "token1_reserve_balanceOf": "419573209476",
+        "oldest_observation_slot_211_ts": 1795193721,
+        "observe_86400s_24h_twap": "SUCCEEDED"
+      }
+    },
+    "WETH_USDT_3000": {
+      "address": "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16",
+      "source": "Factory.getPool(0xefd4bC9afD210517803f293ABABd701CaeeCdfd0, 0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029, 3000)",
+      "verification_status": "VERIFIED",
+      "token0": "0xefd4bC9afD210517803f293ABABd701CaeeCdfd0",
+      "token1": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "evidence": {
+        "liquidity()": "1012957283335421",
+        "sqrtPriceX96": "3270543216138913567277812",
+        "tick": -201913,
+        "observationIndex": 222,
+        "observationCardinality": 240,
+        "observationCardinalityNext": 240,
+        "unlocked": true,
+        "token0_reserve_balanceOf": "24563367993685350323",
+        "token1_reserve_balanceOf": "41838045266",
+        "observe_86400s_24h_twap": "SUCCEEDED"
+      }
+    },
+    "WBTC_USDT_3000": {
+      "address": "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a",
+      "source": "Factory.getPool(0x6119CA49a79f5825C8B345F8d7aC36B272565b14, 0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029, 3000)",
+      "verification_status": "VERIFIED",
+      "token0": "0x6119CA49a79f5825C8B345F8d7aC36B272565b14",
+      "token1": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "evidence": {
+        "liquidity()": "1823343427",
+        "sqrtPriceX96": "1970071585337036895447198882755",
+        "tick": 64273,
+        "observationIndex": 50,
+        "observationCardinality": 240,
+        "observationCardinalityNext": 240,
+        "unlocked": true,
+        "token0_reserve_balanceOf": "73376434",
+        "token1_reserve_balanceOf": "45351645257",
+        "observe_86400s_24h_twap": "SUCCEEDED"
+      }
+    },
+    "USDCe_WHSK_3000": {
+      "address": "0xb580d654ce892181937aac80ea165950cb7d0e02",
+      "source": "Factory.getPool(0x054ed45810DbBAb8B27668922D110669c9D88D0a, 0xB210D2120d57b758EE163cFfb43e73728c471Cf1, 3000)",
+      "verification_status": "VERIFIED",
+      "token0": "0x054ed45810DbBAb8B27668922D110669c9D88D0a",
+      "token1": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "evidence": {
+        "liquidity()": "249999999999",
+        "sqrtPriceX96": "257944478741664417464451675357173796",
+        "tick": 299933,
+        "observationIndex": 0,
+        "observationCardinality": 1,
+        "observationCardinalityNext": 1,
+        "unlocked": true,
+        "token0_reserve_balanceOf": "76788",
+        "token1_reserve_balanceOf": "814497753244129888",
+        "twap_note": "observationCardinality=1; historical TWAP unavailable"
+      }
+    },
+    "USDCe_WHSK_10000": {
+      "address": "0x9861246b8bdf619cc0e8c0422e0a662b51a2c3f4",
+      "source": "Factory.getPool(0x054ed45810DbBAb8B27668922D110669c9D88D0a, 0xB210D2120d57b758EE163cFfb43e73728c471Cf1, 10000)",
+      "verification_status": "VERIFIED",
+      "token0": "0x054ed45810DbBAb8B27668922D110669c9D88D0a",
+      "token1": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+      "fee": 10000,
+      "tickSpacing": 200,
+      "evidence": {
+        "liquidity()": "0",
+        "tick": 299991,
+        "observationCardinality": 1
+      }
+    }
+  },
+  "oracles": {
+    "ChainlinkDataStreamsVerifierProxy": {
+      "address": "0x3278e7a582B94d82487d4B99b31A511CbAe2Cd54",
+      "source": "Chainlink Data Streams official documentation (docs.chain.link)",
+      "verification_status": "VERIFIED",
+      "evidence": {
+        "code_bytes": 7009,
+        "cast_code_hex_len": 14020,
+        "typeAndVersion()": "VerifierProxy 2.0.0",
+        "owner()": "0x322Bf463D776FF83e43fe5c281E619eFB9277719",
+        "s_feeManager()": "0x0000000000000000000000000000000000000000",
+        "s_verifier()": "Reverted (VerifierProxy 2.0.0 maps verifiers by configDigest)",
+        "caveat": "Pull-based architecture requiring signed DON reports from Chainlink Data Streams API (off-chain subscription/API key); no public push AggregatorV3Interface feed addresses found on mainnet 177"
+      }
+    },
+    "ChainlinkPushPriceFeeds_AggregatorV3": {
+      "address": null,
+      "source": "docs.chain.link & standard FeedRegistry 0x47Fb2585D2C56Fe188D0E6ec628a38b74fCeeeDf",
+      "verification_status": "NOT_FOUND",
+      "evidence": {
+        "cast_code_0x47Fb2585D2C56Fe188D0E6ec628a38b74fCeeeDf": "0x (0 bytes)",
+        "web_search": "No public AggregatorV3Interface push feed directory found for HashKey Chain mainnet (177)"
+      }
+    },
+    "PythNetwork": {
+      "address": null,
+      "source": "Standard deterministic Pyth EVM addresses checked via eth_getCode on https://mainnet.hsk.xyz",
+      "verification_status": "NOT_FOUND",
+      "evidence": {
+        "0x4305FB66699C3B2702D4d05CF36551390A4c69C6": "0 bytes",
+        "0x2880aB155794e7179c9eE2e38200202908C17B43": "0 bytes",
+        "0xA2aa501b19aff244D90cc15a4Cf739D2725B5729": "0 bytes",
+        "0xDd24F84d36BF92C65F92307595335bdFab5Bbd21": "0 bytes",
+        "0x8250f4aF4B972684F7b336503E2D6dFeDeB1487a": "0 bytes"
+      }
+    },
+    "RedStone_API3_Chronicle": {
+      "address": null,
+      "source": "Web search + standard deterministic EVM addresses checked via cast code on https://mainnet.hsk.xyz",
+      "verification_status": "NOT_FOUND",
+      "evidence": {
+        "RedStone_PriceFeedAdapter_0x76F414E5C0A4955e65fA9fAaBa57C87e1b1846E6": "0 bytes",
+        "API3_ServerV1_0x3dEC619dc529363767dEe9E71d8dD1A5bc270D76": "0 bytes",
+        "API3_ProxyFactory_0x277149a3A1718B37C8d3B453993b37a0480405b6": "0 bytes",
+        "Chronicle_SelfKisser_0x0Dcc19657007713483A5cA76e6A7bbe5f56EA37d": "0 bytes"
+      }
+    }
+  },
+  "hsp_settlement": {
+    "status": "OFF_CHAIN_AND_PARTNER_GATED",
+    "verification_status": "NOT_FOUND",
+    "address": null,
+    "source": "HashKey Group / CaaS / HSP documentation & open-source hackathon integrations (HashPoint, hsk-meter, agentsettle-hsk, sumplus-hsk-mandate)",
+    "evidence": {
+      "summary": "No public permissionless HSP singleton/coordinator smart contract address was found on HashKey Chain mainnet (177). HSP operates primarily via off-chain CaaS REST APIs (HMAC-SHA256 / ES256K JWTs), KYC/whitelist verification endpoints, and EIP-712 signed mandates, with ecosystem projects deploying custom adapters/escrows (e.g., HSPAdapter.sol, MandatedTreasury.sol) that settle in standard ERC-20 tokens such as USDT."
+    }
+  }
+}
