@@ -110,14 +110,16 @@ contract DeployTestnet is Script {
 
     error InvalidChainId(uint256 actual);
     error InvalidDeployer();
+    error InvalidRoleSetLength(uint256 actual, uint256 expected);
+    error ZeroRoleAddress();
+    error DuplicateRoleAddress(address duplicate);
+    error SafeVerificationFailed();
+    error OwnershipHandoverInitFailed();
 
     function run() external returns (DeployedStack memory stack) {
         if (block.chainid != 133 && block.chainid != 31337) revert InvalidChainId(block.chainid);
 
-        uint256 deployerPk = vm.envOr(
-            "DEPLOYER_PRIVATE_KEY",
-            uint256(keccak256("tranche.testnet.dryrun.deployer"))
-        );
+        uint256 deployerPk = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerPk);
         DeployConfig memory cfg = _loadConfigFromEnv(deployer);
 
@@ -132,11 +134,19 @@ contract DeployTestnet is Script {
     ///         Transfers Ownable2Step pending ownership of all 6 admin-gated contracts to `timelock`.
     function deployAll(DeployConfig memory cfg) public returns (DeployedStack memory stack) {
         if (cfg.deployer == address(0)) revert InvalidDeployer();
+        if (cfg.hspAttestationSigner == address(0)) revert ZeroRoleAddress();
+        _validateDistinctSet(cfg.govOwners, 5);
+        _validateDistinctSet(cfg.guardianOwners, 3);
+        _validateDistinctSet(cfg.treasuryOwners, 3);
+        _validateDistinctSet(cfg.oracleSigners, 3);
 
         // 1. Governance & Emergency Topology (Safe v1.4.1 proxies + OZ TimelockController)
         stack.govSafe = _deploySafeProxy(cfg.govOwners, 3, cfg.saltNonceBase + 1);
         stack.guardianSafe = _deploySafeProxy(cfg.guardianOwners, 2, cfg.saltNonceBase + 2);
         stack.treasurySafe = _deploySafeProxy(cfg.treasuryOwners, 2, cfg.saltNonceBase + 3);
+        _verifySafeState(stack.govSafe, 5, 3);
+        _verifySafeState(stack.guardianSafe, 3, 2);
+        _verifySafeState(stack.treasurySafe, 3, 2);
 
         address[] memory proposers = new address[](1);
         proposers[0] = stack.govSafe;
@@ -249,6 +259,16 @@ contract DeployTestnet is Script {
         stack.oracleAdapter.transferOwnership(address(stack.timelock));
         stack.twapOracle.transferOwnership(address(stack.timelock));
         stack.complianceHook.transferOwnership(address(stack.timelock));
+
+        address tl = address(stack.timelock);
+        if (
+            stack.vault.pendingOwner() != tl ||
+            stack.manager.pendingOwner() != tl ||
+            stack.pullOracle.pendingOwner() != tl ||
+            stack.oracleAdapter.pendingOwner() != tl ||
+            stack.twapOracle.pendingOwner() != tl ||
+            stack.complianceHook.pendingOwner() != tl
+        ) revert OwnershipHandoverInitFailed();
     }
 
     function buildAcceptOwnershipBatch(DeployedStack memory stack)
@@ -295,34 +315,48 @@ contract DeployTestnet is Script {
         );
     }
 
+    function _validateDistinctSet(address[] memory members, uint256 expectedLen) internal pure {
+        if (members.length != expectedLen) revert InvalidRoleSetLength(members.length, expectedLen);
+        for (uint256 i = 0; i < expectedLen; ++i) {
+            if (members[i] == address(0)) revert ZeroRoleAddress();
+            for (uint256 j = i + 1; j < expectedLen; ++j) {
+                if (members[i] == members[j]) revert DuplicateRoleAddress(members[i]);
+            }
+        }
+    }
+
+    function _verifySafeState(address safeAddr, uint256 expectedOwners, uint256 expectedThreshold) internal view {
+        if (
+            ISafeL2(safeAddr).getThreshold() != expectedThreshold ||
+            ISafeL2(safeAddr).getOwners().length != expectedOwners
+        ) revert SafeVerificationFailed();
+    }
+
     function _loadConfigFromEnv(address deployer) internal view returns (DeployConfig memory cfg) {
         cfg.deployer = deployer;
         cfg.govOwners = new address[](5);
-        cfg.govOwners[0] = vm.envOr("GOV_OWNER_1", vm.addr(uint256(keccak256("tranche.gov.1"))));
-        cfg.govOwners[1] = vm.envOr("GOV_OWNER_2", vm.addr(uint256(keccak256("tranche.gov.2"))));
-        cfg.govOwners[2] = vm.envOr("GOV_OWNER_3", vm.addr(uint256(keccak256("tranche.gov.3"))));
-        cfg.govOwners[3] = vm.envOr("GOV_OWNER_4", vm.addr(uint256(keccak256("tranche.gov.4"))));
-        cfg.govOwners[4] = vm.envOr("GOV_OWNER_5", vm.addr(uint256(keccak256("tranche.gov.5"))));
+        cfg.govOwners[0] = vm.envAddress("GOV_OWNER_1");
+        cfg.govOwners[1] = vm.envAddress("GOV_OWNER_2");
+        cfg.govOwners[2] = vm.envAddress("GOV_OWNER_3");
+        cfg.govOwners[3] = vm.envAddress("GOV_OWNER_4");
+        cfg.govOwners[4] = vm.envAddress("GOV_OWNER_5");
 
         cfg.guardianOwners = new address[](3);
-        cfg.guardianOwners[0] = vm.envOr("GUARDIAN_OWNER_1", vm.addr(uint256(keccak256("tranche.guard.1"))));
-        cfg.guardianOwners[1] = vm.envOr("GUARDIAN_OWNER_2", vm.addr(uint256(keccak256("tranche.guard.2"))));
-        cfg.guardianOwners[2] = vm.envOr("GUARDIAN_OWNER_3", vm.addr(uint256(keccak256("tranche.guard.3"))));
+        cfg.guardianOwners[0] = vm.envAddress("GUARDIAN_OWNER_1");
+        cfg.guardianOwners[1] = vm.envAddress("GUARDIAN_OWNER_2");
+        cfg.guardianOwners[2] = vm.envAddress("GUARDIAN_OWNER_3");
 
         cfg.treasuryOwners = new address[](3);
-        cfg.treasuryOwners[0] = vm.envOr("TREASURY_OWNER_1", vm.addr(uint256(keccak256("tranche.treasury.1"))));
-        cfg.treasuryOwners[1] = vm.envOr("TREASURY_OWNER_2", vm.addr(uint256(keccak256("tranche.treasury.2"))));
-        cfg.treasuryOwners[2] = vm.envOr("TREASURY_OWNER_3", vm.addr(uint256(keccak256("tranche.treasury.3"))));
+        cfg.treasuryOwners[0] = vm.envAddress("TREASURY_OWNER_1");
+        cfg.treasuryOwners[1] = vm.envAddress("TREASURY_OWNER_2");
+        cfg.treasuryOwners[2] = vm.envAddress("TREASURY_OWNER_3");
 
         cfg.oracleSigners = new address[](3);
-        cfg.oracleSigners[0] = vm.envOr("ORACLE_SIGNER_1", vm.addr(uint256(keccak256("tranche.oracle.1"))));
-        cfg.oracleSigners[1] = vm.envOr("ORACLE_SIGNER_2", vm.addr(uint256(keccak256("tranche.oracle.2"))));
-        cfg.oracleSigners[2] = vm.envOr("ORACLE_SIGNER_3", vm.addr(uint256(keccak256("tranche.oracle.3"))));
+        cfg.oracleSigners[0] = vm.envAddress("ORACLE_SIGNER_1");
+        cfg.oracleSigners[1] = vm.envAddress("ORACLE_SIGNER_2");
+        cfg.oracleSigners[2] = vm.envAddress("ORACLE_SIGNER_3");
 
-        cfg.hspAttestationSigner = vm.envOr(
-            "HSP_ATTESTATION_SIGNER",
-            vm.addr(uint256(keccak256("tranche.hsp.signer")))
-        );
+        cfg.hspAttestationSigner = vm.envAddress("HSP_ATTESTATION_SIGNER");
         cfg.timelockMinDelay = vm.envOr("TIMELOCK_MIN_DELAY", DEFAULT_TESTNET_TIMELOCK_DELAY);
         cfg.saltNonceBase = vm.envOr("SAFE_SALT_NONCE_BASE", uint256(133_2026_0001));
     }

@@ -10,8 +10,11 @@
     "name": "HashKey Chain Testnet",
     "chainId": 133,
     "rpcUrls": [
-      "https://testnet.hsk.xyz"
+      "https://testnet.hsk.xyz",
+      "https://133.rpc.thirdweb.com"
     ],
+    "explorerUrl": "https://testnet-explorer.hskchain.net",
+    "explorerVerifyApiUrl": "https://testnet-explorer.hskchain.net/api/",
     "failedOrGatedRpcsObserved": [
       {
         "url": "https://hashkeychain-testnet.alt.technology",
@@ -110,7 +113,10 @@
     "timelock": null,
     "govSafe": null,
     "guardianSafe": null,
-    "treasurySafe": null
+    "treasurySafe": null,
+    "tUSDT": null,
+    "tWBTC": null,
+    "tWETH": null
   },
   "protocolParameters": {
     "protocolFeeBps": 5,
