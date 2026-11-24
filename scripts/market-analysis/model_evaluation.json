@@ -1,0 +1,968 @@
+{
+  "metadata": {
+    "rpcUrl": "https://mainnet.hsk.xyz",
+    "chainId": 177,
+    "snapshotBlock": 30583147,
+    "snapshotTimestamp": 1795513429,
+    "snapshotIso": "2026-11-24T09:43:49.000Z",
+    "gasPriceWei": "500001000000",
+    "baseFeeWei": "500000000000",
+    "window": {
+      "fromBlock": 29978347,
+      "toBlock": 30583147,
+      "fromTimestamp": 1794303829,
+      "toTimestamp": 1795513429,
+      "fromIso": "2026-11-10T09:43:49.000Z",
+      "toIso": "2026-11-24T09:43:49.000Z",
+      "days": 14
+    }
+  },
+  "gasSummary": {
+    "gasPriceWei": "500001000000",
+    "gasPriceGwei": 500.001,
+    "baseFeeGwei": 500,
+    "whskSpotUsd": 0.0808076499855643,
+    "usdPer100kGas": 0.004040390580043214,
+    "swapSamples": [
+      95627,
+      95627,
+      108688,
+      109646,
+      109662,
+      109672,
+      109672,
+      109686,
+      117565,
+      117667,
+      118318,
+      118318,
+      118334,
+      118334,
+      118348
+    ],
+    "mintSamples": [
+      160496,
+      165031,
+      165296,
+      193701,
+      358868,
+      530575
+    ],
+    "burnSamples": [
+      184093,
+      200369
+    ],
+    "medianSwapGas": 109686,
+    "medianSwapCostUsd": 0.004431742811626199,
+    "medianMintGas": 179498.5,
+    "medianMintCostUsd": 0.007252440485318868,
+    "medianBurnGas": 192231,
+    "medianBurnCostUsd": 0.00776688321592287,
+    "v3WithdrawAndRedeployGasConservative": 426729.5,
+    "v3WithdrawAndRedeployCostUsdConservative": 0.01724153852026551,
+    "v3WithdrawAndRedeployGasMulticall": 371729.5,
+    "v3WithdrawAndRedeployCostUsdMulticall": 0.01501932370124174
+  },
+  "KILL_CRITERIA": {
+    "KC1_minDailyPoolVolumeUsd": 10000,
+    "KC2_minLargeSwapCount14d_ge5000": 14,
+    "KC3_minAmmSlippageAdvantageBps_at10k": 100,
+    "KC4_maxGasDragPctOfPremium_at10k": 5,
+    "KC5_maxLpOpportunityCostAprPct": 10,
+    "KC6_maxOracleStalenessSec_at15bpsSpread": 30
+  },
+  "killEvaluation": {
+    "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc": {
+      "name": "WHSK/USDT (0.30%)",
+      "metrics": {
+        "avgDailyVolUsd": 1477.8484594285712,
+        "largeSwapsGe5000_14d": 0,
+        "largeSwapsGe1000_14d": 0,
+        "largeSwapsGe500_14d": 1,
+        "maxObservedSwapUsd": 502.147762,
+        "ammAllIn10kBuyBps": 268.45280784676186,
+        "ammAllIn10kSellBps": 261.43671040270044,
+        "ammAllIn5kBuyBps": 149.27175275797788,
+        "gasDrag10kBps": 0.01724153852026551,
+        "gasPctOf20bpsFee": 0.08620769260132755,
+        "lpFeeAprPct": 0.19282964677145242,
+        "toxAt30sAnd15bpsBps": 5.079189754647429e-19
+      },
+      "checks": {
+        "KC1_dailyVolume": {
+          "threshold": ">= $10000/day",
+          "observed": "$1477.85/day",
+          "status": "FAIL"
+        },
+        "KC2_largeSwapFrequency": {
+          "threshold": ">= 14 swaps >= $5k in 14d",
+          "observed": "0 swaps >= $5k (0 >= $1k, max $502.15)",
+          "status": "FAIL"
+        },
+        "KC3_ammSlippageAdvantage": {
+          "threshold": ">= 100 bps all-in at $10k",
+          "observed": "268.5 bps buy / 261.4 bps sell",
+          "status": "PASS"
+        },
+        "KC4_gasDragEfficiency": {
+          "threshold": "<= 5% of 20 bps fee at $10k",
+          "observed": "0.086% (0.0172 bps)",
+          "status": "PASS"
+        },
+        "KC5_lpOpportunityCost": {
+          "threshold": "<= 10% passive LP APR",
+          "observed": "0.19% APR",
+          "status": "PASS"
+        },
+        "KC6_oracleToxicityAt30s": {
+          "threshold": "< 2.0 bps expected toxicity at 30s latency & 15 bps spread",
+          "observed": "0.0000 bps (realized vol 16.8%)",
+          "status": "PASS"
+        }
+      }
+    },
+    "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16": {
+      "name": "WETH/USDT (0.30%)",
+      "metrics": {
+        "avgDailyVolUsd": 975.0496407142857,
+        "largeSwapsGe5000_14d": 0,
+        "largeSwapsGe1000_14d": 0,
+        "largeSwapsGe500_14d": 4,
+        "maxObservedSwapUsd": 510.742775,
+        "ammAllIn10kBuyBps": 2421.5802208519867,
+        "ammAllIn10kSellBps": 1949.4944908755697,
+        "ammAllIn5kBuyBps": 1225.8352458321963,
+        "gasDrag10kBps": 0.01724153852026551,
+        "gasPctOf20bpsFee": 0.08620769260132755,
+        "lpFeeAprPct": 1.2756774554311796,
+        "toxAt30sAnd15bpsBps": 0.011303901864952145
+      },
+      "checks": {
+        "KC1_dailyVolume": {
+          "threshold": ">= $10000/day",
+          "observed": "$975.05/day",
+          "status": "FAIL"
+        },
+        "KC2_largeSwapFrequency": {
+          "threshold": ">= 14 swaps >= $5k in 14d",
+          "observed": "0 swaps >= $5k (0 >= $1k, max $510.74)",
+          "status": "FAIL"
+        },
+        "KC3_ammSlippageAdvantage": {
+          "threshold": ">= 100 bps all-in at $10k",
+          "observed": "2421.6 bps buy / 1949.5 bps sell",
+          "status": "PASS"
+        },
+        "KC4_gasDragEfficiency": {
+          "threshold": "<= 5% of 20 bps fee at $10k",
+          "observed": "0.086% (0.0172 bps)",
+          "status": "PASS"
+        },
+        "KC5_lpOpportunityCost": {
+          "threshold": "<= 10% passive LP APR",
+          "observed": "1.28% APR",
+          "status": "PASS"
+        },
+        "KC6_oracleToxicityAt30s": {
+          "threshold": "< 2.0 bps expected toxicity at 30s latency & 15 bps spread",
+          "observed": "0.0113 bps (realized vol 61.1%)",
+          "status": "PASS"
+        }
+      }
+    },
+    "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a": {
+      "name": "WBTC/USDT (0.30%)",
+      "metrics": {
+        "avgDailyVolUsd": 693.7784944285714,
+        "largeSwapsGe5000_14d": 0,
+        "largeSwapsGe1000_14d": 3,
+        "largeSwapsGe500_14d": 15,
+        "maxObservedSwapUsd": 1026.639713,
+        "ammAllIn10kBuyBps": 2235.702193849618,
+        "ammAllIn10kSellBps": 1827.1956594149651,
+        "ammAllIn5kBuyBps": 1132.8962323310354,
+        "gasDrag10kBps": 0.01724153852026551,
+        "gasPctOf20bpsFee": 0.08620769260132755,
+        "lpFeeAprPct": 0.8373898666719689,
+        "toxAt30sAnd15bpsBps": 0.05733866278706274
+      },
+      "checks": {
+        "KC1_dailyVolume": {
+          "threshold": ">= $10000/day",
+          "observed": "$693.78/day",
+          "status": "FAIL"
+        },
+        "KC2_largeSwapFrequency": {
+          "threshold": ">= 14 swaps >= $5k in 14d",
+          "observed": "0 swaps >= $5k (3 >= $1k, max $1026.64)",
+          "status": "FAIL"
+        },
+        "KC3_ammSlippageAdvantage": {
+          "threshold": ">= 100 bps all-in at $10k",
+          "observed": "2235.7 bps buy / 1827.2 bps sell",
+          "status": "PASS"
+        },
+        "KC4_gasDragEfficiency": {
+          "threshold": "<= 5% of 20 bps fee at $10k",
+          "observed": "0.086% (0.0172 bps)",
+          "status": "PASS"
+        },
+        "KC5_lpOpportunityCost": {
+          "threshold": "<= 10% passive LP APR",
+          "observed": "0.84% APR",
+          "status": "PASS"
+        },
+        "KC6_oracleToxicityAt30s": {
+          "threshold": "< 2.0 bps expected toxicity at 30s latency & 15 bps spread",
+          "observed": "0.0573 bps (realized vol 75.7%)",
+          "status": "PASS"
+        }
+      }
+    }
+  },
+  "floatingOracleSensitivity": {
+    "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc": {
+      "name": "WHSK/USDT (0.30%)",
+      "realizedAnnualizedVolPct": 16.840092196021903,
+      "stressedAnnualizedVolPct": 80,
+      "observedSellBaseSharePct": 67.9026180611635,
+      "observedBuyBaseSharePct": 32.09738193883651,
+      "toxicityBpsAtRealizedVol": [
+        {
+          "latencySec": 2,
+          "spread_5bps": 0,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 10,
+          "spread_5bps": 0,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 30,
+          "spread_5bps": 0.0005,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 60,
+          "spread_5bps": 0.013,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 300,
+          "spread_5bps": 0.4644,
+          "spread_10bps": 0.0538,
+          "spread_15bps": 0.0029,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 1800,
+          "spread_5bps": 2.9626,
+          "spread_10bps": 1.5675,
+          "spread_15bps": 0.7451,
+          "spread_25bps": 0.1186,
+          "spread_50bps": 0.0001
+        },
+        {
+          "latencySec": 3600,
+          "spread_5bps": 4.9534,
+          "spread_10bps": 3.2589,
+          "spread_15bps": 2.0374,
+          "spread_25bps": 0.6752,
+          "spread_50bps": 0.0147
+        }
+      ],
+      "toxicityBpsAtStressedVol": [
+        {
+          "latencySec": 2,
+          "spread_5bps": 0.0043,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 10,
+          "spread_5bps": 0.3031,
+          "spread_10bps": 0.0208,
+          "spread_15bps": 0.0005,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 30,
+          "spread_5bps": 1.2309,
+          "spread_10bps": 0.3694,
+          "spread_15bps": 0.0814,
+          "spread_25bps": 0.0014,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 60,
+          "spread_5bps": 2.3466,
+          "spread_10bps": 1.0956,
+          "spread_15bps": 0.4422,
+          "spread_25bps": 0.0447,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 300,
+          "spread_5bps": 7.5451,
+          "spread_10bps": 5.6412,
+          "spread_15bps": 4.1086,
+          "spread_25bps": 2.0046,
+          "spread_50bps": 0.1951
+        },
+        {
+          "latencySec": 1800,
+          "spread_5bps": 21.6944,
+          "spread_10bps": 19.4413,
+          "spread_15bps": 17.3508,
+          "spread_25bps": 13.6458,
+          "spread_50bps": 6.9226
+        },
+        {
+          "latencySec": 3600,
+          "spread_5bps": 31.6578,
+          "spread_10bps": 29.3326,
+          "spread_15bps": 27.1232,
+          "spread_25bps": 23.0477,
+          "spread_50bps": 14.7729
+        }
+      ]
+    },
+    "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16": {
+      "name": "WETH/USDT (0.30%)",
+      "realizedAnnualizedVolPct": 61.0859410902418,
+      "stressedAnnualizedVolPct": 80,
+      "observedSellBaseSharePct": 67.11690218802099,
+      "observedBuyBaseSharePct": 32.88309781197902,
+      "toxicityBpsAtRealizedVol": [
+        {
+          "latencySec": 2,
+          "spread_5bps": 0.0002,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 10,
+          "spread_5bps": 0.112,
+          "spread_10bps": 0.0018,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 30,
+          "spread_5bps": 0.668,
+          "spread_10bps": 0.1148,
+          "spread_15bps": 0.0113,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 60,
+          "spread_5bps": 1.4365,
+          "spread_10bps": 0.4856,
+          "spread_15bps": 0.1264,
+          "spread_25bps": 0.0036,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 300,
+          "spread_5bps": 5.2795,
+          "spread_10bps": 3.5509,
+          "spread_15bps": 2.2802,
+          "spread_25bps": 0.8099,
+          "spread_50bps": 0.0232
+        },
+        {
+          "latencySec": 1800,
+          "spread_5bps": 16.0192,
+          "spread_10bps": 13.8418,
+          "spread_15bps": 11.8753,
+          "spread_25bps": 8.5485,
+          "spread_50bps": 3.272
+        },
+        {
+          "latencySec": 3600,
+          "spread_5bps": 23.6139,
+          "spread_10bps": 21.3425,
+          "spread_15bps": 19.2221,
+          "spread_25bps": 15.4246,
+          "spread_50bps": 8.3253
+        }
+      ],
+      "toxicityBpsAtStressedVol": [
+        {
+          "latencySec": 2,
+          "spread_5bps": 0.0043,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 10,
+          "spread_5bps": 0.3031,
+          "spread_10bps": 0.0208,
+          "spread_15bps": 0.0005,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 30,
+          "spread_5bps": 1.2309,
+          "spread_10bps": 0.3694,
+          "spread_15bps": 0.0814,
+          "spread_25bps": 0.0014,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 60,
+          "spread_5bps": 2.3466,
+          "spread_10bps": 1.0956,
+          "spread_15bps": 0.4422,
+          "spread_25bps": 0.0447,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 300,
+          "spread_5bps": 7.5451,
+          "spread_10bps": 5.6412,
+          "spread_15bps": 4.1086,
+          "spread_25bps": 2.0046,
+          "spread_50bps": 0.1951
+        },
+        {
+          "latencySec": 1800,
+          "spread_5bps": 21.6944,
+          "spread_10bps": 19.4413,
+          "spread_15bps": 17.3508,
+          "spread_25bps": 13.6458,
+          "spread_50bps": 6.9226
+        },
+        {
+          "latencySec": 3600,
+          "spread_5bps": 31.6578,
+          "spread_10bps": 29.3326,
+          "spread_15bps": 27.1232,
+          "spread_25bps": 23.0477,
+          "spread_50bps": 14.7729
+        }
+      ]
+    },
+    "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a": {
+      "name": "WBTC/USDT (0.30%)",
+      "realizedAnnualizedVolPct": 75.65151961968192,
+      "stressedAnnualizedVolPct": 80,
+      "observedSellBaseSharePct": 74.13777119300283,
+      "observedBuyBaseSharePct": 25.86222880699715,
+      "toxicityBpsAtRealizedVol": [
+        {
+          "latencySec": 2,
+          "spread_5bps": 0.0026,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 10,
+          "spread_5bps": 0.2522,
+          "spread_10bps": 0.0136,
+          "spread_15bps": 0.0002,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 30,
+          "spread_5bps": 1.0948,
+          "spread_10bps": 0.2983,
+          "spread_15bps": 0.0573,
+          "spread_25bps": 0.0007,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 60,
+          "spread_5bps": 2.1319,
+          "spread_10bps": 0.9406,
+          "spread_15bps": 0.3521,
+          "spread_25bps": 0.0287,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 300,
+          "spread_5bps": 7.0215,
+          "spread_10bps": 5.1506,
+          "spread_15bps": 3.6685,
+          "spread_25bps": 1.6936,
+          "spread_50bps": 0.134
+        },
+        {
+          "latencySec": 1800,
+          "spread_5bps": 20.3886,
+          "spread_10bps": 18.1495,
+          "spread_15bps": 16.0821,
+          "spread_25bps": 12.4485,
+          "spread_50bps": 6.0098
+        },
+        {
+          "latencySec": 3600,
+          "spread_5bps": 29.8077,
+          "spread_10bps": 27.4925,
+          "spread_15bps": 25.2997,
+          "spread_25bps": 21.2762,
+          "spread_50bps": 13.2261
+        }
+      ],
+      "toxicityBpsAtStressedVol": [
+        {
+          "latencySec": 2,
+          "spread_5bps": 0.0043,
+          "spread_10bps": 0,
+          "spread_15bps": 0,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 10,
+          "spread_5bps": 0.3031,
+          "spread_10bps": 0.0208,
+          "spread_15bps": 0.0005,
+          "spread_25bps": 0,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 30,
+          "spread_5bps": 1.2309,
+          "spread_10bps": 0.3694,
+          "spread_15bps": 0.0814,
+          "spread_25bps": 0.0014,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 60,
+          "spread_5bps": 2.3466,
+          "spread_10bps": 1.0956,
+          "spread_15bps": 0.4422,
+          "spread_25bps": 0.0447,
+          "spread_50bps": 0
+        },
+        {
+          "latencySec": 300,
+          "spread_5bps": 7.5451,
+          "spread_10bps": 5.6412,
+          "spread_15bps": 4.1086,
+          "spread_25bps": 2.0046,
+          "spread_50bps": 0.1951
+        },
+        {
+          "latencySec": 1800,
+          "spread_5bps": 21.6944,
+          "spread_10bps": 19.4413,
+          "spread_15bps": 17.3508,
+          "spread_25bps": 13.6458,
+          "spread_50bps": 6.9226
+        },
+        {
+          "latencySec": 3600,
+          "spread_5bps": 31.6578,
+          "spread_10bps": 29.3326,
+          "spread_15bps": 27.1232,
+          "spread_25bps": 23.0477,
+          "spread_50bps": 14.7729
+        }
+      ]
+    }
+  },
+  "fixedStrikeModels": {
+    "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc": {
+      "name": "WHSK/USDT (0.30%)",
+      "realizedAnnualizedVolPct": 16.840092196021903,
+      "pricedImpliedVolPct": 21.050115245027378,
+      "optionCostTableBps": [
+        {
+          "tenorHours": 1,
+          "K_0pct_OTM": {
+            "realizedVolBps": 7.18,
+            "pricedIvBps": 8.97,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 6,
+          "K_0pct_OTM": {
+            "realizedVolBps": 17.58,
+            "pricedIvBps": 21.98,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 0.18,
+            "pricedIvBps": 0.78,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 24,
+          "K_0pct_OTM": {
+            "realizedVolBps": 35.16,
+            "pricedIvBps": 43.96,
+            "ammBreakevenNotionalUsd": "~$582"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 5.74,
+            "pricedIvBps": 11.06,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 0.38,
+            "pricedIvBps": 1.6,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 72,
+          "K_0pct_OTM": {
+            "realizedVolBps": 60.91,
+            "pricedIvBps": 76.13,
+            "ammBreakevenNotionalUsd": "~$1932"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 23.77,
+            "pricedIvBps": 36.68,
+            "ammBreakevenNotionalUsd": "~$277"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 7.06,
+            "pricedIvBps": 14.94,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0.03,
+            "pricedIvBps": 0.33,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 168,
+          "K_0pct_OTM": {
+            "realizedVolBps": 93.04,
+            "pricedIvBps": 116.29,
+            "ammBreakevenNotionalUsd": "~$3616"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 51.88,
+            "pricedIvBps": 73.62,
+            "ammBreakevenNotionalUsd": "~$1826"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 25.94,
+            "pricedIvBps": 43.56,
+            "ammBreakevenNotionalUsd": "~$565"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 1.58,
+            "pricedIvBps": 5.82,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        }
+      ],
+      "grossPremiumYield24hAtmAt25PctUtilApr": 40.10989091885697,
+      "grossPremiumYield24hOtm2At25PctUtilApr": 1.459535441802079
+    },
+    "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16": {
+      "name": "WETH/USDT (0.30%)",
+      "realizedAnnualizedVolPct": 61.0859410902418,
+      "pricedImpliedVolPct": 76.35742636280224,
+      "optionCostTableBps": [
+        {
+          "tenorHours": 1,
+          "K_0pct_OTM": {
+            "realizedVolBps": 26.04,
+            "pricedIvBps": 32.55,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 1.82,
+            "pricedIvBps": 4.42,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 0.02,
+            "pricedIvBps": 0.21,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 6,
+          "K_0pct_OTM": {
+            "realizedVolBps": 63.78,
+            "pricedIvBps": 79.72,
+            "ammBreakevenNotionalUsd": "~$208"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 26.13,
+            "pricedIvBps": 39.85,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 8.36,
+            "pricedIvBps": 17.11,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0.05,
+            "pricedIvBps": 0.49,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 24,
+          "K_0pct_OTM": {
+            "realizedVolBps": 127.55,
+            "pricedIvBps": 159.44,
+            "ammBreakevenNotionalUsd": "~$541"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 84.35,
+            "pricedIvBps": 115.17,
+            "ammBreakevenNotionalUsd": "~$356"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 52.77,
+            "pricedIvBps": 80.4,
+            "ammBreakevenNotionalUsd": "~$210"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 9.05,
+            "pricedIvBps": 22.01,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 72,
+          "K_0pct_OTM": {
+            "realizedVolBps": 220.91,
+            "pricedIvBps": 276.12,
+            "ammBreakevenNotionalUsd": "~$1029"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 175.58,
+            "pricedIvBps": 230.35,
+            "ammBreakevenNotionalUsd": "~$837"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 137.23,
+            "pricedIvBps": 190.2,
+            "ammBreakevenNotionalUsd": "~$670"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 58.99,
+            "pricedIvBps": 100.5,
+            "ammBreakevenNotionalUsd": "~$294"
+          }
+        },
+        {
+          "tenorHours": 168,
+          "K_0pct_OTM": {
+            "realizedVolBps": 337.39,
+            "pricedIvBps": 421.66,
+            "ammBreakevenNotionalUsd": "~$1637"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 291.41,
+            "pricedIvBps": 375.64,
+            "ammBreakevenNotionalUsd": "~$1445"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 250.05,
+            "pricedIvBps": 333.31,
+            "ammBreakevenNotionalUsd": "~$1268"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 151.75,
+            "pricedIvBps": 227.35,
+            "ammBreakevenNotionalUsd": "~$825"
+          }
+        }
+      ],
+      "grossPremiumYield24hAtmAt25PctUtilApr": 145.48596052707958,
+      "grossPremiumYield24hOtm2At25PctUtilApr": 73.36333237759631
+    },
+    "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a": {
+      "name": "WBTC/USDT (0.30%)",
+      "realizedAnnualizedVolPct": 75.65151961968192,
+      "pricedImpliedVolPct": 94.5643995246024,
+      "optionCostTableBps": [
+        {
+          "tenorHours": 1,
+          "K_0pct_OTM": {
+            "realizedVolBps": 32.25,
+            "pricedIvBps": 40.31,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 4.27,
+            "pricedIvBps": 8.71,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 0.19,
+            "pricedIvBps": 0.96,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0,
+            "pricedIvBps": 0,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 6,
+          "K_0pct_OTM": {
+            "realizedVolBps": 78.99,
+            "pricedIvBps": 98.73,
+            "ammBreakevenNotionalUsd": "~$311"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 39.2,
+            "pricedIvBps": 57.14,
+            "ammBreakevenNotionalUsd": "~$123"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 16.65,
+            "pricedIvBps": 30.04,
+            "ammBreakevenNotionalUsd": "< $100"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 0.45,
+            "pricedIvBps": 2.32,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 24,
+          "K_0pct_OTM": {
+            "realizedVolBps": 157.96,
+            "pricedIvBps": 197.45,
+            "ammBreakevenNotionalUsd": "~$759"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 113.74,
+            "pricedIvBps": 152.43,
+            "ammBreakevenNotionalUsd": "~$555"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 79.08,
+            "pricedIvBps": 115.17,
+            "ammBreakevenNotionalUsd": "~$386"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 21.3,
+            "pricedIvBps": 43.41,
+            "ammBreakevenNotionalUsd": "< $100"
+          }
+        },
+        {
+          "tenorHours": 72,
+          "K_0pct_OTM": {
+            "realizedVolBps": 273.56,
+            "pricedIvBps": 341.92,
+            "ammBreakevenNotionalUsd": "~$1414"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 227.82,
+            "pricedIvBps": 295.94,
+            "ammBreakevenNotionalUsd": "~$1205"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 187.73,
+            "pricedIvBps": 254.5,
+            "ammBreakevenNotionalUsd": "~$1017"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 98.46,
+            "pricedIvBps": 155.69,
+            "ammBreakevenNotionalUsd": "~$569"
+          }
+        },
+        {
+          "tenorHours": 168,
+          "K_0pct_OTM": {
+            "realizedVolBps": 417.77,
+            "pricedIvBps": 522.07,
+            "ammBreakevenNotionalUsd": "~$2231"
+          },
+          "K_1pct_OTM": {
+            "realizedVolBps": 371.74,
+            "pricedIvBps": 476.19,
+            "ammBreakevenNotionalUsd": "~$2023"
+          },
+          "K_2pct_OTM": {
+            "realizedVolBps": 329.45,
+            "pricedIvBps": 433.3,
+            "ammBreakevenNotionalUsd": "~$1828"
+          },
+          "K_5pct_OTM": {
+            "realizedVolBps": 223.77,
+            "pricedIvBps": 321.78,
+            "ammBreakevenNotionalUsd": "~$1322"
+          }
+        }
+      ],
+      "grossPremiumYield24hAtmAt25PctUtilApr": 180.16976540197285,
+      "grossPremiumYield24hOtm2At25PctUtilApr": 105.08919015902708
+    }
+  }
+}

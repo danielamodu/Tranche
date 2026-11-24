@@ -1,0 +1,1979 @@
+{
+  "metadata": {
+    "rpcUrl": "https://mainnet.hsk.xyz",
+    "chainId": 177,
+    "snapshotBlock": 30583147,
+    "snapshotTimestamp": 1795513429,
+    "snapshotIso": "2026-11-24T09:43:49.000Z",
+    "gasPriceWei": "500001000000",
+    "baseFeeWei": "500000000000",
+    "window": {
+      "fromBlock": 29978347,
+      "toBlock": 30583147,
+      "fromTimestamp": 1794303829,
+      "toTimestamp": 1795513429,
+      "fromIso": "2026-11-10T09:43:49.000Z",
+      "toIso": "2026-11-24T09:43:49.000Z",
+      "days": 14
+    }
+  },
+  "gasSummary": {
+    "gasPriceWei": "500001000000",
+    "gasPriceGwei": 500.001,
+    "baseFeeGwei": 500,
+    "whskSpotUsd": 0.0808076499855643,
+    "usdPer100kGas": 0.004040390580043214,
+    "swapSamples": [
+      95627,
+      95627,
+      108688,
+      109646,
+      109662,
+      109672,
+      109672,
+      109686,
+      117565,
+      117667,
+      118318,
+      118318,
+      118334,
+      118334,
+      118348
+    ],
+    "mintSamples": [
+      160496,
+      165031,
+      165296,
+      193701,
+      358868,
+      530575
+    ],
+    "burnSamples": [
+      184093,
+      200369
+    ],
+    "medianSwapGas": 109686,
+    "medianSwapCostUsd": 0.004431742811626199,
+    "medianMintGas": 179498.5,
+    "medianMintCostUsd": 0.007252440485318868,
+    "medianBurnGas": 192231,
+    "medianBurnCostUsd": 0.00776688321592287,
+    "v3WithdrawAndRedeployGasConservative": 426729.5,
+    "v3WithdrawAndRedeployCostUsdConservative": 0.01724153852026551,
+    "v3WithdrawAndRedeployGasMulticall": 371729.5,
+    "v3WithdrawAndRedeployCostUsdMulticall": 0.01501932370124174
+  },
+  "pools": {
+    "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc": {
+      "name": "WHSK/USDT (0.30%)",
+      "address": "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc",
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "currentTick": -301483,
+      "activeLiquidity": "1475813786831558685",
+      "liquidityReconstructionMatchesSlot": true,
+      "initializedTickCount": 8,
+      "tickRangeSummary": [
+        {
+          "tickLower": -887220,
+          "tickUpper": -301440,
+          "liquidity": "1475813786831558685",
+          "shareOfActivePct": 100
+        },
+        {
+          "tickLower": -301440,
+          "tickUpper": -299340,
+          "liquidity": "1475831005908433993",
+          "shareOfActivePct": 100.00116675132249
+        },
+        {
+          "tickLower": -299340,
+          "tickUpper": -294600,
+          "liquidity": "1475831087087894032",
+          "shareOfActivePct": 100.00117225197987
+        },
+        {
+          "tickLower": -294600,
+          "tickUpper": -294420,
+          "liquidity": "1475813868011018724",
+          "shareOfActivePct": 100.0000055006574
+        },
+        {
+          "tickLower": -294420,
+          "tickUpper": -290460,
+          "liquidity": "1475814031572150130",
+          "shareOfActivePct": 100.00001658343305
+        },
+        {
+          "tickLower": -290460,
+          "tickUpper": -269400,
+          "liquidity": "1475813868011018724",
+          "shareOfActivePct": 100.0000055006574
+        },
+        {
+          "tickLower": -269400,
+          "tickUpper": 887220,
+          "liquidity": "1475813786831558685",
+          "shareOfActivePct": 100
+        }
+      ],
+      "spotPriceUsd": 0.0808076499855643,
+      "balances": {
+        "token0Symbol": "WHSK",
+        "token0Amount": 5193022.60074201,
+        "token1Symbol": "USDT",
+        "token1Amount": 419573.209476
+      },
+      "tvlUsd": 839209.1621638852,
+      "lpInventoryExposure": {
+        "token0SharePct": 50.00373823444227,
+        "token1SharePct": 49.99626176555774,
+        "fullRangeSharePct": 100
+      },
+      "depthTable": {
+        "+/-10bps": {
+          "bps": 10,
+          "buyBaseCapacityUsd": 209.71006412183954,
+          "buyBaseCapacityTokens": 2593.879263943498,
+          "sellBaseCapacityUsd": 209.81494539393134,
+          "sellBaseCapacityTokens": 2597.7730035505188,
+          "twoSidedUsd": 419.5250095157709,
+          "pctOfTvl": 0.04999051826770259
+        },
+        "+/-50bps": {
+          "bps": 50,
+          "buyBaseCapacityUsd": 1047.5065473196023,
+          "buyBaseCapacityTokens": 12930.676201806627,
+          "sellBaseCapacityUsd": 1050.1266959957236,
+          "sellBaseCapacityTokens": 13027.997956411396,
+          "twoSidedUsd": 2097.6332433153257,
+          "pctOfTvl": 0.24995356794087156
+        },
+        "+/-100bps": {
+          "bps": 100,
+          "buyBaseCapacityUsd": 2092.4208751836813,
+          "buyBaseCapacityTokens": 25765.339782167706,
+          "sellBaseCapacityUsd": 2102.8952326816698,
+          "sellBaseCapacityTokens": 26154.568667087377,
+          "twoSidedUsd": 4195.316107865351,
+          "pctOfTvl": 0.4999130487383869
+        },
+        "+/-500bps": {
+          "bps": 500,
+          "buyBaseCapacityUsd": 10360.31150768519,
+          "buyBaseCapacityTokens": 125119.69511484483,
+          "sellBaseCapacityUsd": 10622.60916252026,
+          "sellBaseCapacityTokens": 134870.48621453694,
+          "twoSidedUsd": 20982.92067020545,
+          "pctOfTvl": 2.5003207324502252
+        },
+        "+/-1000bps": {
+          "bps": 1000,
+          "buyBaseCapacityUsd": 20476.758524669876,
+          "buyBaseCapacityTokens": 241608.59457323232,
+          "sellBaseCapacityUsd": 21528.637182596023,
+          "sellBaseCapacityTokens": 280829.55194034043,
+          "twoSidedUsd": 42005.395707265896,
+          "pctOfTvl": 5.005354755536244
+        },
+        "+/-2000bps": {
+          "bps": 2000,
+          "buyBaseCapacityUsd": 40042.064644746,
+          "buyBaseCapacityTokens": 452348.70569185546,
+          "sellBaseCapacityUsd": 44290.4281640624,
+          "sellBaseCapacityTokens": 612791.0423400932,
+          "twoSidedUsd": 84332.4928088084,
+          "pctOfTvl": 10.049043386437612
+        }
+      },
+      "priceImpactTable": [
+        {
+          "tradeUsd": 100,
+          "buyBase": {
+            "tradeUsd": 100,
+            "side": "BUY_BASE",
+            "baseTraded": 1233.5009366995087,
+            "effectivePriceExFee": 0.08082685390314201,
+            "effectivePriceAllIn": 0.08107006409542829,
+            "endSpotPrice": 0.08084606238455495,
+            "purePriceImpactBps": 2.376497470366612,
+            "allInCostBps": 32.47391922805099,
+            "endSpotMoveBps": 4.7535597183578915,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 100,
+            "side": "SELL_BASE",
+            "baseTraded": 1237.506597678119,
+            "usdtOut": 99.6763119496772,
+            "effectivePriceExFee": 0.08078845063070648,
+            "effectivePriceAllIn": 0.08054608527881436,
+            "endSpotPrice": 0.08076925583746124,
+            "purePriceImpactBps": 2.375932830771532,
+            "allInCostBps": 32.36880503228012,
+            "endSpotMoveBps": 4.751301158978372,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 500,
+          "buyBase": {
+            "tradeUsd": 500,
+            "side": "BUY_BASE",
+            "baseTraded": 6161.648818005766,
+            "effectivePriceExFee": 0.08090366957351862,
+            "effectivePriceAllIn": 0.08114711090623733,
+            "endSpotPrice": 0.08099980325664079,
+            "purePriceImpactBps": 11.882487359979876,
+            "allInCostBps": 42.00851289867469,
+            "endSpotMoveBps": 23.7790940722582,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 500,
+            "side": "SELL_BASE",
+            "baseTraded": 6187.532988390596,
+            "usdtOut": 497.9083610193126,
+            "effectivePriceExFee": 0.08071174435734123,
+            "effectivePriceAllIn": 0.0804696091242692,
+            "endSpotPrice": 0.08061595255361462,
+            "purePriceImpactBps": 11.868384768052298,
+            "allInCostBps": 41.83277961374854,
+            "endSpotMoveBps": 23.72268367956898,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 1000,
+          "buyBase": {
+            "tradeUsd": 1000,
+            "side": "BUY_BASE",
+            "baseTraded": 12308.689214389175,
+            "effectivePriceExFee": 0.08099968913298106,
+            "effectivePriceAllIn": 0.08124341939115452,
+            "endSpotPrice": 0.08119218421081342,
+            "purePriceImpactBps": 23.764971194071283,
+            "allInCostBps": 53.926751448416525,
+            "endSpotMoveBps": 47.58636407788286,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 1000,
+            "side": "SELL_BASE",
+            "baseTraded": 12375.065976781192,
+            "usdtOut": 994.636249467451,
+            "effectivePriceExFee": 0.08061606610824493,
+            "effectivePriceAllIn": 0.08037421790992019,
+            "endSpotPrice": 0.08042493645006925,
+            "purePriceImpactBps": 23.708631219149233,
+            "allInCostBps": 53.63750532549116,
+            "endSpotMoveBps": 47.361052519585556,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 2500,
+          "buyBase": {
+            "tradeUsd": 2500,
+            "side": "BUY_BASE",
+            "baseTraded": 30662.678385801362,
+            "effectivePriceExFee": 0.08128774559870723,
+            "effectivePriceAllIn": 0.08153234262658698,
+            "endSpotPrice": 0.08177069097329567,
+            "purePriceImpactBps": 59.412148878068564,
+            "allInCostBps": 89.68119245543527,
+            "endSpotMoveBps": 119.1769576152013,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 2500,
+            "side": "SELL_BASE",
+            "baseTraded": 30937.66494195298,
+            "usdtOut": 2477.778911699374,
+            "effectivePriceExFee": 0.08033038757802025,
+            "effectivePriceAllIn": 0.08008939641528619,
+            "endSpotPrice": 0.07985594395565067,
+            "purePriceImpactBps": 59.06153781595202,
+            "allInCostBps": 88.8843532025041,
+            "endSpotMoveBps": 117.77424910681789,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 5000,
+          "buyBase": {
+            "tradeUsd": 5000,
+            "side": "BUY_BASE",
+            "baseTraded": 60965.290309712975,
+            "effectivePriceExFee": 0.08176783830070257,
+            "effectivePriceAllIn": 0.08201387994052414,
+            "endSpotPrice": 0.08273943261043273,
+            "purePriceImpactBps": 118.82393749970355,
+            "allInCostBps": 149.27175275797788,
+            "endSpotMoveBps": 239.05937435546366,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 5000,
+            "side": "SELL_BASE",
+            "baseTraded": 61875.32988390596,
+            "usdtOut": 4926.461384860765,
+            "effectivePriceExFee": 0.07985872963996532,
+            "effectivePriceAllIn": 0.07961915345104542,
+            "endSpotPrice": 0.07892095242032557,
+            "purePriceImpactBps": 117.42951883497498,
+            "allInCostBps": 147.07723027846953,
+            "endSpotMoveBps": 233.4800684806182,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 10000,
+          "buyBase": {
+            "tradeUsd": 10000,
+            "side": "BUY_BASE",
+            "baseTraded": 120515.3902769523,
+            "effectivePriceExFee": 0.08272802317685969,
+            "effectivePriceAllIn": 0.08297695403897662,
+            "endSpotPrice": 0.08469402975845695,
+            "purePriceImpactBps": 237.6474494232217,
+            "allInCostBps": 268.45280784676186,
+            "endSpotMoveBps": 480.942061003744,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 10000,
+            "side": "SELL_BASE",
+            "baseTraded": 123750.65976781191,
+            "usdtOut": 9738.5632895973,
+            "effectivePriceExFee": 0.07893183687743674,
+            "effectivePriceAllIn": 0.07869504136680443,
+            "endSpotPrice": 0.07709956760231647,
+            "purePriceImpactBps": 232.13310973189573,
+            "allInCostBps": 261.43671040270044,
+            "endSpotMoveBps": 458.8776414003204,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 25000,
+          "buyBase": {
+            "tradeUsd": 25000,
+            "side": "BUY_BASE",
+            "baseTraded": 291150.73234391934,
+            "effectivePriceExFee": 0.0856085773830634,
+            "effectivePriceAllIn": 0.08586617591079579,
+            "endSpotPrice": 0.09069473219253042,
+            "purePriceImpactBps": 594.1179329378788,
+            "allInCostBps": 625.9959206999777,
+            "endSpotMoveBps": 1223.532946290651,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 25000,
+            "side": "SELL_BASE",
+            "baseTraded": 309376.6494195298,
+            "usdtOut": 23527.192181346218,
+            "effectivePriceExFee": 0.07627591217385478,
+            "effectivePriceAllIn": 0.07604708443733321,
+            "endSpotPrice": 0.07199831673106344,
+            "purePriceImpactBps": 560.8055440937942,
+            "allInCostBps": 589.1231274615127,
+            "endSpotMoveBps": 1090.1608023590081,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 50000,
+          "buyBase": {
+            "tradeUsd": 50000,
+            "side": "BUY_BASE",
+            "baseTraded": 551380.103791384,
+            "effectivePriceExFee": 0.09040950091819212,
+            "effectivePriceAllIn": 0.09068154555485669,
+            "endSpotPrice": 0.10115227282519483,
+            "purePriceImpactBps": 1188.2353879048724,
+            "allInCostBps": 1221.9010911784078,
+            "endSpotMoveBps": 2517.660499131573,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 50000,
+            "side": "SELL_BASE",
+            "baseTraded": 618753.2988390595,
+            "usdtOut": 44555.6772788111,
+            "effectivePriceExFee": 0.07222546789199454,
+            "effectivePriceAllIn": 0.07200879148831855,
+            "endSpotPrice": 0.06455475704527255,
+            "purePriceImpactBps": 1062.0506963267605,
+            "allInCostBps": 1088.8645442377797,
+            "endSpotMoveBps": 2011.3062244967173,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 100000,
+          "buyBase": {
+            "tradeUsd": 100000,
+            "side": "BUY_BASE",
+            "baseTraded": 996886.8764858203,
+            "effectivePriceExFee": 0.10001134767814163,
+            "effectivePriceAllIn": 0.10031228453173684,
+            "endSpotPrice": 0.12377874026700496,
+            "purePriceImpactBps": 2376.4702594380506,
+            "allInCostBps": 2413.711393618907,
+            "endSpotMoveBps": 5317.700773270491,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 100000,
+            "side": "SELL_BASE",
+            "baseTraded": 1237506.597678119,
+            "usdtOut": 80555.90866819318,
+            "effectivePriceExFee": 0.06529121035033542,
+            "effectivePriceAllIn": 0.06509533671928441,
+            "endSpotPrice": 0.0527541903492217,
+            "purePriceImpactBps": 1920.1696421070026,
+            "allInCostBps": 1944.40913318068,
+            "endSpotMoveBps": 3471.634138767079,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 250000,
+          "buyBase": {
+            "tradeUsd": 250000,
+            "side": "BUY_BASE",
+            "baseTraded": 1934916.5501817844,
+            "effectivePriceExFee": 0.12881692493486765,
+            "effectivePriceAllIn": 0.12920453855051922,
+            "endSpotPrice": 0.2053497865446844,
+            "purePriceImpactBps": 5941.179449950576,
+            "allInCostBps": 5989.146890622444,
+            "endSpotMoveBps": 15412.17156808404,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 250000,
+            "side": "SELL_BASE",
+            "baseTraded": 3093766.494195298,
+            "usdtOut": 156355.42934845606,
+            "effectivePriceExFee": 0.05069093202861651,
+            "effectivePriceAllIn": 0.05053885923253067,
+            "endSpotPrice": 0.031798605582378084,
+            "purePriceImpactBps": 3726.9637172133985,
+            "allInCostBps": 3745.7828260617575,
+            "endSpotMoveBps": 6064.901579484285,
+            "unfilledUsd": 0
+          }
+        }
+      ],
+      "historical14d": {
+        "swapCount": 1047,
+        "swapsPerDay": 74.78571428571429,
+        "buyBaseCount": 330,
+        "sellBaseCount": 717,
+        "buyBaseVolUsd": 6640.9093029999985,
+        "sellBaseVolUsd": 14048.969129000001,
+        "totalVolUsd": 20689.878431999998,
+        "avgDailyVolUsd": 1477.8484594285712,
+        "fees14dUsd": 62.069635295999994,
+        "avgDailyFeesUsd": 4.4335453782857135,
+        "lpFeeAprPct": 0.19282964677145242,
+        "lpFeeApyPct": 0.19301517235197352,
+        "realizedPriceMin": 0.08062254184198325,
+        "realizedPriceMax": 0.08444359276129712,
+        "realizedDailyVolPct": 0.881450711402263,
+        "realizedAnnualizedVolPct": 16.840092196021903,
+        "swapSizeStatsUsd": {
+          "min": 0.04,
+          "p25": 12.000509999999998,
+          "median": 14.99928,
+          "p75": 22.414977999999998,
+          "p90": 25.010867,
+          "p95": 35.008919,
+          "p99": 126.94499723999851,
+          "max": 502.147762,
+          "mean": 19.761106429799426
+        },
+        "sizeBuckets": [
+          {
+            "minUsd": 100,
+            "count": 14,
+            "pctOfSwaps": 1.3371537726838587,
+            "volumeUsd": 2310.417544,
+            "pctOfVolume": 11.16689762868105
+          },
+          {
+            "minUsd": 500,
+            "count": 1,
+            "pctOfSwaps": 0.09551098376313276,
+            "volumeUsd": 502.147762,
+            "pctOfVolume": 2.4270213266374405
+          },
+          {
+            "minUsd": 1000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 2500,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 5000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 10000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 25000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          }
+        ],
+        "dailyBuckets": [
+          {
+            "dayIndex": 0,
+            "startBlock": 29978347,
+            "endBlock": 30021547,
+            "startIso": "2026-11-10T09:43:49.000Z",
+            "endIso": "2026-11-11T09:43:49.000Z",
+            "swapCount": 56,
+            "volumeUsd": 1201.3868240000004,
+            "maxSwapUsd": 100.356691
+          },
+          {
+            "dayIndex": 1,
+            "startBlock": 30021547,
+            "endBlock": 30064747,
+            "startIso": "2026-11-11T09:43:49.000Z",
+            "endIso": "2026-11-12T09:43:49.000Z",
+            "swapCount": 1,
+            "volumeUsd": 12.005457,
+            "maxSwapUsd": 12.005457
+          },
+          {
+            "dayIndex": 2,
+            "startBlock": 30064747,
+            "endBlock": 30107947,
+            "startIso": "2026-11-12T09:43:49.000Z",
+            "endIso": "2026-11-13T09:43:49.000Z",
+            "swapCount": 12,
+            "volumeUsd": 128.708419,
+            "maxSwapUsd": 24.993521
+          },
+          {
+            "dayIndex": 3,
+            "startBlock": 30107947,
+            "endBlock": 30151147,
+            "startIso": "2026-11-13T09:43:49.000Z",
+            "endIso": "2026-11-14T09:43:49.000Z",
+            "swapCount": 65,
+            "volumeUsd": 1527.3459360000004,
+            "maxSwapUsd": 145.800226
+          },
+          {
+            "dayIndex": 4,
+            "startBlock": 30151147,
+            "endBlock": 30194347,
+            "startIso": "2026-11-14T09:43:49.000Z",
+            "endIso": "2026-11-15T09:43:49.000Z",
+            "swapCount": 160,
+            "volumeUsd": 2554.4393480000003,
+            "maxSwapUsd": 75.017233
+          },
+          {
+            "dayIndex": 5,
+            "startBlock": 30194347,
+            "endBlock": 30237547,
+            "startIso": "2026-11-15T09:43:49.000Z",
+            "endIso": "2026-11-16T09:43:49.000Z",
+            "swapCount": 70,
+            "volumeUsd": 1469.7256720000003,
+            "maxSwapUsd": 74.999976
+          },
+          {
+            "dayIndex": 6,
+            "startBlock": 30237547,
+            "endBlock": 30280747,
+            "startIso": "2026-11-16T09:43:49.000Z",
+            "endIso": "2026-11-17T09:43:49.000Z",
+            "swapCount": 31,
+            "volumeUsd": 1554.208791,
+            "maxSwapUsd": 149.999877
+          },
+          {
+            "dayIndex": 7,
+            "startBlock": 30280747,
+            "endBlock": 30323947,
+            "startIso": "2026-11-17T09:43:49.000Z",
+            "endIso": "2026-11-18T09:43:49.000Z",
+            "swapCount": 76,
+            "volumeUsd": 1108.2137380000001,
+            "maxSwapUsd": 34.990916
+          },
+          {
+            "dayIndex": 8,
+            "startBlock": 30323947,
+            "endBlock": 30367147,
+            "startIso": "2026-11-18T09:43:49.000Z",
+            "endIso": "2026-11-19T09:43:49.000Z",
+            "swapCount": 63,
+            "volumeUsd": 1635.5016099999996,
+            "maxSwapUsd": 502.147762
+          },
+          {
+            "dayIndex": 9,
+            "startBlock": 30367147,
+            "endBlock": 30410347,
+            "startIso": "2026-11-19T09:43:49.000Z",
+            "endIso": "2026-11-20T09:43:49.000Z",
+            "swapCount": 35,
+            "volumeUsd": 865.9750240000002,
+            "maxSwapUsd": 75.030441
+          },
+          {
+            "dayIndex": 10,
+            "startBlock": 30410347,
+            "endBlock": 30453547,
+            "startIso": "2026-11-20T09:43:49.000Z",
+            "endIso": "2026-11-21T09:43:49.000Z",
+            "swapCount": 307,
+            "volumeUsd": 6418.055819000003,
+            "maxSwapUsd": 165.5081
+          },
+          {
+            "dayIndex": 11,
+            "startBlock": 30453547,
+            "endBlock": 30496747,
+            "startIso": "2026-11-21T09:43:49.000Z",
+            "endIso": "2026-11-22T09:43:49.000Z",
+            "swapCount": 43,
+            "volumeUsd": 558.7161739999998,
+            "maxSwapUsd": 25.002208
+          },
+          {
+            "dayIndex": 12,
+            "startBlock": 30496747,
+            "endBlock": 30539947,
+            "startIso": "2026-11-22T09:43:49.000Z",
+            "endIso": "2026-11-23T09:43:49.000Z",
+            "swapCount": 47,
+            "volumeUsd": 678.9282250000003,
+            "maxSwapUsd": 22.157868
+          },
+          {
+            "dayIndex": 13,
+            "startBlock": 30539947,
+            "endBlock": 30583147,
+            "startIso": "2026-11-23T09:43:49.000Z",
+            "endIso": "2026-11-24T09:43:49.000Z",
+            "swapCount": 81,
+            "volumeUsd": 976.6673949999996,
+            "maxSwapUsd": 25.000709
+          }
+        ],
+        "mintCount14d": 0,
+        "burnCount14d": 0
+      },
+      "gasDragByNotionalBps": [
+        {
+          "notionalUsd": 1000,
+          "conservativeGasBps": 0.1724153852026551,
+          "multicallGasBps": 0.1501932370124174
+        },
+        {
+          "notionalUsd": 5000,
+          "conservativeGasBps": 0.03448307704053102,
+          "multicallGasBps": 0.030038647402483475
+        },
+        {
+          "notionalUsd": 10000,
+          "conservativeGasBps": 0.01724153852026551,
+          "multicallGasBps": 0.015019323701241738
+        },
+        {
+          "notionalUsd": 25000,
+          "conservativeGasBps": 0.006896615408106203,
+          "multicallGasBps": 0.006007729480496695
+        },
+        {
+          "notionalUsd": 50000,
+          "conservativeGasBps": 0.0034483077040531017,
+          "multicallGasBps": 0.0030038647402483476
+        },
+        {
+          "notionalUsd": 100000,
+          "conservativeGasBps": 0.0017241538520265508,
+          "multicallGasBps": 0.0015019323701241738
+        }
+      ]
+    },
+    "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16": {
+      "name": "WETH/USDT (0.30%)",
+      "address": "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16",
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "currentTick": -201913,
+      "activeLiquidity": "1012957283335421",
+      "liquidityReconstructionMatchesSlot": true,
+      "initializedTickCount": 2,
+      "tickRangeSummary": [
+        {
+          "tickLower": -887220,
+          "tickUpper": 887220,
+          "liquidity": "1012957283335421",
+          "shareOfActivePct": 100
+        }
+      ],
+      "spotPriceUsd": 1704.04326384131,
+      "balances": {
+        "token0Symbol": "WETH",
+        "token0Amount": 24.563367993685347,
+        "token1Symbol": "USDT",
+        "token1Amount": 41838.045266
+      },
+      "tvlUsd": 83695.08703289475,
+      "lpInventoryExposure": {
+        "token0SharePct": 50.01134863560587,
+        "token1SharePct": 49.98865136439414,
+        "fullRangeSharePct": 100
+      },
+      "depthTable": {
+        "+/-10bps": {
+          "bps": 10,
+          "buyBaseCapacityUsd": 20.902243910859006,
+          "buyBaseCapacityTokens": 0.012260135094001636,
+          "sellBaseCapacityUsd": 20.91269764820782,
+          "sellBaseCapacityTokens": 0.012278539101566212,
+          "twoSidedUsd": 41.814941559066824,
+          "pctOfTvl": 0.049961046748935534
+        },
+        "+/-50bps": {
+          "bps": 50,
+          "buyBaseCapacityUsd": 104.40699481634104,
+          "buyBaseCapacityTokens": 0.06111755158696701,
+          "sellBaseCapacityUsd": 104.66834021019145,
+          "sellBaseCapacityTokens": 0.06157765982798127,
+          "twoSidedUsd": 209.07533502653249,
+          "pctOfTvl": 0.24980598316883215
+        },
+        "+/-100bps": {
+          "bps": 100,
+          "buyBaseCapacityUsd": 208.55459216989047,
+          "buyBaseCapacityTokens": 0.12178069641865923,
+          "sellBaseCapacityUsd": 209.59999824783705,
+          "sellBaseCapacityTokens": 0.12362123003994385,
+          "twoSidedUsd": 418.1545904177275,
+          "pctOfTvl": 0.4996166504413572
+        },
+        "+/-500bps": {
+          "bps": 500,
+          "buyBaseCapacityUsd": 1032.6230555788675,
+          "buyBaseCapacityTokens": 0.5913798884402027,
+          "sellBaseCapacityUsd": 1058.7778350766205,
+          "sellBaseCapacityTokens": 0.6374739195338648,
+          "twoSidedUsd": 2091.400890655488,
+          "pctOfTvl": 2.4988335215345474
+        },
+        "+/-1000bps": {
+          "bps": 1000,
+          "buyBaseCapacityUsd": 2040.93887868291,
+          "buyBaseCapacityTokens": 1.141965646678688,
+          "sellBaseCapacityUsd": 2145.804624796255,
+          "sellBaseCapacityTokens": 1.3273587144305241,
+          "twoSidedUsd": 4186.743503479165,
+          "pctOfTvl": 5.002376664993067
+        },
+        "+/-2000bps": {
+          "bps": 2000,
+          "buyBaseCapacityUsd": 3991.0314073765567,
+          "buyBaseCapacityTokens": 2.138030545660393,
+          "sellBaseCapacityUsd": 4414.520286750039,
+          "sellBaseCapacityTokens": 2.8963957836883334,
+          "twoSidedUsd": 8405.551694126596,
+          "pctOfTvl": 10.043064643475375
+        }
+      },
+      "priceImpactTable": [
+        {
+          "tradeUsd": 100,
+          "buyBase": {
+            "tradeUsd": 100,
+            "side": "BUY_BASE",
+            "baseTraded": 0.05836873470263817,
+            "effectivePriceExFee": 1708.1062405742664,
+            "effectivePriceAllIn": 1713.2459785097958,
+            "endSpotPrice": 1712.178904725408,
+            "purePriceImpactBps": 23.843154802287714,
+            "allInCostBps": 54.005170313227154,
+            "endSpotMoveBps": 47.74315920687666,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 100,
+            "side": "SELL_BASE",
+            "baseTraded": 0.05868395604849653,
+            "usdtOut": 99.46284918897703,
+            "effectivePriceExFee": 1699.9899514838555,
+            "effectivePriceAllIn": 1694.889981629404,
+            "endSpotPrice": 1695.946280513622,
+            "purePriceImpactBps": 23.7864404235677,
+            "allInCostBps": 53.715081102296836,
+            "endSpotMoveBps": 47.51630137274421,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 500,
+          "buyBase": {
+            "tradeUsd": 500,
+            "side": "BUY_BASE",
+            "baseTraded": 0.28909307542697427,
+            "effectivePriceExFee": 1724.358147505759,
+            "effectivePriceAllIn": 1729.546787869367,
+            "endSpotPrice": 1744.9152166282004,
+            "purePriceImpactBps": 119.21577400948458,
+            "allInCostBps": 149.6647683144281,
+            "endSpotMoveBps": 239.8527880962109,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 500,
+            "side": "SELL_BASE",
+            "baseTraded": 0.2934197802424826,
+            "usdtOut": 492.6271078045037,
+            "effectivePriceExFee": 1683.9677124170337,
+            "effectivePriceAllIn": 1678.9158092797827,
+            "endSpotPrice": 1664.128673629228,
+            "purePriceImpactBps": 117.81127774315614,
+            "allInCostBps": 147.4578439099261,
+            "endSpotMoveBps": 234.23460576995737,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 1000,
+          "buyBase": {
+            "tradeUsd": 1000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.5714537808447012,
+            "effectivePriceExFee": 1744.673031170207,
+            "effectivePriceAllIn": 1749.9227995689137,
+            "endSpotPrice": 1786.2715403310845,
+            "purePriceImpactBps": 238.4315480189625,
+            "allInCostBps": 269.2392658164122,
+            "endSpotMoveBps": 482.5480563469542,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 1000,
+            "side": "SELL_BASE",
+            "baseTraded": 0.5868395604849652,
+            "usdtOut": 973.7819658450627,
+            "effectivePriceExFee": 1664.3596783835785,
+            "effectivePriceAllIn": 1659.3665993484278,
+            "endSpotPrice": 1625.6002402102495,
+            "purePriceImpactBps": 232.8789784848262,
+            "allInCostBps": 262.18034154937175,
+            "endSpotMoveBps": 460.33469510763257,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 2500,
+          "buyBase": {
+            "tradeUsd": 2500,
+            "side": "BUY_BASE",
+            "baseTraded": 1.3804140403706155,
+            "effectivePriceExFee": 1805.6176821635413,
+            "effectivePriceAllIn": 1811.050834667544,
+            "endSpotPrice": 1913.246736935701,
+            "purePriceImpactBps": 596.0788700473429,
+            "allInCostBps": 627.9627583223091,
+            "endSpotMoveBps": 1227.688742026407,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 2500,
+            "side": "SELL_BASE",
+            "baseTraded": 1.4670989012124132,
+            "usdtOut": 2352.285246805506,
+            "effectivePriceExFee": 1608.182880422153,
+            "effectivePriceAllIn": 1603.3583317808864,
+            "endSpotPrice": 1517.7150907852467,
+            "purePriceImpactBps": 562.5466527361833,
+            "allInCostBps": 590.8590127779756,
+            "endSpotMoveBps": 1093.4474318218668,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 5000,
+          "buyBase": {
+            "tradeUsd": 5000,
+            "side": "BUY_BASE",
+            "baseTraded": 2.613790188586816,
+            "effectivePriceExFee": 1907.192100485775,
+            "effectivePriceAllIn": 1912.9308931652708,
+            "endSpotPrice": 2134.559482929939,
+            "purePriceImpactBps": 1192.1577400946992,
+            "allInCostBps": 1225.8352458321963,
+            "endSpotMoveBps": 2526.439487916201,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 5000,
+            "side": "SELL_BASE",
+            "baseTraded": 2.9341978024248263,
+            "usdtOut": 4454.011563955868,
+            "effectivePriceExFee": 1522.5332803671604,
+            "effectivePriceAllIn": 1517.965680526059,
+            "endSpotPrice": 1360.3572391701073,
+            "purePriceImpactBps": 1065.1723892560317,
+            "allInCostBps": 1091.9768720882628,
+            "endSpotMoveBps": 2016.8855566287348,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 10000,
+          "buyBase": {
+            "tradeUsd": 10000,
+            "side": "BUY_BASE",
+            "baseTraded": 4.724355114656373,
+            "effectivePriceExFee": 2110.3409371302455,
+            "effectivePriceAllIn": 2116.6910101607277,
+            "endSpotPrice": 2613.5127936179556,
+            "purePriceImpactBps": 2384.3154801894293,
+            "allInCostBps": 2421.5802208519867,
+            "endSpotMoveBps": 5337.126991285948,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 10000,
+            "side": "SELL_BASE",
+            "baseTraded": 5.868395604849653,
+            "usdtOut": 8050.505509124429,
+            "effectivePriceExFee": 1375.968874958961,
+            "effectivePriceAllIn": 1371.840968334084,
+            "endSpotPrice": 1111.057673845624,
+            "purePriceImpactBps": 1925.2703017809126,
+            "allInCostBps": 1949.4944908755697,
+            "endSpotMoveBps": 3479.8740300698605,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 25000,
+          "buyBase": {
+            "tradeUsd": 25000,
+            "side": "BUY_BASE",
+            "baseTraded": 9.164319081959759,
+            "effectivePriceExFee": 2719.787447063647,
+            "effectivePriceAllIn": 2727.9713611470884,
+            "endSpotPrice": 4340.995275278334,
+            "purePriceImpactBps": 5960.788700473563,
+            "allInCostBps": 6008.815145911297,
+            "endSpotMoveBps": 15474.677594116483,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 25000,
+            "side": "SELL_BASE",
+            "baseTraded": 14.670989012124132,
+            "usdtOut": 15616.396199305898,
+            "effectivePriceExFee": 1067.6435205177231,
+            "effectivePriceAllIn": 1064.44058995617,
+            "endSpotPrice": 668.9165181956487,
+            "purePriceImpactBps": 3734.645456647584,
+            "allInCostBps": 3753.4415202776404,
+            "endSpotMoveBps": 6074.5332446093225,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 50000,
+          "buyBase": {
+            "tradeUsd": 50000,
+            "side": "BUY_BASE",
+            "baseTraded": 13.344820746755012,
+            "effectivePriceExFee": 3735.531630285986,
+            "effectivePriceAllIn": 3746.771946124359,
+            "endSpotPrice": 8188.87457670005,
+            "purePriceImpactBps": 11921.577400947139,
+            "allInCostBps": 11987.540021010167,
+            "endSpotMoveBps": 38055.555574571634,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 50000,
+            "side": "SELL_BASE",
+            "baseTraded": 29.341978024248263,
+            "usdtOut": 22740.151900677636,
+            "effectivePriceExFee": 777.3360614860158,
+            "effectivePriceAllIn": 775.0040533015577,
+            "endSpotPrice": 354.5985981156768,
+            "purePriceImpactBps": 5438.284473284326,
+            "allInCostBps": 5451.9696198644715,
+            "endSpotMoveBps": 7919.075145332114,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 100000,
+          "buyBase": {
+            "tradeUsd": 100000,
+            "side": "BUY_BASE",
+            "baseTraded": 17.28795808866974,
+            "effectivePriceExFee": 5767.019996730663,
+            "effectivePriceAllIn": 5784.373116078899,
+            "endSpotPrice": 19517.415049497566,
+            "purePriceImpactBps": 23843.154801894278,
+            "allInCostBps": 23944.9897712079,
+            "endSpotMoveBps": 104535.912694498,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 100000,
+            "side": "SELL_BASE",
+            "baseTraded": 58.683956048496526,
+            "usdtOut": 29459.428526568554,
+            "effectivePriceExFee": 503.51194320274493,
+            "effectivePriceAllIn": 502.0014073731367,
+            "endSpotPrice": 148.77807525631812,
+            "purePriceImpactBps": 7045.192725519704,
+            "allInCostBps": 7054.057147343145,
+            "endSpotMoveBps": 9126.911397067832,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 250000,
+          "buyBase": {
+            "tradeUsd": 250000,
+            "side": "BUY_BASE",
+            "baseTraded": 21.013388962794732,
+            "effectivePriceExFee": 11861.48509606469,
+            "effectivePriceAllIn": 11897.176625942519,
+            "endSpotPrice": 82565.29142752274,
+            "purePriceImpactBps": 59607.88700473569,
+            "allInCostBps": 59817.3390218011,
+            "endSpotMoveBps": 474525.7933264051,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 250000,
+            "side": "SELL_BASE",
+            "baseTraded": 146.7098901212413,
+            "usdtOut": 35807.72391252769,
+            "effectivePriceExFee": 244.80606108979822,
+            "effectivePriceAllIn": 244.07164290652884,
+            "endSpotPrice": 35.16929928833253,
+            "purePriceImpactBps": 8563.381187060073,
+            "allInCostBps": 8567.691043498893,
+            "endSpotMoveBps": 9793.612638630708,
+            "unfilledUsd": 0
+          }
+        }
+      ],
+      "historical14d": {
+        "swapCount": 173,
+        "swapsPerDay": 12.357142857142858,
+        "buyBaseCount": 60,
+        "sellBaseCount": 113,
+        "buyBaseVolUsd": 4488.771379000001,
+        "sellBaseVolUsd": 9161.923591,
+        "totalVolUsd": 13650.69497,
+        "avgDailyVolUsd": 975.0496407142857,
+        "fees14dUsd": 40.95208491,
+        "avgDailyFeesUsd": 2.9251489221428573,
+        "lpFeeAprPct": 1.2756774554311796,
+        "lpFeeApyPct": 1.2838263523534676,
+        "realizedPriceMin": 1549.2044463343288,
+        "realizedPriceMax": 2101.9840847654546,
+        "realizedDailyVolPct": 3.197384290056908,
+        "realizedAnnualizedVolPct": 61.0859410902418,
+        "swapSizeStatsUsd": {
+          "min": 0.113666,
+          "p25": 41.156184,
+          "median": 99.84185,
+          "p75": 99.937591,
+          "p90": 99.9785782,
+          "p95": 99.9937024,
+          "p99": 502.36911464,
+          "max": 510.742775,
+          "mean": 78.90575127167631
+        },
+        "sizeBuckets": [
+          {
+            "minUsd": 100,
+            "count": 5,
+            "pctOfSwaps": 2.8901734104046244,
+            "volumeUsd": 2265.818151,
+            "pctOfVolume": 16.598555282200405
+          },
+          {
+            "minUsd": 500,
+            "count": 4,
+            "pctOfSwaps": 2.312138728323699,
+            "volumeUsd": 2016.251362,
+            "pctOfVolume": 14.770320239600226
+          },
+          {
+            "minUsd": 1000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 2500,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 5000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 10000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 25000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          }
+        ],
+        "dailyBuckets": [
+          {
+            "dayIndex": 0,
+            "startBlock": 29978347,
+            "endBlock": 30021547,
+            "startIso": "2026-11-10T09:43:49.000Z",
+            "endIso": "2026-11-11T09:43:49.000Z",
+            "swapCount": 10,
+            "volumeUsd": 516.8856890000001,
+            "maxSwapUsd": 66.85404
+          },
+          {
+            "dayIndex": 1,
+            "startBlock": 30021547,
+            "endBlock": 30064747,
+            "startIso": "2026-11-11T09:43:49.000Z",
+            "endIso": "2026-11-12T09:43:49.000Z",
+            "swapCount": 0,
+            "volumeUsd": 0,
+            "maxSwapUsd": 0
+          },
+          {
+            "dayIndex": 2,
+            "startBlock": 30064747,
+            "endBlock": 30107947,
+            "startIso": "2026-11-12T09:43:49.000Z",
+            "endIso": "2026-11-13T09:43:49.000Z",
+            "swapCount": 16,
+            "volumeUsd": 1279.6693300000002,
+            "maxSwapUsd": 501.878887
+          },
+          {
+            "dayIndex": 3,
+            "startBlock": 30107947,
+            "endBlock": 30151147,
+            "startIso": "2026-11-13T09:43:49.000Z",
+            "endIso": "2026-11-14T09:43:49.000Z",
+            "swapCount": 6,
+            "volumeUsd": 286.63014300000003,
+            "maxSwapUsd": 99.935708
+          },
+          {
+            "dayIndex": 4,
+            "startBlock": 30151147,
+            "endBlock": 30194347,
+            "startIso": "2026-11-14T09:43:49.000Z",
+            "endIso": "2026-11-15T09:43:49.000Z",
+            "swapCount": 37,
+            "volumeUsd": 2566.566369,
+            "maxSwapUsd": 510.742775
+          },
+          {
+            "dayIndex": 5,
+            "startBlock": 30194347,
+            "endBlock": 30237547,
+            "startIso": "2026-11-15T09:43:49.000Z",
+            "endIso": "2026-11-16T09:43:49.000Z",
+            "swapCount": 0,
+            "volumeUsd": 0,
+            "maxSwapUsd": 0
+          },
+          {
+            "dayIndex": 6,
+            "startBlock": 30237547,
+            "endBlock": 30280747,
+            "startIso": "2026-11-16T09:43:49.000Z",
+            "endIso": "2026-11-17T09:43:49.000Z",
+            "swapCount": 3,
+            "volumeUsd": 217.017442,
+            "maxSwapUsd": 99.947711
+          },
+          {
+            "dayIndex": 7,
+            "startBlock": 30280747,
+            "endBlock": 30323947,
+            "startIso": "2026-11-17T09:43:49.000Z",
+            "endIso": "2026-11-18T09:43:49.000Z",
+            "swapCount": 7,
+            "volumeUsd": 699.425855,
+            "maxSwapUsd": 99.999473
+          },
+          {
+            "dayIndex": 8,
+            "startBlock": 30323947,
+            "endBlock": 30367147,
+            "startIso": "2026-11-18T09:43:49.000Z",
+            "endIso": "2026-11-19T09:43:49.000Z",
+            "swapCount": 5,
+            "volumeUsd": 499.536977,
+            "maxSwapUsd": 99.971976
+          },
+          {
+            "dayIndex": 9,
+            "startBlock": 30367147,
+            "endBlock": 30410347,
+            "startIso": "2026-11-19T09:43:49.000Z",
+            "endIso": "2026-11-20T09:43:49.000Z",
+            "swapCount": 5,
+            "volumeUsd": 443.692539,
+            "maxSwapUsd": 99.961569
+          },
+          {
+            "dayIndex": 10,
+            "startBlock": 30410347,
+            "endBlock": 30453547,
+            "startIso": "2026-11-20T09:43:49.000Z",
+            "endIso": "2026-11-21T09:43:49.000Z",
+            "swapCount": 40,
+            "volumeUsd": 3578.255459,
+            "maxSwapUsd": 503.6297
+          },
+          {
+            "dayIndex": 11,
+            "startBlock": 30453547,
+            "endBlock": 30496747,
+            "startIso": "2026-11-21T09:43:49.000Z",
+            "endIso": "2026-11-22T09:43:49.000Z",
+            "swapCount": 10,
+            "volumeUsd": 701.35725,
+            "maxSwapUsd": 99.993614
+          },
+          {
+            "dayIndex": 12,
+            "startBlock": 30496747,
+            "endBlock": 30539947,
+            "startIso": "2026-11-22T09:43:49.000Z",
+            "endIso": "2026-11-23T09:43:49.000Z",
+            "swapCount": 5,
+            "volumeUsd": 400.66351,
+            "maxSwapUsd": 99.969287
+          },
+          {
+            "dayIndex": 13,
+            "startBlock": 30539947,
+            "endBlock": 30583147,
+            "startIso": "2026-11-23T09:43:49.000Z",
+            "endIso": "2026-11-24T09:43:49.000Z",
+            "swapCount": 29,
+            "volumeUsd": 2460.994407,
+            "maxSwapUsd": 99.998556
+          }
+        ],
+        "mintCount14d": 0,
+        "burnCount14d": 0
+      },
+      "gasDragByNotionalBps": [
+        {
+          "notionalUsd": 1000,
+          "conservativeGasBps": 0.1724153852026551,
+          "multicallGasBps": 0.1501932370124174
+        },
+        {
+          "notionalUsd": 5000,
+          "conservativeGasBps": 0.03448307704053102,
+          "multicallGasBps": 0.030038647402483475
+        },
+        {
+          "notionalUsd": 10000,
+          "conservativeGasBps": 0.01724153852026551,
+          "multicallGasBps": 0.015019323701241738
+        },
+        {
+          "notionalUsd": 25000,
+          "conservativeGasBps": 0.006896615408106203,
+          "multicallGasBps": 0.006007729480496695
+        },
+        {
+          "notionalUsd": 50000,
+          "conservativeGasBps": 0.0034483077040531017,
+          "multicallGasBps": 0.0030038647402483476
+        },
+        {
+          "notionalUsd": 100000,
+          "conservativeGasBps": 0.0017241538520265508,
+          "multicallGasBps": 0.0015019323701241738
+        }
+      ]
+    },
+    "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a": {
+      "name": "WBTC/USDT (0.30%)",
+      "address": "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a",
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "currentTick": 64273,
+      "activeLiquidity": "1823343427",
+      "liquidityReconstructionMatchesSlot": true,
+      "initializedTickCount": 2,
+      "tickRangeSummary": [
+        {
+          "tickLower": -887220,
+          "tickUpper": 887220,
+          "liquidity": "1823343427",
+          "shareOfActivePct": 100
+        }
+      ],
+      "spotPriceUsd": 61830.79731641943,
+      "balances": {
+        "token0Symbol": "WBTC",
+        "token0Amount": 0.73376434,
+        "token1Symbol": "USDT",
+        "token1Amount": 45351.645257
+      },
+      "tvlUsd": 90720.87944155627,
+      "lpInventoryExposure": {
+        "token0SharePct": 50.009693979855875,
+        "token1SharePct": 49.99030602014412,
+        "fullRangeSharePct": 100
+      },
+      "depthTable": {
+        "+/-10bps": {
+          "bps": 10,
+          "buyBaseCapacityUsd": 22.663781295331678,
+          "buyBaseCapacityTokens": 0.00036636205385807714,
+          "sellBaseCapacityUsd": 22.67511602178515,
+          "sellBaseCapacityTokens": 0.00036691200946279307,
+          "twoSidedUsd": 45.33889731711683,
+          "pctOfTvl": 0.049976254194410465
+        },
+        "+/-50bps": {
+          "bps": 50,
+          "buyBaseCapacityUsd": 113.20589819503766,
+          "buyBaseCapacityTokens": 0.0018263380912607434,
+          "sellBaseCapacityUsd": 113.48926848169435,
+          "sellBaseCapacityTokens": 0.0018400872219908342,
+          "twoSidedUsd": 226.69516667673201,
+          "pctOfTvl": 0.2498820206243397
+        },
+        "+/-100bps": {
+          "bps": 100,
+          "buyBaseCapacityUsd": 226.13053819644665,
+          "buyBaseCapacityTokens": 0.0036390974257728115,
+          "sellBaseCapacityUsd": 227.2640459105643,
+          "sellBaseCapacityTokens": 0.003694096956570646,
+          "twoSidedUsd": 453.3945841070109,
+          "pctOfTvl": 0.4997687267781552
+        },
+        "+/-500bps": {
+          "bps": 500,
+          "buyBaseCapacityUsd": 1119.6474020667374,
+          "buyBaseCapacityTokens": 0.017671840389860274,
+          "sellBaseCapacityUsd": 1148.006376581276,
+          "sellBaseCapacityTokens": 0.019049239886080708,
+          "twoSidedUsd": 2267.6537786480135,
+          "pctOfTvl": 2.4995941315900376
+        },
+        "+/-1000bps": {
+          "bps": 1000,
+          "buyBaseCapacityUsd": 2212.939078736062,
+          "buyBaseCapacityTokens": 0.03412465495239757,
+          "sellBaseCapacityUsd": 2326.6423895107487,
+          "sellBaseCapacityTokens": 0.03966464162887749,
+          "twoSidedUsd": 4539.581468246811,
+          "pctOfTvl": 5.003899318647232
+        },
+        "+/-2000bps": {
+          "bps": 2000,
+          "buyBaseCapacityUsd": 4327.375727952266,
+          "buyBaseCapacityTokens": 0.06388944786609274,
+          "sellBaseCapacityUsd": 4786.554148415555,
+          "sellBaseCapacityTokens": 0.0865512084460744,
+          "twoSidedUsd": 9113.92987636782,
+          "pctOfTvl": 10.046121612212929
+        }
+      },
+      "priceImpactTable": [
+        {
+          "tradeUsd": 100,
+          "buyBase": {
+            "tradeUsd": 100,
+            "side": "BUY_BASE",
+            "baseTraded": 0.0016089270324324602,
+            "effectivePriceExFee": 61966.762935960076,
+            "effectivePriceAllIn": 62153.222603771384,
+            "endSpotPrice": 62103.027543230186,
+            "purePriceImpactBps": 21.98995087267619,
+            "allInCostBps": 52.14639004280208,
+            "endSpotMoveBps": 44.028257539299176,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 100,
+            "side": "SELL_BASE",
+            "baseTraded": 0.0016173170060908234,
+            "usdtOut": 99.4812412392388,
+            "effectivePriceExFee": 61695.13002857774,
+            "effectivePriceAllIn": 61510.04463849201,
+            "endSpotPrice": 61559.76041784599,
+            "purePriceImpactBps": 21.941701179658544,
+            "allInCostBps": 51.87587607611954,
+            "endSpotMoveBps": 43.83525853409509,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 500,
+          "buyBase": {
+            "tradeUsd": 500,
+            "side": "BUY_BASE",
+            "baseTraded": 0.00797464425763657,
+            "effectivePriceExFee": 62510.62541412217,
+            "effectivePriceAllIn": 62698.72157885875,
+            "endSpotPrice": 63197.92820506136,
+            "purePriceImpactBps": 109.94975436330101,
+            "allInCostBps": 140.37086696419453,
+            "endSpotMoveBps": 221.1084035752653,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 500,
+            "side": "SELL_BASE",
+            "baseTraded": 0.008086585030454117,
+            "usdtOut": 493.07861276447017,
+            "effectivePriceExFee": 61158.362621667446,
+            "effectivePriceAllIn": 60974.88753380244,
+            "endSpotPrice": 60493.24092364728,
+            "purePriceImpactBps": 108.75400673078795,
+            "allInCostBps": 138.4277447105964,
+            "endSpotMoveBps": 216.3252700635898,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 1000,
+          "buyBase": {
+            "tradeUsd": 1000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.015777699709235427,
+            "effectivePriceExFee": 63190.45351182652,
+            "effectivePriceAllIn": 63380.59529771968,
+            "endSpotPrice": 64580.00848017364,
+            "purePriceImpactBps": 219.89950872686182,
+            "allInCostBps": 250.65146311621157,
+            "endSpotMoveBps": 444.6345968474419,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 1000,
+            "side": "SELL_BASE",
+            "baseTraded": 0.016173170060908234,
+            "usdtOut": 975.5477528410693,
+            "effectivePriceExFee": 60500.39656810893,
+            "effectivePriceAllIn": 60318.895378404595,
+            "endSpotPrice": 59198.621783362476,
+            "purePriceImpactBps": 215.1679755158531,
+            "allInCostBps": 244.52247158930683,
+            "endSpotMoveBps": 425.7062252629196,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 2500,
+          "buyBase": {
+            "tradeUsd": 2500,
+            "side": "BUY_BASE",
+            "baseTraded": 0.03821098231694741,
+            "effectivePriceExFee": 65229.93780493629,
+            "effectivePriceAllIn": 65426.21645429919,
+            "endSpotPrice": 68815.94562433269,
+            "purePriceImpactBps": 549.748771817018,
+            "allInCostBps": 581.4932515717342,
+            "endSpotMoveBps": 1129.719914845464,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 2500,
+            "side": "SELL_BASE",
+            "baseTraded": 0.04043292515227059,
+            "usdtOut": 2362.615502900457,
+            "effectivePriceExFee": 58608.78647802147,
+            "effectivePriceAllIn": 58432.96011858741,
+            "endSpotPrice": 55554.675040785114,
+            "purePriceImpactBps": 521.1012922749969,
+            "allInCostBps": 549.5379883981722,
+            "endSpotMoveBps": 1015.0479288688819,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 5000,
+          "buyBase": {
+            "tradeUsd": 5000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.0726368490435568,
+            "effectivePriceExFee": 68629.07829345319,
+            "effectivePriceAllIn": 68835.58504859898,
+            "endSpotPrice": 76174.82859400508,
+            "purePriceImpactBps": 1099.4975436340426,
+            "allInCostBps": 1132.8962323310354,
+            "endSpotMoveBps": 2319.884572113795,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 5000,
+            "side": "SELL_BASE",
+            "baseTraded": 0.08086585030454117,
+            "usdtOut": 4491.1942909155205,
+            "effectivePriceExFee": 55705.94260988117,
+            "effectivePriceAllIn": 55538.82478205153,
+            "endSpotPrice": 50187.8057010162,
+            "purePriceImpactBps": 990.5831676719756,
+            "allInCostBps": 1017.6114181689588,
+            "endSpotMoveBps": 1883.0408341364514,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 10000,
+          "buyBase": {
+            "tradeUsd": 10000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.13218015447481077,
+            "effectivePriceExFee": 75427.35927048684,
+            "effectivePriceAllIn": 75654.32223719843,
+            "endSpotPrice": 92013.79851862723,
+            "purePriceImpactBps": 2198.9950872680697,
+            "allInCostBps": 2235.702193849618,
+            "endSpotMoveBps": 4881.548113919043,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 10000,
+            "side": "SELL_BASE",
+            "baseTraded": 0.16173170060908235,
+            "usdtOut": 8172.804340585034,
+            "effectivePriceExFee": 50685.1563379605,
+            "effectivePriceAllIn": 50533.100868946625,
+            "endSpotPrice": 41548.63246962035,
+            "purePriceImpactBps": 1802.6034698244398,
+            "allInCostBps": 1827.1956594149651,
+            "endSpotMoveBps": 3280.269012706564,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 25000,
+          "buyBase": {
+            "tradeUsd": 25000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.2601171693754598,
+            "effectivePriceExFee": 95822.2022015879,
+            "effectivePriceAllIn": 96110.5338029969,
+            "endSpotPrice": 148500.34017471274,
+            "purePriceImpactBps": 5497.487718170167,
+            "allInCostBps": 5544.1200784053835,
+            "endSpotMoveBps": 14017.212557483525,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 25000,
+            "side": "SELL_BASE",
+            "baseTraded": 0.4043292515227059,
+            "usdtOut": 16083.2519781748,
+            "effectivePriceExFee": 39897.303640980055,
+            "effectivePriceAllIn": 39777.61173005711,
+            "endSpotPrice": 25744.368614147766,
+            "purePriceImpactBps": 3547.3412324273622,
+            "allInCostBps": 3566.699208730081,
+            "endSpotMoveBps": 5836.319482926797,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 50000,
+          "buyBase": {
+            "tradeUsd": 50000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.38401213184596655,
+            "effectivePriceExFee": 129813.60708675641,
+            "effectivePriceAllIn": 130204.21974599439,
+            "endSpotPrice": 272543.34920891863,
+            "purePriceImpactBps": 10994.975436340337,
+            "allInCostBps": 11058.149885998331,
+            "endSpotMoveBps": 34078.89935725341,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 50000,
+            "side": "SELL_BASE",
+            "baseTraded": 0.8086585030454118,
+            "usdtOut": 23743.776291214093,
+            "effectivePriceExFee": 29450.28323748172,
+            "effectivePriceAllIn": 29361.932387769273,
+            "endSpotPrice": 14027.30063999315,
+            "purePriceImpactBps": 5236.955608582931,
+            "allInCostBps": 5251.244741757182,
+            "endSpotMoveBps": 7731.340812539038,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 100000,
+          "buyBase": {
+            "tradeUsd": 100000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.504053620304116,
+            "effectivePriceExFee": 197796.41685709337,
+            "effectivePriceAllIn": 198391.59163198934,
+            "endSpotPrice": 632749.7658050684,
+            "purePriceImpactBps": 21989.950872680674,
+            "allInCostBps": 22086.20950118423,
+            "endSpotMoveBps": 92335.6956836523,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 100000,
+            "side": "SELL_BASE",
+            "baseTraded": 1.6173170060908235,
+            "usdtOut": 31166.037233631232,
+            "effectivePriceExFee": 19328.19389517186,
+            "effectivePriceAllIn": 19270.20931348634,
+            "endSpotPrice": 6041.957979897396,
+            "purePriceImpactBps": 6874.0183316317725,
+            "allInCostBps": 6883.396276636878,
+            "endSpotMoveBps": 9022.823860902578,
+            "unfilledUsd": 0
+          }
+        },
+        {
+          "tradeUsd": 250000,
+          "buyBase": {
+            "tradeUsd": 250000,
+            "side": "BUY_BASE",
+            "baseTraded": 0.620418662186658,
+            "effectivePriceExFee": 401744.8461681043,
+            "effectivePriceAllIn": 402953.70728997426,
+            "endSpotPrice": 2610332.203815421,
+            "purePriceImpactBps": 54974.87718170169,
+            "allInCostBps": 55170.38834674192,
+            "endSpotMoveBps": 412173.4664777218,
+            "unfilledUsd": 0
+          },
+          "sellBase": {
+            "tradeUsd": 250000,
+            "side": "SELL_BASE",
+            "baseTraded": 4.0432925152270585,
+            "usdtOut": 38360.98055298735,
+            "effectivePriceExFee": 9516.108378860054,
+            "effectivePriceAllIn": 9487.560053723473,
+            "endSpotPrice": 1464.5827420725,
+            "purePriceImpactBps": 8460.943608706626,
+            "allInCostBps": 8465.560777880506,
+            "endSpotMoveBps": 9763.1305424419,
+            "unfilledUsd": 0
+          }
+        }
+      ],
+      "historical14d": {
+        "swapCount": 21,
+        "swapsPerDay": 1.5,
+        "buyBaseCount": 9,
+        "sellBaseCount": 12,
+        "buyBaseVolUsd": 2511.972143,
+        "sellBaseVolUsd": 7200.926778999999,
+        "totalVolUsd": 9712.898922,
+        "avgDailyVolUsd": 693.7784944285714,
+        "fees14dUsd": 29.138696766000002,
+        "avgDailyFeesUsd": 2.0813354832857143,
+        "lpFeeAprPct": 0.8373898666719689,
+        "lpFeeApyPct": 0.8408960963312229,
+        "realizedPriceMin": 56511.4400626504,
+        "realizedPriceMax": 74082.3041770629,
+        "realizedDailyVolPct": 3.959781514924442,
+        "realizedAnnualizedVolPct": 75.65151961968192,
+        "swapSizeStatsUsd": {
+          "min": 0.126001,
+          "p25": 407.502986,
+          "median": 507.155554,
+          "p75": 510.709303,
+          "p90": 1009.864322,
+          "p95": 1012.670019,
+          "p99": 1023.8457742,
+          "max": 1026.639713,
+          "mean": 462.5189962857143
+        },
+        "sizeBuckets": [
+          {
+            "minUsd": 100,
+            "count": 16,
+            "pctOfSwaps": 76.19047619047619,
+            "volumeUsd": 9632.532527,
+            "pctOfVolume": 99.17258075425897
+          },
+          {
+            "minUsd": 500,
+            "count": 15,
+            "pctOfSwaps": 71.42857142857143,
+            "volumeUsd": 9225.029541,
+            "pctOfVolume": 94.9770981360162
+          },
+          {
+            "minUsd": 1000,
+            "count": 3,
+            "pctOfSwaps": 14.285714285714285,
+            "volumeUsd": 3049.174054,
+            "pctOfVolume": 31.393038046484058
+          },
+          {
+            "minUsd": 2500,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 5000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 10000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          },
+          {
+            "minUsd": 25000,
+            "count": 0,
+            "pctOfSwaps": 0,
+            "volumeUsd": 0,
+            "pctOfVolume": 0
+          }
+        ],
+        "dailyBuckets": [
+          {
+            "dayIndex": 0,
+            "startBlock": 29978347,
+            "endBlock": 30021547,
+            "startIso": "2026-11-10T09:43:49.000Z",
+            "endIso": "2026-11-11T09:43:49.000Z",
+            "swapCount": 1,
+            "volumeUsd": 407.502986,
+            "maxSwapUsd": 407.502986
+          },
+          {
+            "dayIndex": 1,
+            "startBlock": 30021547,
+            "endBlock": 30064747,
+            "startIso": "2026-11-11T09:43:49.000Z",
+            "endIso": "2026-11-12T09:43:49.000Z",
+            "swapCount": 0,
+            "volumeUsd": 0,
+            "maxSwapUsd": 0
+          },
+          {
+            "dayIndex": 2,
+            "startBlock": 30064747,
+            "endBlock": 30107947,
+            "startIso": "2026-11-12T09:43:49.000Z",
+            "endIso": "2026-11-13T09:43:49.000Z",
+            "swapCount": 4,
+            "volumeUsd": 1529.3026869999999,
+            "maxSwapUsd": 510.490773
+          },
+          {
+            "dayIndex": 3,
+            "startBlock": 30107947,
+            "endBlock": 30151147,
+            "startIso": "2026-11-13T09:43:49.000Z",
+            "endIso": "2026-11-14T09:43:49.000Z",
+            "swapCount": 1,
+            "volumeUsd": 510.709303,
+            "maxSwapUsd": 510.709303
+          },
+          {
+            "dayIndex": 4,
+            "startBlock": 30151147,
+            "endBlock": 30194347,
+            "startIso": "2026-11-14T09:43:49.000Z",
+            "endIso": "2026-11-15T09:43:49.000Z",
+            "swapCount": 5,
+            "volumeUsd": 2639.3259740000003,
+            "maxSwapUsd": 1009.864322
+          },
+          {
+            "dayIndex": 5,
+            "startBlock": 30194347,
+            "endBlock": 30237547,
+            "startIso": "2026-11-15T09:43:49.000Z",
+            "endIso": "2026-11-16T09:43:49.000Z",
+            "swapCount": 0,
+            "volumeUsd": 0,
+            "maxSwapUsd": 0
+          },
+          {
+            "dayIndex": 6,
+            "startBlock": 30237547,
+            "endBlock": 30280747,
+            "startIso": "2026-11-16T09:43:49.000Z",
+            "endIso": "2026-11-17T09:43:49.000Z",
+            "swapCount": 0,
+            "volumeUsd": 0,
+            "maxSwapUsd": 0
+          },
+          {
+            "dayIndex": 7,
+            "startBlock": 30280747,
+            "endBlock": 30323947,
+            "startIso": "2026-11-17T09:43:49.000Z",
+            "endIso": "2026-11-18T09:43:49.000Z",
+            "swapCount": 0,
+            "volumeUsd": 0,
+            "maxSwapUsd": 0
+          },
+          {
+            "dayIndex": 8,
+            "startBlock": 30323947,
+            "endBlock": 30367147,
+            "startIso": "2026-11-18T09:43:49.000Z",
+            "endIso": "2026-11-19T09:43:49.000Z",
+            "swapCount": 0,
+            "volumeUsd": 0,
+            "maxSwapUsd": 0
+          },
+          {
+            "dayIndex": 9,
+            "startBlock": 30367147,
+            "endBlock": 30410347,
+            "startIso": "2026-11-19T09:43:49.000Z",
+            "endIso": "2026-11-20T09:43:49.000Z",
+            "swapCount": 2,
+            "volumeUsd": 586.292581,
+            "maxSwapUsd": 507.155554
+          },
+          {
+            "dayIndex": 10,
+            "startBlock": 30410347,
+            "endBlock": 30453547,
+            "startIso": "2026-11-20T09:43:49.000Z",
+            "endIso": "2026-11-21T09:43:49.000Z",
+            "swapCount": 3,
+            "volumeUsd": 2039.63939,
+            "maxSwapUsd": 1026.639713
+          },
+          {
+            "dayIndex": 11,
+            "startBlock": 30453547,
+            "endBlock": 30496747,
+            "startIso": "2026-11-21T09:43:49.000Z",
+            "endIso": "2026-11-22T09:43:49.000Z",
+            "swapCount": 3,
+            "volumeUsd": 1000.126001,
+            "maxSwapUsd": 500
+          },
+          {
+            "dayIndex": 12,
+            "startBlock": 30496747,
+            "endBlock": 30539947,
+            "startIso": "2026-11-22T09:43:49.000Z",
+            "endIso": "2026-11-23T09:43:49.000Z",
+            "swapCount": 1,
+            "volumeUsd": 500,
+            "maxSwapUsd": 500
+          },
+          {
+            "dayIndex": 13,
+            "startBlock": 30539947,
+            "endBlock": 30583147,
+            "startIso": "2026-11-23T09:43:49.000Z",
+            "endIso": "2026-11-24T09:43:49.000Z",
+            "swapCount": 1,
+            "volumeUsd": 500,
+            "maxSwapUsd": 500
+          }
+        ],
+        "mintCount14d": 0,
+        "burnCount14d": 0
+      },
+      "gasDragByNotionalBps": [
+        {
+          "notionalUsd": 1000,
+          "conservativeGasBps": 0.1724153852026551,
+          "multicallGasBps": 0.1501932370124174
+        },
+        {
+          "notionalUsd": 5000,
+          "conservativeGasBps": 0.03448307704053102,
+          "multicallGasBps": 0.030038647402483475
+        },
+        {
+          "notionalUsd": 10000,
+          "conservativeGasBps": 0.01724153852026551,
+          "multicallGasBps": 0.015019323701241738
+        },
+        {
+          "notionalUsd": 25000,
+          "conservativeGasBps": 0.006896615408106203,
+          "multicallGasBps": 0.006007729480496695
+        },
+        {
+          "notionalUsd": 50000,
+          "conservativeGasBps": 0.0034483077040531017,
+          "multicallGasBps": 0.0030038647402483476
+        },
+        {
+          "notionalUsd": 100000,
+          "conservativeGasBps": 0.0017241538520265508,
+          "multicallGasBps": 0.0015019323701241738
+        }
+      ]
+    }
+  }
+}
