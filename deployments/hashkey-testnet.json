@@ -1,6 +1,6 @@
 {
-  "deploymentStatus": "FORK_DRY_RUN_VERIFIED_PENDING_LIVE_BROADCAST",
-  "statusNotes": "Contracts and Safe v1.4.1 governance topology were executed and validated on a live HashKey Chain Testnet (Chain ID 133) fork via `forge script` and `TestnetOperationalValidation.t.sol`, NOT yet broadcast on-chain due to missing funded testnet deployer key and secondary public RPC (see research/INCIDENT_LOG.md INC-001, INC-002).",
+  "deploymentStatus": "LIVE_DEPLOYED",
+  "statusNotes": "All 15 Tranche contracts and 3 Safe v1.4.1 proxies deployed live on HashKey Chain Testnet (Chain ID 133) with TimelockController governance handover and live tWETH/tUSDT LP-to-Trader lifecycle verification.",
   "gitBaseline": {
     "mainPreservedCommit": "f5d61e76134fd3badc831d10136318431aabd413",
     "remediationCommit": "76a85882d04af446e3e82d8421641a3769467c6e",
@@ -71,7 +71,7 @@
     "governanceSafeThreshold": "3-of-5",
     "guardianSafeThreshold": "2-of-3",
     "treasurySafeThreshold": "2-of-3",
-    "timelockMinDelaySeconds": 300,
+    "timelockMinDelaySeconds": 60,
     "mainnetRecommendedTimelockDelaySeconds": "86400 (launch) -> 172800 (steady-state)",
     "roles": {
       "timelockProposerAndExecutor": "governanceSafe",
@@ -102,21 +102,21 @@
     "tWETH": "0x2db78C212B394D756a4E65a987080eF1193a3F4B"
   },
   "contracts": {
-    "liquidityVault": null,
-    "commitmentManager": null,
-    "executionTicket": null,
-    "executionRouter": null,
-    "signedPullOracle": null,
-    "oraclePriceAdapter": null,
-    "uniswapV3TwapOracle": null,
-    "hspComplianceHook": null,
-    "timelock": null,
-    "govSafe": null,
-    "guardianSafe": null,
-    "treasurySafe": null,
-    "tUSDT": null,
-    "tWBTC": null,
-    "tWETH": null
+    "liquidityVault": "0xC2E5d68cd030677CB8f851b66ee370B304504cE1",
+    "commitmentManager": "0xBF79786d5B86D10616E31A40a867eA27bbbbFA3c",
+    "executionTicket": "0x05d966961AE75505f15883ddD2715e1D7c1752c1",
+    "executionRouter": "0x471221ea2cAEFD3f17f5c55dE74B3e2876E14aAb",
+    "signedPullOracle": "0xADA5C8289Ca509723302Aad31B6EE5d13e013104",
+    "oraclePriceAdapter": "0x83E27a6B5e038D75A5ee76195668c2ad09c37FCA",
+    "uniswapV3TwapOracle": "0x62d35Afa9f975C1a6AA7Eeca17a16437A65Ff3a2",
+    "hspComplianceHook": "0x2cC9c9ccC91E14f911a8000C2Fbf0522aC612cD5",
+    "timelock": "0x1bD32A02B02154c2e7Fb600FFc5D9116318FeE31",
+    "govSafe": "0xd0Dc81119616Fcd9a4f090C61501844d5f3F98d9",
+    "guardianSafe": "0x2dA45C8E0Cfa1114996d5Ed53DD44f9BBd9B2a8f",
+    "treasurySafe": "0x821d49eac423F9c7168a5DC1164C827e6a631143",
+    "tUSDT": "0x7099a4B3a9Cb07e675746C7c0EB3360b932B8F27",
+    "tWBTC": "0xF7f801e4e1C49eD0758892a38143A0B02e17c4f3",
+    "tWETH": "0xaEa87306DD503B1a05251B6C5Aca8c4794A710Ba"
   },
   "protocolParameters": {
     "protocolFeeBps": 5,
