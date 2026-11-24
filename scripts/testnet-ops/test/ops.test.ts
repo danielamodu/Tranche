@@ -26,6 +26,7 @@ import {
 import { FailoverRpcPool } from "../src/rpc-failover.js";
 import { signQuorumPriceReport, submitQuorumPriceUpdate } from "../src/oracle-quorum.js";
 import { runSoakLoop } from "../src/soak-runner.js";
+import { runLiveLifecycle } from "../src/live-lifecycle.js";
 
 async function startAnvil(): Promise<{ proc: ChildProcess; rpcUrl: string }> {
   const port = 19545 + Math.floor(Math.random() * 1000);
@@ -288,5 +289,37 @@ test("2. M-of-N oracle quorum signing (out-of-order keys) & 2-cycle soak runner 
   } finally {
     proc.kill();
     await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("3. runLiveLifecycle executes LP deposit -> offer -> reserve -> exercise -> claimProceeds -> withdrawFree with event & INV-1 checks", async () => {
+  const { proc, rpcUrl } = await startAnvil();
+  try {
+    const dep = await deployLocalTrancheStack(rpcUrl);
+    const res = await runLiveLifecycle({
+      publicClient: dep.publicClient,
+      lpWalletClient: dep.accounts.lp.walletClient,
+      traderWalletClient: dep.accounts.trader1.walletClient,
+      addresses: dep.addresses,
+      inventoryToken: dep.addresses.whsk,
+      paymentToken: dep.addresses.usdt,
+      depositAmount: parseUnits("300", 18),
+      offerAmount: parseUnits("300", 18),
+      reserveAmount: parseUnits("150", 18),
+      minFillAmount: parseUnits("100", 18),
+      fixedPriceX36: 82_000n * 10n ** 18n,
+    });
+    assert.equal(res.steps.length, 6);
+    assert.deepEqual(
+      res.steps.map((s) => s.eventVerified),
+      ["Deposited", "OfferCreated", "TicketReserved", "TicketExercised", "ProceedsClaimed", "WithdrawnFree"],
+    );
+    assert.ok(res.lpGasUsed > 0n);
+    assert.ok(res.traderGasUsed > 0n);
+    console.log(
+      `[lifecycle gas] lpGasUsed=${res.lpGasUsed} traderGasUsed=${res.traderGasUsed} total=${res.lpGasUsed + res.traderGasUsed}`,
+    );
+  } finally {
+    proc.kill();
   }
 });

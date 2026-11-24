@@ -1,0 +1,267 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ==========================================================================
+   Tranche Design System — Apple Liquid Glass × Tranche Monochrome
+   Source of truth: /design.md
+   Typography: Archivo (display) · DM Sans (body) · JetBrains Mono (data)
+   ========================================================================== */
+
+:root {
+  --background: #ffffff;
+  --foreground: #090908;
+  --card: #faf9f5;
+  --card-foreground: #090908;
+  --popover: #ffffff;
+  --popover-foreground: #090908;
+  --primary: #090908;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f1ea;
+  --secondary-foreground: #090908;
+  --muted: #f2f1ea;
+  --muted-foreground: #57564f;
+  --accent: #f2f1ea;
+  --accent-foreground: #090908;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --border: #e6e5dc;
+  --input: #e6e5dc;
+  --ring: #090908;
+  --radius: 0.75rem;
+
+  /* Semantic status */
+  --status-live: #15803d;
+  --status-warn: #b45309;
+  --status-danger: #b91c1c;
+
+  /* Apple Liquid Glass — Light */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-hover: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(9, 9, 8, 0.09);
+  --glass-specular: rgba(255, 255, 255, 0.92);
+  --glass-shadow: 0 8px 30px rgba(9, 9, 8, 0.06);
+
+  /* Ticket paper */
+  --ticket-bg: #090908;
+  --ticket-fg: #f8f7ee;
+  --ticket-muted: rgba(248, 247, 238, 0.62);
+  --ticket-hairline: rgba(248, 247, 238, 0.16);
+
+  /* Motion grammar */
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap: cubic-bezier(0.2, 0, 0, 1);
+  --sidebar: #faf9f5;
+  --sidebar-foreground: #090908;
+  --sidebar-primary: #090908;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f2f1ea;
+  --sidebar-accent-foreground: #090908;
+  --sidebar-border: #e6e5dc;
+  --sidebar-ring: #090908;
+}
+
+.dark {
+  --background: #050505;
+  --foreground: #f8f7ee;
+  --card: #0c0c0b;
+  --card-foreground: #f8f7ee;
+  --popover: #0c0c0b;
+  --popover-foreground: #f8f7ee;
+  --primary: #f8f7ee;
+  --primary-foreground: #050505;
+  --secondary: #141412;
+  --secondary-foreground: #f8f7ee;
+  --muted: #141412;
+  --muted-foreground: #9d9c93;
+  --accent: #1c1c19;
+  --accent-foreground: #f8f7ee;
+  --destructive: #f87171;
+  --destructive-foreground: #050505;
+  --border: #1f1f1c;
+  --input: #1f1f1c;
+  --ring: #f8f7ee;
+
+  /* Semantic status */
+  --status-live: #4ade80;
+  --status-warn: #fbbf24;
+  --status-danger: #f87171;
+
+  /* Apple Liquid Glass — Dark */
+  --glass-bg: rgba(20, 20, 19, 0.68);
+  --glass-bg-hover: rgba(30, 30, 28, 0.78);
+  --glass-border: rgba(248, 247, 238, 0.12);
+  --glass-specular: rgba(255, 255, 255, 0.11);
+  --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  /* Ticket paper (warm cream matching official dark logo) */
+  --ticket-bg: #f8f7ee;
+  --ticket-fg: #050505;
+  --ticket-muted: rgba(5, 5, 5, 0.58);
+  --ticket-hairline: rgba(5, 5, 5, 0.14);
+  --sidebar: #0c0c0b;
+  --sidebar-foreground: #f8f7ee;
+  --sidebar-primary: #f8f7ee;
+  --sidebar-primary-foreground: #050505;
+  --sidebar-accent: #1c1c19;
+  --sidebar-accent-foreground: #f8f7ee;
+  --sidebar-border: #1f1f1c;
+  --sidebar-ring: #f8f7ee;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-status-live: var(--status-live);
+  --color-status-warn: var(--status-warn);
+  --color-status-danger: var(--status-danger);
+
+  --font-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.035em;
+  }
+}
+
+/* Tabular numerals for zero horizontal jitter */
+.tabular-nums-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Apple Liquid Glass Floating Pill / Bar */
+.glass-pill {
+  background: var(--glass-bg);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-specular),
+    var(--glass-shadow);
+  transition:
+    background-color 160ms var(--ease-snap),
+    border-color 160ms var(--ease-snap),
+    transform 160ms var(--ease-snap);
+}
+
+.glass-pill-interactive:hover {
+  background: var(--glass-bg-hover);
+}
+
+.glass-pill-interactive:active {
+  transform: scale(0.985);
+}
+
+/* Subtle architectural entrance */
+@keyframes tranche-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: tranche-rise 520ms var(--ease-out-expo) both;
+}
+
+.animate-rise-delay-1 {
+  animation: tranche-rise 520ms var(--ease-out-expo) 70ms both;
+}
+
+.animate-rise-delay-2 {
+  animation: tranche-rise 520ms var(--ease-out-expo) 140ms both;
+}
+
+.animate-rise-delay-3 {
+  animation: tranche-rise 520ms var(--ease-out-expo) 210ms both;
+}
+
+/* Editorial masked line reveal (Jeton / Aristide style) */
+@keyframes tranche-mask-up {
+  from {
+    transform: translateY(105%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-mask-up {
+  animation: tranche-mask-up 680ms var(--ease-out-expo) both;
+}
+
+.animate-mask-up-delay {
+  animation: tranche-mask-up 680ms var(--ease-out-expo) 110ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-rise-delay-1,
+  .animate-rise-delay-2,
+  .animate-rise-delay-3,
+  .animate-mask-up,
+  .animate-mask-up-delay {
+    animation: none;
+  }
+}
