@@ -17,3 +17,6 @@ Thumbs.db
 
 # Forge script broadcast / dry-run artifacts
 broadcast/
+
+!web/src/lib/
+!web/src/lib/**
