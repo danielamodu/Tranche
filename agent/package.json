@@ -1,0 +1,28 @@
+{
+  "name": "@tranche/agent",
+  "version": "0.1.0",
+  "description": "Deterministic execution agent and decision-trace tooling for Tranche",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/agent.integration.test.ts",
+    "demo": "tsx src/run-demo.ts"
+  },
+  "dependencies": {
+    "@tranche/sdk": "file:../sdk",
+    "viem": "^2.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
