@@ -1,0 +1,183 @@
+{
+  "deploymentStatus": "FORK_DRY_RUN_VERIFIED_PENDING_LIVE_BROADCAST",
+  "statusNotes": "Contracts and Safe v1.4.1 governance topology were executed and validated on a live HashKey Chain Testnet (Chain ID 133) fork via `forge script` and `TestnetOperationalValidation.t.sol`, NOT yet broadcast on-chain due to missing funded testnet deployer key and secondary public RPC (see research/INCIDENT_LOG.md INC-001, INC-002).",
+  "gitBaseline": {
+    "mainPreservedCommit": "f5d61e76134fd3badc831d10136318431aabd413",
+    "remediationCommit": "76a85882d04af446e3e82d8421641a3769467c6e",
+    "validationBranch": "testnet/phase3-validation"
+  },
+  "network": {
+    "name": "HashKey Chain Testnet",
+    "chainId": 133,
+    "rpcUrls": [
+      "https://testnet.hsk.xyz"
+    ],
+    "failedOrGatedRpcsObserved": [
+      {
+        "url": "https://hashkeychain-testnet.alt.technology",
+        "error": "DNS NXDOMAIN (os error 11001)"
+      },
+      {
+        "url": "https://hashkey-testnet.drpc.org",
+        "error": "HTTP 400 JSON-RPC code 35: chain is not available on free plan, please upgrade to paid plan"
+      }
+    ],
+    "nativeCurrency": {
+      "name": "HashKey EcoPoints",
+      "symbol": "HSK",
+      "decimals": 18
+    },
+    "sampledForkBlock": 36166196,
+    "observedGasPriceWei": "1001000000",
+    "dryRunEstimatedGas": 25300880,
+    "dryRunEstimatedGasPriceWei": "2000000001",
+    "dryRunEstimatedCostHsk": "0.05060176002530088"
+  },
+  "canonicalInfrastructure": {
+    "WHSK": {
+      "address": "0x4200000000000000000000000000000000000006",
+      "name": "Wrapped HashKey EcoPoints",
+      "symbol": "WHSK",
+      "decimals": 18,
+      "codeBytes": 2865,
+      "verification": "LIVE_CHAIN_133_RPC_VERIFIED"
+    },
+    "Multicall3": {
+      "address": "0xcA11bde05977b3631167028862be2a173976CA11",
+      "codeBytes": 3808,
+      "verification": "LIVE_CHAIN_133_RPC_VERIFIED"
+    },
+    "SafeL2_v1_4_1": {
+      "address": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
+      "version": "1.4.1",
+      "codeBytes": 24421,
+      "verification": "LIVE_CHAIN_133_RPC_VERIFIED"
+    },
+    "SafeProxyFactory_v1_4_1": {
+      "address": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+      "codeBytes": 3054,
+      "verification": "LIVE_CHAIN_133_RPC_VERIFIED"
+    },
+    "SafeFallbackHandler_v1_4_1": {
+      "address": "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99",
+      "codeBytes": 5637,
+      "verification": "LIVE_CHAIN_133_RPC_VERIFIED"
+    }
+  },
+  "governanceTopology": {
+    "governanceSafeThreshold": "3-of-5",
+    "guardianSafeThreshold": "2-of-3",
+    "treasurySafeThreshold": "2-of-3",
+    "timelockMinDelaySeconds": 300,
+    "mainnetRecommendedTimelockDelaySeconds": "86400 (launch) -> 172800 (steady-state)",
+    "roles": {
+      "timelockProposerAndExecutor": "governanceSafe",
+      "timelockCanceller": "guardianSafe",
+      "all6AdminContractsOwnerPostHandover": "timelock",
+      "vaultAndManagerAndPullOracleGuardian": "guardianSafe",
+      "vaultFeeCollector": "treasurySafe",
+      "deployerPostHandoverDefaultAdmin": "RENOUNCED"
+    }
+  },
+  "forkDryRunAddresses": {
+    "note": "Predicted deterministic CREATE/CREATE2 addresses from `forge script contracts/script/DeployTestnet.s.sol --fork-url https://testnet.hsk.xyz` with default fallback config; will differ when live DEPLOYER_PRIVATE_KEY and signer env vars are supplied.",
+    "deployerFallback": "0x4a1CF4B062b4A488039F5B3DaA77a48AB013b38B",
+    "govSafe": "0x4F0C36c2Ad4783b6058Eb4aBDafD8138deF670Cb",
+    "guardianSafe": "0xaB12481bb6FE2Fcc038d8c1e2637ED819846C4aa",
+    "treasurySafe": "0xeA86eF0bAC8328D25FF9284a0DaE9b4D9AEe49aE",
+    "timelock": "0xF8A150f21E9845Bf26BC17c5e15b17D98d2c14a4",
+    "liquidityVault": "0x97dC7B9Fdf8632c652Ed05B1b8252d07BE4103BF",
+    "commitmentManager": "0x8c460a5B9D5bDc2CF99010fFfe630CbBFeaa26C0",
+    "executionTicket": "0xb7393d9d28a2fAe7D45694d730D7aA68813126C0",
+    "executionRouter": "0xac03F3E7b5cbcA802e61Aa3db3121De8Db45D09D",
+    "signedPullOracle": "0xc6c5A346529Ef6EAB8c61e897c9E87C476B01591",
+    "oraclePriceAdapter": "0x9750d8ea4487A605a2f09C93BEbA5aB19B96c56a",
+    "uniswapV3TwapOracle": "0xb67f440eEc5B2F3E4968f43CAab2fb57EeC21a1C",
+    "hspComplianceHook": "0x47978FE8f46b3E6970e1f203630A2eeEB06CA6dc",
+    "tUSDT": "0x86B5dC186327336162bb7879734f6015B7dD068d",
+    "tWBTC": "0x8D7Ab6c9bb0F23dCfe8f87ec0b0A03a3e3eb67DD",
+    "tWETH": "0x2db78C212B394D756a4E65a987080eF1193a3F4B"
+  },
+  "contracts": {
+    "liquidityVault": null,
+    "commitmentManager": null,
+    "executionTicket": null,
+    "executionRouter": null,
+    "signedPullOracle": null,
+    "oraclePriceAdapter": null,
+    "uniswapV3TwapOracle": null,
+    "hspComplianceHook": null,
+    "timelock": null,
+    "govSafe": null,
+    "guardianSafe": null,
+    "treasurySafe": null
+  },
+  "protocolParameters": {
+    "protocolFeeBps": 5,
+    "maxProtocolFeeBps": 100,
+    "minOfferDurationSeconds": 60,
+    "maxOfferDurationSeconds": 2592000,
+    "signedPullOracle": {
+      "eip712Name": "ProtocolSignedPullOracle",
+      "eip712Version": "2",
+      "threshold": 2,
+      "signerCount": 3,
+      "maxPriceAgeSeconds": 30,
+      "chainlinkDataStreamsIntegrated": false
+    },
+    "tokenMinTicketAmount": {
+      "WHSK": {
+        "decimals": 18,
+        "minAmount": "10000000000000000000",
+        "human": "10 WHSK"
+      },
+      "tUSDT": {
+        "decimals": 6,
+        "minAmount": "1000000",
+        "human": "1 tUSDT"
+      },
+      "tWBTC": {
+        "decimals": 8,
+        "minAmount": "10000",
+        "human": "0.0001 tWBTC"
+      },
+      "tWETH": {
+        "decimals": 18,
+        "minAmount": "1000000000000000",
+        "human": "0.001 tWETH"
+      }
+    },
+    "oraclePairConfigs": {
+      "WHSK/tUSDT": {
+        "inventoryDecimals": 18,
+        "paymentDecimals": 6,
+        "maxStalenessSeconds": 30,
+        "maxJumpBps": 500,
+        "requireSecondaryCheck": false,
+        "allowSecondaryFallback": false,
+        "hardMinPriceX36": "1000000000000000000000",
+        "hardMaxPriceX36": "100000000000000000000000000"
+      },
+      "tWETH/tUSDT": {
+        "inventoryDecimals": 18,
+        "paymentDecimals": 6,
+        "maxStalenessSeconds": 30,
+        "maxJumpBps": 300,
+        "requireSecondaryCheck": false,
+        "allowSecondaryFallback": false,
+        "hardMinPriceX36": "100000000000000000000000000",
+        "hardMaxPriceX36": "100000000000000000000000000000"
+      },
+      "tWBTC/tUSDT": {
+        "inventoryDecimals": 8,
+        "paymentDecimals": 6,
+        "maxStalenessSeconds": 30,
+        "maxJumpBps": 300,
+        "requireSecondaryCheck": false,
+        "allowSecondaryFallback": false,
+        "hardMinPriceX36": "10000000000000000000000000000000000000",
+        "hardMaxPriceX36": "10000000000000000000000000000000000000000"
+      }
+    }
+  }
+}

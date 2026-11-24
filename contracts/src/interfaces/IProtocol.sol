@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @title Core interfaces and shared types for the protocol
+/// @title Core interfaces and shared types for Tranche
 enum PriceMode {
     FIXED,
     FLOATING
@@ -33,6 +33,7 @@ struct Offer {
     uint16 dailyPremiumBps;
     address paymentToken;
     int16 spreadBps;
+    uint16 protocolFeeBps;
     address oracle;
     address complianceHook;
     uint256 minFillAmount;
@@ -48,6 +49,7 @@ struct Ticket {
     PriceMode priceMode;
     TicketStatus status;
     int16 spreadBps;
+    uint16 protocolFeeBps;
     address lp;
     address inventoryToken;
     address paymentToken;
@@ -55,6 +57,7 @@ struct Ticket {
     address complianceHook;
     uint256 initialAmount;
     uint256 remainingAmount;
+    uint256 minFillAmount;
     uint256 fixedOrMinPriceX36;
     uint256 maxPriceX36;
 }
@@ -156,6 +159,15 @@ interface ICommitmentManager {
         address receiver
     ) external returns (uint256 actualFill, uint256 grossPayment);
 
+    function exerciseFor(
+        uint256 ticketId,
+        uint256 fillAmount,
+        uint256 maxPaymentIn,
+        address exerciser,
+        address tokenReceiver,
+        address finalReceiver
+    ) external returns (uint256 actualFill, uint256 grossPayment);
+
     function splitTicket(
         uint256 ticketId,
         uint256 splitAmount,
@@ -164,6 +176,7 @@ interface ICommitmentManager {
 
     function reclaimExpired(uint256 ticketId) external;
     function reclaimExpiredBatch(uint256[] calldata ticketIds) external;
+    function reclaimExpiredBatchBestEffort(uint256[] calldata ticketIds) external returns (uint256 reclaimedCount);
 
     function quoteReservation(uint64 offerId, uint256 inventoryAmount, uint32 duration)
         external

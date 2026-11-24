@@ -136,7 +136,7 @@ export async function deployLocalTrancheStack(
   const trader2 = makeAccount(3, "trader2", ANVIL_PRIVATE_KEYS[3]);
   const keeper = makeAccount(4, "keeper", ANVIL_PRIVATE_KEYS[4]);
 
-  const protocolFeeBps = options.protocolFeeBps ?? 50;
+  const protocolFeeBps = options.protocolFeeBps ?? 5;
   const minTicketAmount = options.minTicketAmount ?? 100n * 10n ** 18n;
   const maxStaleness = options.maxStaleness ?? 30;
   const maxDeviationBps = options.maxDeviationBps ?? 500;
@@ -161,7 +161,7 @@ export async function deployLocalTrancheStack(
     admin.walletClient,
     ABIS.LiquidityVault,
     BYTECODES.LiquidityVault,
-    [guardian, feeCollector],
+    [admin.address, guardian, feeCollector],
   );
 
   const commitmentManager = await deployContract(
@@ -169,7 +169,7 @@ export async function deployLocalTrancheStack(
     admin.walletClient,
     ABIS.CommitmentManager,
     BYTECODES.CommitmentManager,
-    [liquidityVault, guardian, protocolFeeBps, minTicketAmount],
+    [admin.address, liquidityVault, guardian, protocolFeeBps],
   );
 
   const executionTicket = await deployContract(
@@ -191,6 +191,14 @@ export async function deployLocalTrancheStack(
     "setTicketNft",
     [executionTicket],
   );
+  await sendAndConfirm(
+    publicClient,
+    admin.walletClient,
+    commitmentManager,
+    ABIS.CommitmentManager,
+    "setTokenMinTicketAmount",
+    [whsk, minTicketAmount],
+  );
 
   const executionRouter = await deployContract(
     publicClient,
@@ -205,7 +213,7 @@ export async function deployLocalTrancheStack(
     admin.walletClient,
     ABIS.SignedPullOracle,
     BYTECODES.SignedPullOracle,
-    [admin.address],
+    [admin.address, guardian, [admin.address], 1n, maxStaleness],
   );
 
   const oraclePriceAdapter = await deployContract(
@@ -213,6 +221,7 @@ export async function deployLocalTrancheStack(
     admin.walletClient,
     ABIS.OraclePriceAdapter,
     BYTECODES.OraclePriceAdapter,
+    [admin.address],
   );
 
   const hspComplianceHook = await deployContract(
@@ -220,7 +229,32 @@ export async function deployLocalTrancheStack(
     admin.walletClient,
     ABIS.HSPComplianceHook,
     BYTECODES.HSPComplianceHook,
-    [admin.address],
+    [admin.address, admin.address],
+  );
+
+  await sendAndConfirm(
+    publicClient,
+    admin.walletClient,
+    commitmentManager,
+    ABIS.CommitmentManager,
+    "setApprovedRouter",
+    [executionRouter, true],
+  );
+  await sendAndConfirm(
+    publicClient,
+    admin.walletClient,
+    commitmentManager,
+    ABIS.CommitmentManager,
+    "setApprovedOracle",
+    [oraclePriceAdapter, true],
+  );
+  await sendAndConfirm(
+    publicClient,
+    admin.walletClient,
+    commitmentManager,
+    ABIS.CommitmentManager,
+    "setApprovedComplianceHook",
+    [hspComplianceHook, true],
   );
 
   await sendAndConfirm(
@@ -236,7 +270,9 @@ export async function deployLocalTrancheStack(
         primaryFeed: signedPullOracle,
         secondaryFeed: zeroAddress,
         maxStaleness,
+        secondaryMaxStaleness: 0,
         maxDeviationBps,
+        requireSecondaryCheck: false,
         allowSecondaryFallback: false,
         hardMinPriceX36,
         hardMaxPriceX36,

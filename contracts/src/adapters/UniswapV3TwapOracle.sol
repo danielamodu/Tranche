@@ -2,19 +2,21 @@
 pragma solidity ^0.8.24;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IPriceOracle, IUniswapV3Pool} from "../interfaces/IProtocol.sol";
 
 /// @title UniswapV3TwapOracle
-/// @notice Permissionless HSKSwap V3 TWAP reader with observationCardinality guard.
+/// @notice Permissionless HSKSwap V3 TWAP reader with observationCardinality >= 2 guard.
 /// @dev Intended as a secondary circuit breaker on deep pools (e.g. WHSK/USDT), NOT sole fast oracle on thin pools.
-contract UniswapV3TwapOracle is IPriceOracle {
+contract UniswapV3TwapOracle is Ownable2Step, IPriceOracle {
     uint256 public constant PRICE_SCALE = 1e36;
     int24 internal constant MIN_TICK = -887272;
     int24 internal constant MAX_TICK = 887272;
 
     error ZeroAddress();
-    error Unauthorized();
     error InvalidWindow();
+    error InvalidMinCardinality();
     error UnsupportedPair();
 
     struct PoolConfig {
@@ -24,12 +26,9 @@ contract UniswapV3TwapOracle is IPriceOracle {
         bool invIsToken0;
     }
 
-    address public immutable admin;
     mapping(bytes32 => PoolConfig) public poolConfigs;
 
-    constructor() {
-        admin = msg.sender;
-    }
+    constructor(address _owner) Ownable(_owner) {}
 
     function setPoolConfig(
         address inventoryToken,
@@ -37,10 +36,10 @@ contract UniswapV3TwapOracle is IPriceOracle {
         address pool,
         uint32 twapWindow,
         uint16 minCardinality
-    ) external {
-        if (msg.sender != admin) revert Unauthorized();
+    ) external onlyOwner {
         if (pool == address(0)) revert ZeroAddress();
         if (twapWindow == 0) revert InvalidWindow();
+        if (minCardinality < 2) revert InvalidMinCardinality();
 
         address t0 = IUniswapV3Pool(pool).token0();
         address t1 = IUniswapV3Pool(pool).token1();
@@ -118,7 +117,6 @@ contract UniswapV3TwapOracle is IPriceOracle {
         }
     }
 
-    /// @dev Standard Uniswap V3 TickMath.getSqrtRatioAtTick
     function _getSqrtRatioAtTick(int24 tick) internal pure returns (uint160 sqrtPriceX96) {
         unchecked {
             uint256 absTick = tick < 0 ? uint256(-int256(tick)) : uint256(int256(tick));

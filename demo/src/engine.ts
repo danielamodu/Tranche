@@ -359,7 +359,7 @@ export class TrancheDemoSession {
     }
 
     const deployment = await deployLocalTrancheStack(rpcUrl, {
-      protocolFeeBps: 50,
+      protocolFeeBps: 5,
       minTicketAmount: 100n * 10n ** 18n,
       maxStaleness: 3600,
       maxDeviationBps: 500,

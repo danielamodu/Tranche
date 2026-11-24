@@ -233,12 +233,13 @@ describe("TrancheHSPAdapter Integration (local anvil)", () => {
     vaultAddress = await deployContract(adminWallet, artifacts.LiquidityVault.abi, artifacts.LiquidityVault.bytecode, [
       adminAccount.address,
       adminAccount.address,
+      adminAccount.address,
     ]);
     managerAddress = await deployContract(
       adminWallet,
       artifacts.CommitmentManager.abi,
       artifacts.CommitmentManager.bytecode,
-      [vaultAddress, adminAccount.address, 50, ONE_WHSK]
+      [adminAccount.address, vaultAddress, adminAccount.address, 5]
     );
     ticketNftAddress = await deployContract(
       adminWallet,
@@ -250,11 +251,19 @@ describe("TrancheHSPAdapter Integration (local anvil)", () => {
       adminWallet,
       artifacts.HSPComplianceHook.abi,
       artifacts.HSPComplianceHook.bytecode,
-      [hspSignerAccount.address]
+      [adminAccount.address, hspSignerAccount.address]
     );
 
     await writeAndWait(adminWallet, vaultAddress, artifacts.LiquidityVault.abi, "setManager", [managerAddress]);
     await writeAndWait(adminWallet, managerAddress, artifacts.CommitmentManager.abi, "setTicketNft", [ticketNftAddress]);
+    await writeAndWait(adminWallet, managerAddress, artifacts.CommitmentManager.abi, "setTokenMinTicketAmount", [
+      whskAddress,
+      ONE_WHSK,
+    ]);
+    await writeAndWait(adminWallet, managerAddress, artifacts.CommitmentManager.abi, "setApprovedComplianceHook", [
+      hookAddress,
+      true,
+    ]);
 
     // Fund LP with WHSK and Traders with USDT
     await writeAndWait(adminWallet, whskAddress, artifacts.MockWHSK.abi, "mint", [lpAccount.address, 500n * ONE_WHSK]);

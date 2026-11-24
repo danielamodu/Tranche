@@ -7,14 +7,14 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {ILiquidityVault, INonfungiblePositionManager} from "../interfaces/IProtocol.sol";
 
 /// @title V3PositionSegregator
-/// @notice Stateless periphery adapter that withdraws liquidity from an HSKSwap V3 LP NFT
+/// @notice Stateless periphery adapter that withdraws liquidity and/or accrued fees from an HSKSwap V3 LP NFT
 ///         and segregates the resulting ERC-20 tokens into LiquidityVault.
 contract V3PositionSegregator is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     struct WithdrawAndSegregateParams {
         uint256 tokenId;
-        uint128 liquidityToWithdraw; // 0 = withdraw full position liquidity
+        uint128 liquidityToWithdraw; // 0 = withdraw full position liquidity (or fee-only if posLiquidity == 0)
         uint256 amount0Min;
         uint256 amount1Min;
         uint256 deadline;
@@ -48,9 +48,8 @@ contract V3PositionSegregator is ReentrancyGuard {
         vault = ILiquidityVault(_vault);
     }
 
-    /// @notice Withdraws liquidity + accrued fees from an HSKSwap V3 NFT approved to this adapter
-    ///         and segregates chosen tokens into LiquidityVault for `msg.sender`.
-    /// @dev Caller must be `nfpm.ownerOf(tokenId)` AND have approved this contract on NFPM.
+    /// @notice Withdraws liquidity + accrued fees (or fees alone when posLiquidity == 0) from an HSKSwap V3 NFT
+    ///         approved to this adapter and segregates chosen tokens into LiquidityVault for `msg.sender`.
     function withdrawAndSegregate(WithdrawAndSegregateParams calldata p)
         external
         nonReentrant
@@ -60,17 +59,19 @@ contract V3PositionSegregator is ReentrancyGuard {
 
         (,, address token0, address token1,,,, uint128 posLiquidity,,,,) = nfpm.positions(p.tokenId);
         uint128 liq = p.liquidityToWithdraw == 0 ? posLiquidity : p.liquidityToWithdraw;
-        if (liq == 0 || liq > posLiquidity) revert ZeroLiquidity();
+        if (liq > posLiquidity) revert ZeroLiquidity();
 
-        nfpm.decreaseLiquidity(
-            INonfungiblePositionManager.DecreaseLiquidityParams({
-                tokenId: p.tokenId,
-                liquidity: liq,
-                amount0Min: p.amount0Min,
-                amount1Min: p.amount1Min,
-                deadline: p.deadline
-            })
-        );
+        if (liq > 0) {
+            nfpm.decreaseLiquidity(
+                INonfungiblePositionManager.DecreaseLiquidityParams({
+                    tokenId: p.tokenId,
+                    liquidity: liq,
+                    amount0Min: p.amount0Min,
+                    amount1Min: p.amount1Min,
+                    deadline: p.deadline
+                })
+            );
+        }
 
         (collected0, collected1) = nfpm.collect(
             INonfungiblePositionManager.CollectParams({

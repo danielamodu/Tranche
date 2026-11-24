@@ -37,6 +37,7 @@ export interface SignAndUpdatePullOraclePriceParams {
   priceX36: bigint;
   reportTimestamp?: bigint;
   signerWalletClient?: WalletClient;
+  signerWalletClients?: WalletClient[];
 }
 
 export class TrancheClient {
@@ -594,21 +595,34 @@ export class TrancheClient {
     });
   }
 
+  public async reclaimExpiredBatchBestEffort(ticketIds: bigint[]): Promise<TxExecutionResult> {
+    return this.executeContractWrite({
+      address: this.addresses.commitmentManager,
+      abi: ABIS.CommitmentManager,
+      functionName: "reclaimExpiredBatchBestEffort",
+      args: [ticketIds],
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Oracle & ERC-20 / ERC-721 Helpers
   // ---------------------------------------------------------------------------
 
   public async signAndUpdatePullOraclePrice(
     params: SignAndUpdatePullOraclePriceParams,
-  ): Promise<TxExecutionResult<{ priceX36: bigint; reportTimestamp: bigint; signature: Hex }>> {
+  ): Promise<TxExecutionResult<{ priceX36: bigint; reportTimestamp: bigint; signature: Hex; signatures: Hex[] }>> {
     if (!this.addresses.signedPullOracle) {
       throw new Error("signedPullOracle address is not configured on TrancheClient.");
     }
 
-    const signerClient = params.signerWalletClient ?? this.walletClient;
-    if (!signerClient || !signerClient.account) {
+    const clients =
+      params.signerWalletClients && params.signerWalletClients.length > 0
+        ? params.signerWalletClients
+        : [params.signerWalletClient ?? this.walletClient].filter((c): c is WalletClient => Boolean(c));
+
+    if (clients.length === 0 || clients.some((c) => !c.account)) {
       throw new Error(
-        "signAndUpdatePullOraclePrice requires a signerWalletClient (or default walletClient) with an active account.",
+        "signAndUpdatePullOraclePrice requires signerWalletClients / signerWalletClient (or default walletClient) with active accounts.",
       );
     }
 
@@ -616,30 +630,38 @@ export class TrancheClient {
       params.reportTimestamp ?? (await this.publicClient.getBlock({ blockTag: "latest" })).timestamp;
     const chainId = await this.publicClient.getChainId();
 
-    const signature = await signerClient.signTypedData({
-      account: signerClient.account,
-      domain: {
-        name: "ProtocolSignedPullOracle",
-        version: "1",
-        chainId,
-        verifyingContract: this.addresses.signedPullOracle,
-      },
-      types: {
-        PriceReport: [
-          { name: "inventoryToken", type: "address" },
-          { name: "paymentToken", type: "address" },
-          { name: "priceX36", type: "uint256" },
-          { name: "reportTimestamp", type: "uint256" },
-        ],
-      },
-      primaryType: "PriceReport",
-      message: {
-        inventoryToken: params.inventoryToken,
-        paymentToken: params.paymentToken,
-        priceX36: params.priceX36,
-        reportTimestamp,
-      },
-    });
+    const sortedClients = [...clients].sort((a, b) =>
+      BigInt(a.account!.address) < BigInt(b.account!.address) ? -1 : 1,
+    );
+
+    const signatures: Hex[] = [];
+    for (const signerClient of sortedClients) {
+      const sig = await signerClient.signTypedData({
+        account: signerClient.account!,
+        domain: {
+          name: "ProtocolSignedPullOracle",
+          version: "2",
+          chainId,
+          verifyingContract: this.addresses.signedPullOracle,
+        },
+        types: {
+          PriceReport: [
+            { name: "inventoryToken", type: "address" },
+            { name: "paymentToken", type: "address" },
+            { name: "priceX36", type: "uint256" },
+            { name: "reportTimestamp", type: "uint256" },
+          ],
+        },
+        primaryType: "PriceReport",
+        message: {
+          inventoryToken: params.inventoryToken,
+          paymentToken: params.paymentToken,
+          priceX36: params.priceX36,
+          reportTimestamp,
+        },
+      });
+      signatures.push(sig);
+    }
 
     const res = await this.executeContractWrite({
       address: this.addresses.signedPullOracle,
@@ -650,7 +672,7 @@ export class TrancheClient {
         params.paymentToken,
         params.priceX36,
         reportTimestamp,
-        signature,
+        signatures,
       ],
     });
 
@@ -658,7 +680,8 @@ export class TrancheClient {
       ...res,
       priceX36: params.priceX36,
       reportTimestamp,
-      signature,
+      signature: signatures[0],
+      signatures,
     };
   }
 

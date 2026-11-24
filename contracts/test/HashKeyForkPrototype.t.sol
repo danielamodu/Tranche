@@ -20,7 +20,7 @@ import {
 } from "../src/interfaces/IProtocol.sol";
 
 /// @title HashKeyForkPrototypeTest
-/// @notice Phase 3 mainnet-fork mechanical prototype against live HashKey Chain state (block 30583147).
+/// @notice Mainnet-fork mechanical prototype against live HashKey Chain state (block 30583147).
 contract HashKeyForkPrototypeTest is Test {
     address internal constant NFPM = 0xDF0A9b833Db0E4CeEa103A4408f3B68e7FC0cad5;
     address internal constant WHSK = 0xB210D2120d57b758EE163cFfb43e73728c471Cf1;
@@ -30,8 +30,8 @@ contract HashKeyForkPrototypeTest is Test {
     uint256 internal constant REAL_TOKEN_ID = 33;
     address internal constant REAL_LP = 0x8fed6470991878e806bcb733FFB8392B5D07e95E;
 
-    uint256 internal constant ORACLE_PK = 0xA11CE;
-    address internal oracleSigner;
+    uint256 internal constant ORACLE_PK1 = 0xA11CE1;
+    uint256 internal constant ORACLE_PK2 = 0xA11CE2;
 
     address internal guardian = makeAddr("guardian");
     address internal feeCollector = makeAddr("feeCollector");
@@ -51,21 +51,27 @@ contract HashKeyForkPrototypeTest is Test {
     function setUp() public {
         if (block.chainid != 177) return;
 
-        oracleSigner = vm.addr(ORACLE_PK);
-        vault = new LiquidityVault(guardian, feeCollector);
-        manager = new CommitmentManager(address(vault), guardian, 50, 1_000e18);
+        vault = new LiquidityVault(address(this), guardian, feeCollector);
+        manager = new CommitmentManager(address(this), address(vault), guardian, 5);
         ticketNft = new ExecutionTicket(address(manager));
         vault.setManager(address(manager));
         manager.setTicketNft(address(ticketNft));
+        manager.setTokenMinTicketAmount(WHSK, 1_000e18);
 
         router = new ExecutionRouter(address(manager), WHSK);
+        manager.setApprovedRouter(address(router), true);
+
         segregator = new V3PositionSegregator(NFPM, address(vault));
 
-        pullOracle = new SignedPullOracle(oracleSigner);
-        twapOracle = new UniswapV3TwapOracle();
+        address[] memory signers = new address[](2);
+        signers[0] = vm.addr(ORACLE_PK1);
+        signers[1] = vm.addr(ORACLE_PK2);
+        pullOracle = new SignedPullOracle(address(this), guardian, signers, 2, 30);
+
+        twapOracle = new UniswapV3TwapOracle(address(this));
         twapOracle.setPoolConfig(WHSK, USDT, WHSK_USDT_POOL, 1800, 100);
 
-        oracleAdapter = new OraclePriceAdapter();
+        oracleAdapter = new OraclePriceAdapter(address(this));
         oracleAdapter.setPairConfig(
             WHSK,
             USDT,
@@ -73,12 +79,20 @@ contract HashKeyForkPrototypeTest is Test {
                 primaryFeed: address(pullOracle),
                 secondaryFeed: address(twapOracle),
                 maxStaleness: 30,
+                secondaryMaxStaleness: 3600,
                 maxDeviationBps: 500,
+                requireSecondaryCheck: true,
                 allowSecondaryFallback: false,
-                hardMinPriceX36: 1e18,
-                hardMaxPriceX36: 1e27
+                hardMinPriceX36: 3e22,
+                hardMaxPriceX36: 25e22
             })
         );
+        manager.setApprovedOracle(address(oracleAdapter), true);
+    }
+
+    function _signDigest(uint256 pk, bytes32 digest) internal pure returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
+        return abi.encodePacked(r, s, v);
     }
 
     function _signAndPushPrice(uint256 priceX36, uint256 ts) internal {
@@ -86,17 +100,27 @@ contract HashKeyForkPrototypeTest is Test {
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256("ProtocolSignedPullOracle"),
-                keccak256("1"),
+                keccak256("2"),
                 block.chainid,
                 address(pullOracle)
             )
         );
-        bytes32 structHash = keccak256(
-            abi.encode(pullOracle.PRICE_REPORT_TYPEHASH(), WHSK, USDT, priceX36, ts)
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                domainSep,
+                keccak256(abi.encode(pullOracle.PRICE_REPORT_TYPEHASH(), WHSK, USDT, priceX36, ts))
+            )
         );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ORACLE_PK, digest);
-        pullOracle.updatePrice(WHSK, USDT, priceX36, ts, abi.encodePacked(r, s, v));
+        bytes[] memory sigs = new bytes[](2);
+        if (vm.addr(ORACLE_PK1) < vm.addr(ORACLE_PK2)) {
+            sigs[0] = _signDigest(ORACLE_PK1, digest);
+            sigs[1] = _signDigest(ORACLE_PK2, digest);
+        } else {
+            sigs[0] = _signDigest(ORACLE_PK2, digest);
+            sigs[1] = _signDigest(ORACLE_PK1, digest);
+        }
+        pullOracle.updatePrice(WHSK, USDT, priceX36, ts, sigs);
     }
 
     function _assertVaultSolvency() internal view {

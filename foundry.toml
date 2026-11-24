@@ -15,6 +15,7 @@ remappings = [
 
 [rpc_endpoints]
 hashkey = "https://mainnet.hsk.xyz"
+hashkey_testnet = "https://testnet.hsk.xyz"
 
 [invariant]
 runs = 64

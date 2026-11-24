@@ -56,7 +56,7 @@ contract MockFoTToken is ERC20 {
 
     function _update(address from, address to, uint256 value) internal override {
         if (from != address(0) && to != address(0)) {
-            uint256 fee = value / 100; // 1% FoT
+            uint256 fee = value / 100;
             super._update(from, address(0xdead), fee);
             super._update(from, to, value - fee);
         } else {
@@ -115,12 +115,6 @@ contract MockReentrantToken is ERC20 {
     }
 }
 
-contract MockBrokenOracle {
-    function getPriceX36(address, address) external pure returns (uint256, uint256, bool) {
-        revert("oracle down");
-    }
-}
-
 contract MockRevertingCompliance is IComplianceHook {
     function beforeCreateOffer(address, address, address) external pure override {
         revert("hook down");
@@ -162,11 +156,11 @@ contract MockStaticPriceOracle {
 }
 
 /// @title ProtocolAdversarialTest
-/// @notice Covers all 13 adversarial security vectors from SECURITY_TEST_PLAN.md.
+/// @notice Covers all 13 adversarial security vectors against the remediated contracts.
 contract ProtocolAdversarialTest is Test {
-    uint256 internal constant ORACLE_PK = 0x1111;
+    uint256 internal constant ORACLE_PK1 = 0x1111;
+    uint256 internal constant ORACLE_PK2 = 0x1112;
     uint256 internal constant HSP_PK = 0x2222;
-    // 1 WHSK (1e18) = 0.08 USDT (80_000 raw 6-dec) => priceX36 = 80_000 * 1e18 = 8e22
     uint256 internal constant WHSK_PRICE_X36 = 8e22;
 
     address internal guardian = makeAddr("guardian");
@@ -192,16 +186,23 @@ contract ProtocolAdversarialTest is Test {
         whsk = new MockWHSK();
         usdt = new MockERC20("Tether USD", "USDT", 6);
 
-        vault = new LiquidityVault(guardian, feeCollector);
-        manager = new CommitmentManager(address(vault), guardian, 50, 100e18); // 50 bps fee, 100 WHSK min
+        vault = new LiquidityVault(address(this), guardian, feeCollector);
+        manager = new CommitmentManager(address(this), address(vault), guardian, 5);
         ticketNft = new ExecutionTicket(address(manager));
         vault.setManager(address(manager));
         manager.setTicketNft(address(ticketNft));
+        manager.setTokenMinTicketAmount(address(whsk), 100e18);
 
         router = new ExecutionRouter(address(manager), address(whsk));
-        pullOracle = new SignedPullOracle(vm.addr(ORACLE_PK));
+        manager.setApprovedRouter(address(router), true);
+
+        address[] memory signers = new address[](2);
+        signers[0] = vm.addr(ORACLE_PK1);
+        signers[1] = vm.addr(ORACLE_PK2);
+        pullOracle = new SignedPullOracle(address(this), guardian, signers, 2, 30);
+
         secondaryOracle = new MockStaticPriceOracle(WHSK_PRICE_X36, block.timestamp, true);
-        oracleAdapter = new OraclePriceAdapter();
+        oracleAdapter = new OraclePriceAdapter(address(this));
         oracleAdapter.setPairConfig(
             address(whsk),
             address(usdt),
@@ -209,7 +210,9 @@ contract ProtocolAdversarialTest is Test {
                 primaryFeed: address(pullOracle),
                 secondaryFeed: address(secondaryOracle),
                 maxStaleness: 30,
+                secondaryMaxStaleness: 30,
                 maxDeviationBps: 500,
+                requireSecondaryCheck: true,
                 allowSecondaryFallback: false,
                 hardMinPriceX36: 1e18,
                 hardMaxPriceX36: 1e27
@@ -217,7 +220,9 @@ contract ProtocolAdversarialTest is Test {
         );
         _pushOraclePrice(WHSK_PRICE_X36, block.timestamp);
 
-        hspHook = new HSPComplianceHook(vm.addr(HSP_PK));
+        hspHook = new HSPComplianceHook(address(this), vm.addr(HSP_PK));
+        manager.setApprovedOracle(address(oracleAdapter), true);
+        manager.setApprovedComplianceHook(address(hspHook), true);
 
         whsk.mint(lp, 1_000_000e18);
         usdt.mint(trader1, 1_000_000e6);
@@ -234,22 +239,37 @@ contract ProtocolAdversarialTest is Test {
         usdt.approve(address(vault), type(uint256).max);
     }
 
+    function _signDigest(uint256 pk, bytes32 digest) internal pure returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
     function _pushOraclePrice(uint256 priceX36, uint256 ts) internal {
         bytes32 domainSep = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256("ProtocolSignedPullOracle"),
-                keccak256("1"),
+                keccak256("2"),
                 block.chainid,
                 address(pullOracle)
             )
         );
-        bytes32 structHash = keccak256(
-            abi.encode(pullOracle.PRICE_REPORT_TYPEHASH(), address(whsk), address(usdt), priceX36, ts)
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                domainSep,
+                keccak256(abi.encode(pullOracle.PRICE_REPORT_TYPEHASH(), address(whsk), address(usdt), priceX36, ts))
+            )
         );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ORACLE_PK, digest);
-        pullOracle.updatePrice(address(whsk), address(usdt), priceX36, ts, abi.encodePacked(r, s, v));
+        bytes[] memory sigs = new bytes[](2);
+        if (vm.addr(ORACLE_PK1) < vm.addr(ORACLE_PK2)) {
+            sigs[0] = _signDigest(ORACLE_PK1, digest);
+            sigs[1] = _signDigest(ORACLE_PK2, digest);
+        } else {
+            sigs[0] = _signDigest(ORACLE_PK2, digest);
+            sigs[1] = _signDigest(ORACLE_PK1, digest);
+        }
+        pullOracle.updatePrice(address(whsk), address(usdt), priceX36, ts, sigs);
     }
 
     function _createDefaultFixedOffer(uint256 amt) internal returns (uint64) {
@@ -340,7 +360,6 @@ contract ProtocolAdversarialTest is Test {
                 maxPriceX36: 0
             })
         );
-        // Second offer trying to reuse the same 1,000 WHSK MUST revert
         vm.expectRevert(LiquidityVault.InsufficientBalance.selector);
         manager.createOffer(
             CreateOfferParams({
@@ -443,8 +462,8 @@ contract ProtocolAdversarialTest is Test {
     // --- Vector 4: Partial Fill & Rounding Errors ---
     function testFuzz_PartialFillRoundingAlwaysFavorsLP(uint96 rawFill1, uint96 rawFill2) public {
         uint256 total = 1_000e18;
-        uint256 f1 = bound(uint256(rawFill1), 1e12, 500e18); // >= 1e12 wei so USDT payment >= 1 wei
-        uint256 f2 = bound(uint256(rawFill2), 1e12, 499e18);
+        uint256 f1 = bound(uint256(rawFill1), 100e18, 500e18);
+        uint256 f2 = bound(uint256(rawFill2), 100e18, 400e18);
 
         uint64 oid = _createDefaultFixedOffer(total);
         vm.startPrank(trader1);
@@ -457,17 +476,13 @@ contract ProtocolAdversarialTest is Test {
         assertGe(paid1 + paid2, exactCeilTotal, "Sum of partial fills must never underpay LP");
     }
 
-    function test_RevertWhen_ZeroPaymentCalculated() public {
-        // 1 wei WHSK * 8e22 / 1e36 = 0.00000000000008 -> rounds UP to 1 raw USDT!
-        // Instead test a pathological tiny fixed price where fill * price == 0? Since Ceil(positive) >= 1,
-        // 1 wei fill at price >= 1 still charges 1 wei. Test 1 wei fill charges >= 1!
+    function test_RevertWhen_PartialFillLeavesDustBelowMinFill() public {
         uint64 oid = _createDefaultFixedOffer(1_000e18);
         vm.startPrank(trader1);
         uint256 tid = manager.reserve(oid, 1_000e18, 3600, 1_000e6, trader1);
-        (uint256 filled, uint256 paid) = manager.exercise(tid, 1, 1_000e6, trader1);
+        vm.expectRevert(CommitmentManager.InvalidFillAmount.selector);
+        manager.exercise(tid, 1, 1_000e6, trader1);
         vm.stopPrank();
-        assertEq(filled, 1);
-        assertEq(paid, 1); // Ceil rounding guarantees 1 wei fill still pays >= 1 wei
     }
 
     // --- Vector 5: Oracle Manipulation, Stale Updates & Outage Recovery ---
@@ -505,15 +520,12 @@ contract ProtocolAdversarialTest is Test {
         uint256 tFixed = manager.reserve(oidFixed, 500e18, 300, 100e6, trader1);
         vm.stopPrank();
 
-        // Break oracle completely (past staleness + secondary broken)
         vm.warp(block.timestamp + 301);
         secondaryOracle.set(0, 0, false);
 
-        // Reclaim expired FLOATING ticket succeeds even with broken oracle!
         manager.reclaimExpired(tFloat);
         assertEq(uint8(manager.getTicket(tFloat).status), uint8(TicketStatus.RECLAIMED));
 
-        // Fixed ticket expired too -> reclaim succeeds
         manager.reclaimExpired(tFixed);
         assertEq(uint8(manager.getTicket(tFixed).status), uint8(TicketStatus.RECLAIMED));
     }
@@ -525,18 +537,15 @@ contract ProtocolAdversarialTest is Test {
         uint256 tid = manager.reserve(oid, 600e18, 3600, 100e6, trader1);
 
         vm.startPrank(lp);
-        // LP can only decrease the unreserved 400e18
         vm.expectRevert(LiquidityVault.InsufficientBalance.selector);
         manager.decreaseOffer(oid, 401e18);
 
-        // LP pauses & cancels offer: unreserved 400e18 returns to free, 600e18 stays locked for ticket!
         manager.pauseOffer(oid);
         manager.cancelOffer(oid);
         assertEq(vault.lpFreeBalance(lp, address(whsk)), 400e18);
         assertEq(vault.ticketReserved(tid), 600e18);
         vm.stopPrank();
 
-        // Trader can STILL exercise the 600e18 ticket despite LP cancelling offer
         vm.prank(trader1);
         (uint256 filled,) = manager.exercise(tid, 0, 100e6, trader1);
         assertEq(filled, 600e18);
@@ -586,10 +595,8 @@ contract ProtocolAdversarialTest is Test {
         vm.prank(trader1);
         uint256 tid = manager.reserve(oid, 500e18, 3600, 100e6, trader1);
 
-        // LP gets blacklisted by BUSD!
         busd.setBlacklisted(lp, true);
 
-        // Taker exercise MUST STILL SUCCEED because proceeds are pull-based (lpPendingProceeds)
         vm.prank(trader1);
         (uint256 filled,) = manager.exercise(tid, 0, 100e6, trader1);
         assertEq(filled, 500e18);
@@ -614,10 +621,8 @@ contract ProtocolAdversarialTest is Test {
         uint64 oid = _createDefaultFixedOffer(1_000e18);
         vm.startPrank(trader1);
         uint256 tid = manager.reserve(oid, 150e18, 3600, 100e6, trader1);
-        // Splitting 50e18 (< minTicketAmount 100e18) reverts
         vm.expectRevert(CommitmentManager.InvalidSplitAmount.selector);
         manager.splitTicket(tid, 50e18, trader1);
-        // Splitting 100e18 leaves parent with 50e18 (< minTicketAmount) -> reverts
         vm.expectRevert(CommitmentManager.InvalidSplitAmount.selector);
         manager.splitTicket(tid, 100e18, trader1);
         vm.stopPrank();
@@ -630,7 +635,6 @@ contract ProtocolAdversarialTest is Test {
         uint256 tid = manager.reserve(oid, 500e18, 3600, 100e6, trader1);
         uint40 exp = manager.getTicket(tid).expiresAt;
 
-        // At block.timestamp == expiresAt: reclaim reverts, exercise succeeds
         vm.warp(exp);
         vm.expectRevert(CommitmentManager.TicketNotExpired.selector);
         manager.reclaimExpired(tid);
@@ -639,7 +643,6 @@ contract ProtocolAdversarialTest is Test {
         (uint256 filled,) = manager.exercise(tid, 200e18, 100e6, trader1);
         assertEq(filled, 200e18);
 
-        // At block.timestamp == expiresAt + 1: exercise reverts, reclaim succeeds
         vm.warp(exp + 1);
         vm.prank(trader1);
         vm.expectRevert(CommitmentManager.TicketExpired.selector);
@@ -658,7 +661,6 @@ contract ProtocolAdversarialTest is Test {
         ticketNft.setApprovalForAll(address(router), true);
         usdt.approve(address(router), type(uint256).max);
 
-        // Expire t2 so second leg fails
         vm.warp(block.timestamp + 61);
         ExecutionRouter.ExerciseLeg[] memory legs = new ExecutionRouter.ExerciseLeg[](2);
         legs[0] = ExecutionRouter.ExerciseLeg({ticketId: t1, fillAmount: 0, maxLegPaymentIn: 100e6});
@@ -679,7 +681,6 @@ contract ProtocolAdversarialTest is Test {
         );
         vm.stopPrank();
 
-        // Both tickets remain untouched & router holds zero tokens/allowance
         assertEq(manager.getTicket(t1).remainingAmount, 300e18);
         assertEq(usdt.balanceOf(address(router)), 0);
         assertEq(usdt.allowance(address(router), address(vault)), 0);
@@ -691,13 +692,11 @@ contract ProtocolAdversarialTest is Test {
         vm.prank(trader1);
         uint256 tid = manager.reserve(oid, 500e18, 3600, 100e6, trader1);
 
-        // Price jumps 4% (within 5% circuit breaker)
         vm.warp(block.timestamp + 2);
         uint256 higherPrice = (WHSK_PRICE_X36 * 10_400) / 10_000;
         _pushOraclePrice(higherPrice, block.timestamp);
         secondaryOracle.set(higherPrice, block.timestamp, true);
 
-        // Tight maxPaymentIn protects trader from paying unexpected jump
         vm.prank(trader1);
         vm.expectRevert(CommitmentManager.SlippageExceeded.selector);
         manager.exercise(tid, 500e18, 40e6, trader1);
@@ -728,7 +727,6 @@ contract ProtocolAdversarialTest is Test {
         hspHook.submitAttestation(lp, 0, exp, sigLp);
         hspHook.submitAttestation(trader1, 0, exp, sigT1);
 
-        // Replay MUST revert
         vm.expectRevert(HSPComplianceHook.InvalidNonce.selector);
         hspHook.submitAttestation(trader1, 0, exp, sigT1);
 
@@ -736,12 +734,10 @@ contract ProtocolAdversarialTest is Test {
         vm.prank(trader1);
         uint256 tid = manager.reserve(oid, 500e18, 3600, 100e6, trader1);
 
-        // Transfer to non-compliant trader2 MUST revert
         vm.prank(trader1);
         vm.expectRevert(abi.encodeWithSelector(HSPComplianceHook.NotCompliant.selector, trader2));
         ticketNft.transferFrom(trader1, trader2, tid);
 
-        // Revoke trader1 -> exercise reverts, nonce incremented
         hspHook.revoke(trader1);
         vm.prank(trader1);
         vm.expectRevert(abi.encodeWithSelector(HSPComplianceHook.NotCompliant.selector, trader1));
@@ -757,13 +753,12 @@ contract ProtocolAdversarialTest is Test {
         vm.prank(trader1);
         uint256 tid = manager.reserve(oid, 500e18, 300, 100e6, trader1);
 
-        // Also test pausing everything + breaking compliance on exits
         vm.startPrank(guardian);
         vault.setDepositsPaused(true);
         manager.setNewReservationsPaused(true);
+        manager.setFloatingExercisePaused(true);
         vm.stopPrank();
 
-        // Revoke LP compliance -> LP can STILL cancel offer and withdraw free inventory!
         hspHook.revoke(lp);
         vm.startPrank(lp);
         manager.cancelOffer(oid);
@@ -771,7 +766,6 @@ contract ProtocolAdversarialTest is Test {
         vault.claimProceeds(address(usdt), 0, lp);
         vm.stopPrank();
 
-        // Warp past ticket expiry -> anyone can reclaim expired ticket even with revoked compliance & pauses
         vm.warp(block.timestamp + 301);
         manager.reclaimExpired(tid);
         assertEq(vault.lpFreeBalance(lp, address(whsk)), 500e18);
@@ -779,7 +773,6 @@ contract ProtocolAdversarialTest is Test {
         vm.prank(lp);
         vault.withdrawFree(address(whsk), 500e18, lp);
         assertEq(whsk.balanceOf(lp), 1_000_000e18);
-        // Silence unused variable warning
         assertTrue(address(brokenHook) != address(0));
     }
 }

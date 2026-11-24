@@ -55,6 +55,7 @@ contract ExecutionRouter is ReentrancyGuard {
         manager = ICommitmentManager(_manager);
         ticketNft = manager.ticketNft();
         vault = address(manager.vault());
+        if (address(ticketNft) == address(0) || vault == address(0)) revert ZeroAddress();
         whsk = _whsk;
     }
 
@@ -86,28 +87,12 @@ contract ExecutionRouter is ReentrancyGuard {
         IERC20(params.paymentToken).forceApprove(vault, params.maxTotalPaymentIn);
         address legReceiver = params.unwrapInventoryToNative ? address(this) : params.receiver;
 
-        uint256 len = params.legs.length;
-        for (uint256 i = 0; i < len; ++i) {
-            ExerciseLeg calldata leg = params.legs[i];
-            // Mandatory confused-deputy guard: verify msg.sender is authorized on EVERY leg
-            if (!ticketNft.isAuthorized(msg.sender, leg.ticketId)) revert NotTicketAuthorized();
-
-            Ticket memory t = manager.getTicket(leg.ticketId);
-            if (t.inventoryToken != params.inventoryToken || t.paymentToken != params.paymentToken) {
-                revert MismatchedTicketPair();
-            }
-
-            (uint256 filled, uint256 paid) =
-                manager.exercise(leg.ticketId, leg.fillAmount, leg.maxLegPaymentIn, legReceiver);
-            totalInventoryOut += filled;
-            totalPaymentIn += paid;
-        }
+        (totalInventoryOut, totalPaymentIn) = _executeLegs(params, legReceiver);
 
         if (totalInventoryOut < params.minTotalInventoryOut || totalPaymentIn > params.maxTotalPaymentIn) {
             revert SlippageExceeded();
         }
 
-        // Reset residual vault allowance to 0 (INV-7)
         IERC20(params.paymentToken).forceApprove(vault, 0);
 
         uint256 unused = params.maxTotalPaymentIn - totalPaymentIn;
@@ -128,5 +113,38 @@ contract ExecutionRouter is ReentrancyGuard {
         }
 
         emit BatchExercised(msg.sender, params.receiver, totalInventoryOut, totalPaymentIn);
+    }
+
+    function _executeLegs(BatchExerciseParams calldata params, address legReceiver)
+        internal
+        returns (uint256 totalInventoryOut, uint256 totalPaymentIn)
+    {
+        uint256 len = params.legs.length;
+        for (uint256 i = 0; i < len; ++i) {
+            (uint256 filled, uint256 paid) = _executeSingleLeg(
+                params.legs[i], params.inventoryToken, params.paymentToken, legReceiver, params.receiver
+            );
+            totalInventoryOut += filled;
+            totalPaymentIn += paid;
+        }
+    }
+
+    function _executeSingleLeg(
+        ExerciseLeg calldata leg,
+        address invToken,
+        address payToken,
+        address legReceiver,
+        address finalReceiver
+    ) internal returns (uint256 filled, uint256 paid) {
+        if (!ticketNft.isAuthorized(msg.sender, leg.ticketId)) revert NotTicketAuthorized();
+
+        Ticket memory t = manager.getTicket(leg.ticketId);
+        if (t.inventoryToken != invToken || t.paymentToken != payToken) {
+            revert MismatchedTicketPair();
+        }
+
+        return manager.exerciseFor(
+            leg.ticketId, leg.fillAmount, leg.maxLegPaymentIn, msg.sender, legReceiver, finalReceiver
+        );
     }
 }

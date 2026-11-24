@@ -387,10 +387,10 @@ test("Error decoding & negative paths", async () => {
   );
 
   // Reserve a valid ticket (#4) with 60s duration while oracle is fresh
-  const quote4 = await trader1Client.quoteReservation(offer3Id, 150n * 10n ** 18n, 60);
+  const quote4 = await trader1Client.quoteReservation(offer3Id, 200n * 10n ** 18n, 60);
   const reserve4Tx = await trader1Client.reserve(
     offer3Id,
-    150n * 10n ** 18n,
+    200n * 10n ** 18n,
     60,
     quote4.grossPremium,
     accounts.trader1.address,
