@@ -1,0 +1,539 @@
+{
+  "rpcUrl": "https://mainnet.hsk.xyz",
+  "chainId": 177,
+  "snapshotBlock": 30583028,
+  "snapshotTimestamp": 1795513191,
+  "snapshotIso": "2026-11-24T09:39:51.000Z",
+  "gasPriceWei": "500001000000",
+  "baseFeeWei": "500000000000",
+  "scanWindow": {
+    "fromBlock": 30280628,
+    "toBlock": 30583028,
+    "fromTimestamp": 1794908391,
+    "toTimestamp": 1795513191,
+    "days": 7
+  },
+  "v3SwapCount7dTotal": 763,
+  "v2SwapCount7dTotal": 16,
+  "v2ActivePools": {
+    "0x711d26aa3ff64dd9dc5fa22b7c64c26c1b28f8f2": 11,
+    "0xf8365695ccc4fca53241d7d42bbdc3b2e7d43ae4": 2,
+    "0xa00268802152c8061978c16b478077315272befd": 1,
+    "0x340bdfc78724b3c4e28385462d9a36d469ad047b": 2
+  },
+  "pools": [
+    {
+      "pool": "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "22521941300804983880140",
+      "currentTick": -301483,
+      "activeLiquidity": "1475813786831558685",
+      "priceToken0InToken1": 0.0808076499855643,
+      "token0": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "5193022600742010606627978",
+        "poolBalance": 5193022.60074201
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "419573209476",
+        "poolBalance": 419573.209476
+      },
+      "swapCount7d": 652
+    },
+    {
+      "pool": "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "3270543216138913567277812",
+      "currentTick": -201913,
+      "activeLiquidity": "1012957283335421",
+      "priceToken0InToken1": 1704.04326384131,
+      "token0": {
+        "address": "0xefd4bc9afd210517803f293ababd701caeecdfd0",
+        "symbol": "WETH",
+        "decimals": 18,
+        "poolBalanceRaw": "24563367993685350323",
+        "poolBalance": 24.563367993685347
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "41838045266",
+        "poolBalance": 41838.045266
+      },
+      "swapCount7d": 101
+    },
+    {
+      "pool": "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "1970071585337036895447198882755",
+      "currentTick": 64273,
+      "activeLiquidity": "1823343427",
+      "priceToken0InToken1": 61830.79731641943,
+      "token0": {
+        "address": "0x6119ca49a79f5825c8b345f8d7ac36b272565b14",
+        "symbol": "WBTC",
+        "decimals": 8,
+        "poolBalanceRaw": "73376434",
+        "poolBalance": 0.73376434
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "45351645257",
+        "poolBalance": 45351.645257
+      },
+      "swapCount7d": 10
+    },
+    {
+      "pool": "0x4e385f48d658906638029eaaa697022762f1d36b",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "79085791756148556212807",
+      "currentTick": -276360,
+      "activeLiquidity": "998302639375522762032330055387",
+      "priceToken0InToken1": 0.9964092859029634,
+      "token0": {
+        "address": "0x5edae85b5192b1de50b374818957032e07a78f6b",
+        "symbol": "A",
+        "decimals": 18,
+        "poolBalanceRaw": "999999999999999999988811895694313848",
+        "poolBalance": 1000000000000000000
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "0",
+        "poolBalance": 0
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x265aae477d9906f637b871986e5e8f05d3514800",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 500,
+      "feeBps": 5,
+      "tickSpacing": 10,
+      "sqrtPriceX96": "79228162640468783735534928357",
+      "currentTick": 0,
+      "activeLiquidity": "5254415760005734180028544928",
+      "priceToken0InToken1": 1.000000003185848,
+      "token0": {
+        "address": "0xcf9bec9f2769ecc09107c58fa5eb0199d989a606",
+        "symbol": "B",
+        "decimals": 18,
+        "poolBalanceRaw": "499999991785394910974680527",
+        "poolBalance": 499999991.7853949
+      },
+      "token1": {
+        "address": "0xe4577dcf1c44f04cf489aa995e01e988f461cc4a",
+        "symbol": "A",
+        "decimals": 18,
+        "poolBalanceRaw": "500000008529352480447219315",
+        "poolBalance": 500000008.5293525
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x9d5efe39d8f72af6289b912d5adefcb0d5adc2e6",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "79228162514264337593543950336",
+      "currentTick": 0,
+      "activeLiquidity": "2307510000000000000115",
+      "priceToken0InToken1": 1,
+      "token0": {
+        "address": "0xcf9bec9f2769ecc09107c58fa5eb0199d989a606",
+        "symbol": "B",
+        "decimals": 18,
+        "poolBalanceRaw": "2307509999999999999997",
+        "poolBalance": 2307.51
+      },
+      "token1": {
+        "address": "0xe4577dcf1c44f04cf489aa995e01e988f461cc4a",
+        "symbol": "A",
+        "decimals": 18,
+        "poolBalanceRaw": "2307509999999999999997",
+        "poolBalance": 2307.51
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x4adeba4ecec9585d4e213b051c161b3d8dce0aea",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 10000,
+      "feeBps": 100,
+      "tickSpacing": 200,
+      "sqrtPriceX96": "926041015207208176867749126809",
+      "currentTick": 49174,
+      "activeLiquidity": "21523969197153205390",
+      "priceToken0InToken1": 136.61590937926226,
+      "token0": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "1850000000000000000",
+        "poolBalance": 1.85
+      },
+      "token1": {
+        "address": "0xe4577dcf1c44f04cf489aa995e01e988f461cc4a",
+        "symbol": "A",
+        "decimals": 18,
+        "poolBalanceRaw": "251578197121911485846",
+        "poolBalance": 251.5781971219115
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0xf5cbc1af0ab6c1a5b24c0ced9da13bbc526a7c25",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "899024963526058893394734501457",
+      "currentTick": 48582,
+      "activeLiquidity": "18749999999999999990",
+      "priceToken0InToken1": 128.76099816681435,
+      "token0": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "1658030709170546195",
+        "poolBalance": 1.6580307091705462
+      },
+      "token1": {
+        "address": "0xcf9bec9f2769ecc09107c58fa5eb0199d989a606",
+        "symbol": "B",
+        "decimals": 18,
+        "poolBalanceRaw": "214436268501623037992",
+        "poolBalance": 214.43626850162303
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x024fb33b16b668533664be2e0b79292f421a22cc",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "1736643829811603882450115703882",
+      "currentTick": 61750,
+      "activeLiquidity": "1546300298399640966",
+      "priceToken0InToken1": 480.46565417613516,
+      "token0": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "71078495303393413",
+        "poolBalance": 0.07107849530339341
+      },
+      "token1": {
+        "address": "0xe4577dcf1c44f04cf489aa995e01e988f461cc4a",
+        "symbol": "A",
+        "decimals": 18,
+        "poolBalanceRaw": "34578848384099103072",
+        "poolBalance": 34.5788483840991
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0xe4badb6cd5116cdd8c7afd09a1d0b8f41573da0c",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "1651388353167171154216",
+      "currentTick": -353743,
+      "activeLiquidity": "4907074101340",
+      "priceToken0InToken1": 0.0004344494653643189,
+      "token0": {
+        "address": "0xcf9bec9f2769ecc09107c58fa5eb0199d989a606",
+        "symbol": "B",
+        "decimals": 18,
+        "poolBalanceRaw": "236756057390717295736",
+        "poolBalance": 236.7560573907173
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "103014",
+        "poolBalance": 0.103014
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0xeb33d6666dd2359cb1bf6ea6d72286cc1b4a778a",
+      "kind": "UniswapV3",
+      "factory": "0xd136e36610f35e0cc3cad40de858c151f2aa65d4",
+      "fee": 500,
+      "feeBps": 5,
+      "tickSpacing": 10,
+      "sqrtPriceX96": "25055738251564958613595",
+      "currentTick": -299350,
+      "activeLiquidity": "2830955089632",
+      "priceToken0InToken1": 0.1000127201685799,
+      "token0": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "5315350547016023360",
+        "poolBalance": 5.315350547016023
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "6370",
+        "poolBalance": 0.00637
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x0767f7b1af495d245ea00219cfb8b2ed6eafae62",
+      "kind": "UniswapV3",
+      "factory": "0xd136e36610f35e0cc3cad40de858c151f2aa65d4",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "25078314278193296859876",
+      "currentTick": -299332,
+      "activeLiquidity": "950573096369",
+      "priceToken0InToken1": 0.10019303072472682,
+      "token0": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "2086015847900583054",
+        "poolBalance": 2.0860158479005833
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "8927",
+        "poolBalance": 0.008927
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0xb580d654ce892181937aac80ea165950cb7d0e02",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "257944478741664417464451675357173796",
+      "currentTick": 299933,
+      "activeLiquidity": "249999999999",
+      "priceToken0InToken1": 10.599693444224584,
+      "token0": {
+        "address": "0x054ed45810dbbab8b27668922d110669c9d88d0a",
+        "symbol": "USDC.e",
+        "decimals": 6,
+        "poolBalanceRaw": "76788",
+        "poolBalance": 0.076788
+      },
+      "token1": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "814497753244129888",
+        "poolBalance": 0.8144977532441299
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0xfc777c8c5345490648d0292c5ba40661be7209ce",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "755968059903012573096721534721666",
+      "currentTick": 183277,
+      "activeLiquidity": "0",
+      "priceToken0InToken1": 91.04324442788723,
+      "token0": {
+        "address": "0xcfbe9f732c8380d8dd6b2a2746de435f2378f62a",
+        "symbol": "CRCLs",
+        "decimals": 0,
+        "poolBalanceRaw": "2",
+        "poolBalance": 2
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "4",
+        "poolBalance": 0.000004
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x959438caea85ca4766f3ecd4f943ea9767af93ce",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "1612977631356915820221958909713638",
+      "currentTick": 198435,
+      "activeLiquidity": "0",
+      "priceToken0InToken1": 414.4742189840416,
+      "token0": {
+        "address": "0x9af0905292075ec25dfa3c9c35c498dc44cf0bbf",
+        "symbol": "TSLAs",
+        "decimals": 0,
+        "poolBalanceRaw": "2",
+        "poolBalance": 2
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "4",
+        "poolBalance": 0.000004
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x0f10e271790a5d56df49c42647759766d5506dbf",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "2242658256396360514931203297127959",
+      "currentTick": 205027,
+      "activeLiquidity": "0",
+      "priceToken0InToken1": 801.2481344103843,
+      "token0": {
+        "address": "0xa0f5409937f18853ef068808c81d04a76357dd93",
+        "symbol": "QQQs",
+        "decimals": 0,
+        "poolBalanceRaw": "1",
+        "poolBalance": 1
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "3",
+        "poolBalance": 0.000003
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x41767b8a9959b04c7edb42ca7f0d5e97f73d719f",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "1399222648434462849182625558182911",
+      "currentTick": 195591,
+      "activeLiquidity": "0",
+      "priceToken0InToken1": 311.8993609510691,
+      "token0": {
+        "address": "0x14c8a2c497ec878c2dc1b48a5eaec6342d2b6664",
+        "symbol": "AAPLs",
+        "decimals": 0,
+        "poolBalanceRaw": "2",
+        "poolBalance": 2
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "3",
+        "poolBalance": 0.000003
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0xa3a69eb7a1cd69008b06487dd78105f4ce5582af",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 3000,
+      "feeBps": 30,
+      "tickSpacing": 60,
+      "sqrtPriceX96": "1165275330663135435534977714510671",
+      "currentTick": 191932,
+      "activeLiquidity": "0",
+      "priceToken0InToken1": 216.32062908861434,
+      "token0": {
+        "address": "0x8024775a803f049b9505704801e32a2c8630bf2c",
+        "symbol": "NVDAs",
+        "decimals": 0,
+        "poolBalanceRaw": "1",
+        "poolBalance": 1
+      },
+      "token1": {
+        "address": "0xf1b50ed67a9e2cc94ad3c477779e2d4cbfff9029",
+        "symbol": "USDT",
+        "decimals": 6,
+        "poolBalanceRaw": "5",
+        "poolBalance": 0.000005
+      },
+      "swapCount7d": 0
+    },
+    {
+      "pool": "0x9861246b8bdf619cc0e8c0422e0a662b51a2c3f4",
+      "kind": "UniswapV3",
+      "factory": "0x972ca9d1662f5e029cd18327d29026532e84c742",
+      "fee": 10000,
+      "feeBps": 100,
+      "tickSpacing": 200,
+      "sqrtPriceX96": "258690224024130177430264637859036961",
+      "currentTick": 299991,
+      "activeLiquidity": "0",
+      "priceToken0InToken1": 10.661071753607992,
+      "token0": {
+        "address": "0x054ed45810dbbab8b27668922d110669c9d88d0a",
+        "symbol": "USDC.e",
+        "decimals": 6,
+        "poolBalanceRaw": "6",
+        "poolBalance": 0.000006
+      },
+      "token1": {
+        "address": "0xb210d2120d57b758ee163cffb43e73728c471cf1",
+        "symbol": "WHSK",
+        "decimals": 18,
+        "poolBalanceRaw": "4",
+        "poolBalance": 4e-18
+      },
+      "swapCount7d": 0
+    }
+  ]
+}
