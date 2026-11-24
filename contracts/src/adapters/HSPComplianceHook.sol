@@ -3,13 +3,14 @@ pragma solidity ^0.8.24;
 
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IComplianceHook} from "../interfaces/IProtocol.sol";
 
 /// @title HSPComplianceHook
 /// @notice Optional view-only compliance/KYC hook supporting allowlist and revocable EIP-712 HSP attestations.
 /// @dev Never called on LiquidityVault withdrawals, LP proceeds claims, offer cancellations, or expired ticket reclaims.
-contract HSPComplianceHook is EIP712, IComplianceHook {
-    error Unauthorized();
+contract HSPComplianceHook is EIP712, Ownable2Step, IComplianceHook {
     error ZeroAddress();
     error AttestationExpired();
     error InvalidNonce();
@@ -23,40 +24,37 @@ contract HSPComplianceHook is EIP712, IComplianceHook {
     bytes32 public constant ATTESTATION_TYPEHASH =
         keccak256("ComplianceAttestation(address subject,uint256 nonce,uint256 expiry)");
 
-    address public immutable admin;
     address public attestationSigner;
 
     mapping(address => uint256) public validUntil;
     mapping(address => uint256) public nonces;
 
-    constructor(address _attestationSigner) EIP712("ProtocolHSPCompliance", "1") {
+    constructor(address _owner, address _attestationSigner)
+        EIP712("ProtocolHSPCompliance", "1")
+        Ownable(_owner)
+    {
         if (_attestationSigner == address(0)) revert ZeroAddress();
-        admin = msg.sender;
         attestationSigner = _attestationSigner;
     }
 
-    function setAttestationSigner(address _signer) external {
-        if (msg.sender != admin) revert Unauthorized();
+    function setAttestationSigner(address _signer) external onlyOwner {
         if (_signer == address(0)) revert ZeroAddress();
         attestationSigner = _signer;
         emit AttestationSignerUpdated(_signer);
     }
 
-    function setApproved(address subject, uint256 expiry) external {
-        if (msg.sender != admin) revert Unauthorized();
+    function setApproved(address subject, uint256 expiry) external onlyOwner {
         if (subject == address(0)) revert ZeroAddress();
         validUntil[subject] = expiry;
         emit SubjectStatusSet(subject, expiry);
     }
 
-    function revoke(address subject) external {
-        if (msg.sender != admin) revert Unauthorized();
+    function revoke(address subject) external onlyOwner {
         validUntil[subject] = 0;
         nonces[subject]++;
         emit SubjectRevoked(subject);
     }
 
-    /// @notice Submit a signed EIP-712 attestation bound to (chainId, verifyingContract, subject, nonce, expiry).
     function submitAttestation(address subject, uint256 nonce, uint256 expiry, bytes calldata signature) external {
         if (subject == address(0)) revert ZeroAddress();
         if (block.timestamp > expiry) revert AttestationExpired();
