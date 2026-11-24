@@ -31,6 +31,7 @@ export interface Offer {
   dailyPremiumBps: number;
   paymentToken: Address;
   spreadBps: number;
+  protocolFeeBps: number;
   oracle: Address;
   complianceHook: Address;
   minFillAmount: bigint;
@@ -51,6 +52,7 @@ export interface Ticket {
   priceMode: PriceMode;
   status: TicketStatus;
   spreadBps: number;
+  protocolFeeBps: number;
   lp: Address;
   inventoryToken: Address;
   paymentToken: Address;
@@ -58,6 +60,7 @@ export interface Ticket {
   complianceHook: Address;
   initialAmount: bigint;
   remainingAmount: bigint;
+  minFillAmount: bigint;
   fixedOrMinPriceX36: bigint;
   maxPriceX36: bigint;
 }
