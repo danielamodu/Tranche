@@ -1,21 +1,16 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, CheckCircle2, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Reveal } from "@/components/Reveal";
 import { StickyLifecycleStage } from "@/components/StickyLifecycleStage";
 import { TicketSpecimen } from "@/components/TicketSpecimen";
 import { TrancheLogo } from "@/components/TrancheLogo";
 import { ACTIVE_NETWORK, explorerAddressUrl } from "@/config/networks";
+import { useWallet } from "@/context/WalletContext";
 import { useProtocolTelemetry } from "@/hooks/useProtocolTelemetry";
 import { cn } from "@/lib/utils";
+import type { AppRoute } from "@/App";
 
 const TRADER_POINTS = [
   {
@@ -132,14 +127,23 @@ function shortAddr(addr: string): string {
 }
 
 interface LandingPageProps {
-  onNavigate: (path: "/" | "/docs" | "/privacy" | "/terms") => void;
+  onNavigate: (path: AppRoute) => void;
 }
 
 export function LandingPage({ onNavigate }: LandingPageProps) {
   const telemetry = useProtocolTelemetry();
-  const [launchOpen, setLaunchOpen] = useState(false);
+  const { isConnected, isWrongNetwork, selectedRole } = useWallet();
   const [activeBucket, setActiveBucket] = useState<string>("reserved");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  function handleLaunchApp() {
+    // Returning users go straight into their dashboard (reconnect in-dash if needed)
+    if (selectedRole) {
+      onNavigate(selectedRole === "lp" ? "/vault" : "/trade");
+      return;
+    }
+    onNavigate(isConnected && !isWrongNetwork ? "/start" : "/connect");
+  }
   const [scrollState, setScrollState] = useState({
     compact: false,
     showCta: false,
@@ -280,7 +284,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               >
                 <Button
                   type="button"
-                  onClick={() => setLaunchOpen(true)}
+                  onClick={handleLaunchApp}
                   tabIndex={scrollState.showCta ? 0 : -1}
                   className="h-9 whitespace-nowrap rounded-full px-4 text-xs font-medium active:scale-[0.985] transition-transform cursor-pointer"
                 >
@@ -333,7 +337,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <Button
               type="button"
               size="lg"
-              onClick={() => setLaunchOpen(true)}
+              onClick={handleLaunchApp}
               className="h-12 rounded-full px-8 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
             >
               Launch App
@@ -662,7 +666,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <Button
                   type="button"
                   size="lg"
-                  onClick={() => setLaunchOpen(true)}
+                  onClick={handleLaunchApp}
                   className="h-12 rounded-full px-8 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
                 >
                   Launch App
@@ -806,7 +810,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <li>
                   <button
                     type="button"
-                    onClick={() => setLaunchOpen(true)}
+                    onClick={handleLaunchApp}
                     className="transition-colors hover:text-foreground cursor-pointer"
                   >
                     Launch App
@@ -839,29 +843,6 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           </div>
         </div>
       </footer>
-
-      {/* Next-Step Modal (until Screen 2 Connect Wallet is wired) */}
-      <Dialog open={launchOpen} onOpenChange={setLaunchOpen}>
-        <DialogContent className="rounded-[22px] border-border bg-card sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl">Connect Wallet is next</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              Screen 1 (Landing) is live and reading directly from Chain {ACTIVE_NETWORK.chainId}.
-              Next up in the build sequence is Screen 2 (Connect Wallet) followed by the 2-card Role
-              Picker.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-2 flex justify-end">
-            <Button
-              type="button"
-              onClick={() => setLaunchOpen(false)}
-              className="h-10 rounded-full px-5 cursor-pointer"
-            >
-              Got it
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

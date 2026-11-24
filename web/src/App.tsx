@@ -1,19 +1,39 @@
 import { useCallback, useEffect, useState } from "react";
+import { WalletProvider } from "@/context/WalletContext";
+import { ConnectWalletPage } from "@/pages/ConnectWalletPage";
 import { DocsPage } from "@/pages/DocsPage";
 import { LandingPage } from "@/pages/LandingPage";
 import { PrivacyPage } from "@/pages/PrivacyPage";
+import { RolePickerPage } from "@/pages/RolePickerPage";
 import { TermsPage } from "@/pages/TermsPage";
+import { TicketsPage } from "@/pages/TicketsPage";
+import { TradePage } from "@/pages/TradePage";
+import { VaultPage } from "@/pages/VaultPage";
 
-export type AppRoute = "/" | "/docs" | "/privacy" | "/terms";
+export type AppRoute =
+  | "/"
+  | "/docs"
+  | "/privacy"
+  | "/terms"
+  | "/connect"
+  | "/start"
+  | "/trade"
+  | "/tickets"
+  | "/vault";
 
 function resolveRoute(pathname: string): AppRoute {
   if (pathname === "/docs") return "/docs";
   if (pathname === "/privacy") return "/privacy";
   if (pathname === "/terms") return "/terms";
+  if (pathname === "/connect") return "/connect";
+  if (pathname === "/start") return "/start";
+  if (pathname === "/trade") return "/trade";
+  if (pathname === "/tickets") return "/tickets";
+  if (pathname === "/vault") return "/vault";
   return "/";
 }
 
-export function App() {
+function AppRouter() {
   const [route, setRoute] = useState<AppRoute>(() => resolveRoute(window.location.pathname));
 
   useEffect(() => {
@@ -33,10 +53,23 @@ export function App() {
     window.scrollTo({ top: 0 });
   }, []);
 
+  if (route === "/connect") return <ConnectWalletPage onNavigate={navigate} />;
+  if (route === "/start") return <RolePickerPage onNavigate={navigate} />;
+  if (route === "/trade") return <TradePage onNavigate={navigate} />;
+  if (route === "/tickets") return <TicketsPage onNavigate={navigate} />;
+  if (route === "/vault") return <VaultPage onNavigate={navigate} />;
   if (route === "/docs") return <DocsPage onNavigate={navigate} />;
   if (route === "/privacy") return <PrivacyPage onNavigate={navigate} />;
   if (route === "/terms") return <TermsPage onNavigate={navigate} />;
   return <LandingPage onNavigate={navigate} />;
+}
+
+export function App() {
+  return (
+    <WalletProvider>
+      <AppRouter />
+    </WalletProvider>
+  );
 }
 
 export default App;
