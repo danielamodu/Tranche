@@ -1,7 +1,7 @@
-// Stage 1 — Experiment 1: Historical HSKSwap vs. Tranche Economic Backtest
-// Reads observed 14-day HashKey Chain mainnet data (market_data_14d.json & analysis_summary.json),
-// reconstructs historical V3 execution costs, replays eligible swaps, simulates $1k/$5k/$10k/$25k
-// block tickets under remediated Tranche FIXED & FLOATING formulas, and writes machine-readable JSON.
+// Stage 1 — Experiment 1A: Historical HSKSwap vs. Tranche Economic Backtest (Corrected & Bootstrapped)
+// Source of truth for protocol math: CommitmentManager.sol (_quoteReservation, _quoteExercise)
+// and LiquidityVault.sol (collectFeeAndProceeds, settleExercise).
+// Strictly separates OBSERVED 14-day on-chain data from SIMULATED / ASSUMED scenarios.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -20,6 +20,7 @@ const Q96 = 2 ** 96;
 const BPS = 10_000;
 const SECONDS_PER_DAY = 86_400;
 const DAYS_PER_YEAR = 365;
+const BOOTSTRAP_RESAMPLES = 1_000;
 
 // Measured gas units from Chain-133 fork validation (TestnetOperationalValidation.t.sol)
 // priced at observed HashKey Chain Mainnet gas price (analysis_summary.json gasSummary).
@@ -32,52 +33,52 @@ const TRANCHE_GAS = {
 };
 
 const USD_PER_GAS = summary.gasSummary.usdPer100kGas / 100_000;
-const TRADER_GAS_USD = (TRANCHE_GAS.reserve + TRANCHE_GAS.exercise) * USD_PER_GAS;
+const TRADER_GAS_RESERVE_ONLY_USD = TRANCHE_GAS.reserve * USD_PER_GAS;
+const TRADER_GAS_FULL_USD = (TRANCHE_GAS.reserve + TRANCHE_GAS.exercise) * USD_PER_GAS;
 const LP_CYCLE_GAS_USD = (TRANCHE_GAS.createOffer + TRANCHE_GAS.claimProceedsApprox) * USD_PER_GAS;
 const V3_SWAP_GAS_USD = summary.gasSummary.medianSwapCostUsd;
 
-// Pre-registered pass/fail thresholds (defined before interpreting results)
+// Pre-registered economic pass/fail criteria (unchanged)
 const PASS_CRITERIA = {
   C1_minTraderSavingsBps: 25,
-  C2_minLpNetMarginPerFillBps: 0.01, // strictly > 0 bps
+  C2_minLpNetMarginPerFillBps: 0.01,
   C3_mustBeatPassiveV3FeeApr: true,
-  C4_minObserved14dEligibleSwapsAt1k: 14, // >= 1 eligible >=$1k swap/day on observed retail flow
+  C4_minObserved14dEligibleSwapsAt1k: 14,
 };
 
-// Pool-specific parameters grounded in Phase 2 remediated configuration
 const POOL_CONFIGS = {
   "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc": {
     symbol: "WHSK/USDT",
     invSymbol: "WHSK",
     dec0: 18,
     dec1: 6,
-    remediatedMinFillTokens: 1_000, // 1,000 WHSK (~$80.81) from RemediationRegression / mainnet design
+    remediatedMinFillTokens: 1_000,
     floatingOffer: { basePremiumBps: 10, dailyPremiumBps: 10, spreadBps: 20 },
     fixedOffer: { basePremiumBps: 20, dailyPremiumBps: 25, strikeOffsetBps: 30 },
-    lpRebalBpsBase: 10, // CEX/OTC restock cost for thinner WHSK orderbook
-    floatingMarkoutBpsBase: 8,
+    lpRebalBpsBase: 10,
+    promptOracleLagMarkoutBpsBase: 8,
   },
   "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16": {
     symbol: "WETH/USDT",
     invSymbol: "WETH",
     dec0: 18,
     dec1: 6,
-    remediatedMinFillTokens: 0.05, // 0.05 WETH (~$85.20)
+    remediatedMinFillTokens: 0.05,
     floatingOffer: { basePremiumBps: 10, dailyPremiumBps: 10, spreadBps: 25 },
     fixedOffer: { basePremiumBps: 25, dailyPremiumBps: 45, strikeOffsetBps: 50 },
-    lpRebalBpsBase: 5, // Deep CEX/OTC hedge for WETH
-    floatingMarkoutBpsBase: 12,
+    lpRebalBpsBase: 5,
+    promptOracleLagMarkoutBpsBase: 12,
   },
   "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a": {
     symbol: "WBTC/USDT",
     invSymbol: "WBTC",
     dec0: 8,
     dec1: 6,
-    remediatedMinFillTokens: 0.001, // 0.001 WBTC (~$61.83)
+    remediatedMinFillTokens: 0.001,
     floatingOffer: { basePremiumBps: 10, dailyPremiumBps: 10, spreadBps: 25 },
     fixedOffer: { basePremiumBps: 25, dailyPremiumBps: 50, strikeOffsetBps: 50 },
-    lpRebalBpsBase: 5, // Deep CEX/OTC hedge for WBTC
-    floatingMarkoutBpsBase: 12,
+    lpRebalBpsBase: 5,
+    promptOracleLagMarkoutBpsBase: 12,
   },
 };
 
@@ -86,7 +87,7 @@ const TRADE_SIZES_USD = [1_000, 5_000, 10_000, 25_000];
 const SCENARIOS = [
   {
     id: "base",
-    label: "Base",
+    label: "Base (Hypothetical 25% Util, Prompt Hedge)",
     utilization: 0.25,
     exerciseProbFloating: 0.85,
     markoutMultiplier: 1.0,
@@ -96,7 +97,7 @@ const SCENARIOS = [
   },
   {
     id: "high_utilization",
-    label: "High Utilization",
+    label: "High Utilization (Hypothetical 65% Util, Prompt Hedge)",
     utilization: 0.65,
     exerciseProbFloating: 0.90,
     markoutMultiplier: 1.2,
@@ -106,7 +107,7 @@ const SCENARIOS = [
   },
   {
     id: "adverse_selection",
-    label: "Adverse Selection",
+    label: "Adverse Selection (Hypothetical 25% Util, 3x Markout, 2x Rebal)",
     utilization: 0.25,
     exerciseProbFloating: 0.95,
     markoutMultiplier: 3.0,
@@ -116,6 +117,52 @@ const SCENARIOS = [
   },
 ];
 
+// Deterministic PRNG (Mulberry32) for reproducible block-bootstrap confidence intervals
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function quantileSorted(sorted, q) {
+  if (sorted.length === 0) return null;
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
+}
+
+function bootstrapMeanCI90(samples, seed = 1337) {
+  if (samples.length === 0) {
+    return { nIndependentWindows: 0, sampleMean: null, median: null, lower90: null, upper90: null };
+  }
+  const sampleMean = samples.reduce((a, b) => a + b, 0) / samples.length;
+  const rng = mulberry32(seed);
+  const means = [];
+  const n = samples.length;
+  for (let b = 0; b < BOOTSTRAP_RESAMPLES; b++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      sum += samples[Math.floor(rng() * n)];
+    }
+    means.push(sum / n);
+  }
+  means.sort((a, b) => a - b);
+  return {
+    nIndependentWindows: n,
+    sampleMean: round(sampleMean, 2),
+    median: round(quantileSorted(means, 0.5), 2),
+    lower90: round(quantileSorted(means, 0.05), 2),
+    upper90: round(quantileSorted(means, 0.95), 2),
+  };
+}
+
 function sqrtPriceX96ToUsd(sqrtPriceX96Str, dec0, dec1) {
   const sp = Number(BigInt(sqrtPriceX96Str)) / Q96;
   return sp * sp * 10 ** (dec0 - dec1);
@@ -123,7 +170,7 @@ function sqrtPriceX96ToUsd(sqrtPriceX96Str, dec0, dec1) {
 
 function blockToTimestamp(blockNum) {
   const { fromBlock, fromTimestamp } = marketData.metadata.window;
-  return fromTimestamp + (blockNum - fromBlock) * 2; // Verified 2.0000s OP Stack block time
+  return fromTimestamp + (blockNum - fromBlock) * 2;
 }
 
 function effPremiumBpsFormula(basePremiumBps, dailyPremiumBps, durationSeconds) {
@@ -131,12 +178,121 @@ function effPremiumBpsFormula(basePremiumBps, dailyPremiumBps, durationSeconds) 
 }
 
 function round(n, digits = 2) {
-  if (!Number.isFinite(n)) return null;
+  if (n === null || n === undefined || !Number.isFinite(n)) return null;
   const f = 10 ** digits;
   return Math.round(n * f) / f;
 }
 
-// Reconstruct observed 14-day swap series, realized HSKSwap execution costs, and forward markouts
+// ---------------------------------------------------------------------------
+// Explicit Two-Token Balance-Sheet Accounting (Solidity Source of Truth)
+// Matches CommitmentManager._quoteReservation, _quoteExercise,
+// LiquidityVault.collectFeeAndProceeds, and LiquidityVault.settleExercise.
+// ---------------------------------------------------------------------------
+function evaluateTwoTokenCycle({
+  notionalUsd,
+  p0,
+  pEx,
+  pEnd,
+  fillFraction, // 0.0 (expired), 0.5 (partial), 1.0 (full)
+  mode, // "FLOATING" | "FIXED"
+  basePremiumBps,
+  dailyPremiumBps,
+  durationSeconds,
+  spreadOrStrikeBps,
+  protocolFeeBps,
+  restockCostBps,
+  hedgeDelayPrice, // price at which LP restocks filled inventory (null => zero hedging / keeps USDT)
+  lpGasUsd,
+  traderGasUsd,
+}) {
+  const Q = notionalUsd / p0; // Committed inventory tokens
+  const effPremBps = effPremiumBpsFormula(basePremiumBps, dailyPremiumBps, durationSeconds);
+  const f = protocolFeeBps / BPS;
+
+  // 1. Reservation step (always paid upfront, non-refundable)
+  // In Solidity: refPrice = fixedPrice (FIXED) or oracle * (1 + spread) (FLOATING)
+  const refPriceRes = p0 * (1 + spreadOrStrikeBps / BPS);
+  const notionalPayResUsd = Q * refPriceRes;
+  const grossPremiumUsd = notionalPayResUsd * (effPremBps / BPS);
+  const resProtocolFeeUsd = grossPremiumUsd * f;
+  const lpNetPremiumUsd = grossPremiumUsd - resProtocolFeeUsd;
+
+  // 2. Exercise step on filled quantity q = fillFraction * Q
+  const qFilled = Q * fillFraction;
+  const qRemaining = Q - qFilled;
+  const effPriceEx =
+    mode === "FIXED"
+      ? p0 * (1 + spreadOrStrikeBps / BPS)
+      : pEx * (1 + spreadOrStrikeBps / BPS);
+
+  const grossExerciseUsd = qFilled * effPriceEx;
+  const exProtocolFeeUsd = grossExerciseUsd * f;
+  const lpNetExerciseUsd = grossExerciseUsd - exProtocolFeeUsd;
+
+  // Conservation identity check (exact Solidity LiquidityVault._creditPayment invariant)
+  const totalTreasuryFeeUsd = resProtocolFeeUsd + exProtocolFeeUsd;
+  const totalTraderPaidUsd = grossPremiumUsd + grossExerciseUsd;
+  const totalLpGrossReceiptsUsd = lpNetPremiumUsd + lpNetExerciseUsd;
+  // totalTraderPaidUsd === totalLpGrossReceiptsUsd + totalTreasuryFeeUsd
+
+  // 3. LP Inventory Exposure & Restocking / Hedging Cashflows
+  // Initial LP committed inventory value = Q * p0 = notionalUsd
+  // HODL benchmark value at cycle end = Q * pEnd
+  const hodlEndUsd = Q * pEnd;
+
+  let lpFinalValueUsd;
+  let restockOutflowUsd = 0;
+
+  if (qFilled === 0) {
+    // Expired unexercised: LP reclaims 100% of Q + keeps non-refundable lpNetPremiumUsd - gas
+    lpFinalValueUsd = Q * pEnd + lpNetPremiumUsd - lpGasUsd;
+  } else if (hedgeDelayPrice === null) {
+    // Zero hedging: LP holds USDT exercise proceeds + remaining inventory at pEnd
+    lpFinalValueUsd = qRemaining * pEnd + lpNetPremiumUsd + lpNetExerciseUsd - lpGasUsd;
+  } else {
+    // LP buys back qFilled units at hedgeDelayPrice * (1 + restockCostBps/BPS) to restore Q units
+    restockOutflowUsd = qFilled * hedgeDelayPrice * (1 + restockCostBps / BPS);
+    const residualUsdtUsd = lpNetPremiumUsd + lpNetExerciseUsd - restockOutflowUsd - lpGasUsd;
+    lpFinalValueUsd = Q * pEnd + residualUsdtUsd;
+  }
+
+  // LP P&L vs HODL (cleanly isolates execution + premium + hedge/option alpha from passive asset drift)
+  const lpPnlVsHodlUsd = lpFinalValueUsd - hodlEndUsd;
+  const lpPnlVsHodlBps = (lpPnlVsHodlUsd / notionalUsd) * BPS;
+
+  // LP absolute mark-to-market P&L vs initial committed USD value (includes passive inventory drift)
+  const lpPnlVsInitialUsd = lpFinalValueUsd - notionalUsd;
+  const lpPnlVsInitialBps = (lpPnlVsInitialUsd / notionalUsd) * BPS;
+
+  // Trader all-in cost vs exercise-time spot on filled quantity (or vs p0 if full immediate fill)
+  const traderAllInVsSpotBps =
+    qFilled > 0
+      ? ((grossPremiumUsd + grossExerciseUsd + traderGasUsd - qFilled * pEx) / (qFilled * pEx)) * BPS
+      : ((grossPremiumUsd + traderGasUsd) / notionalUsd) * BPS;
+
+  return {
+    fillFraction,
+    effPremiumBps: effPremBps,
+    grossPremiumUsd: round(grossPremiumUsd, 4),
+    resProtocolFeeUsd: round(resProtocolFeeUsd, 4),
+    lpNetPremiumUsd: round(lpNetPremiumUsd, 4),
+    grossExerciseUsd: round(grossExerciseUsd, 4),
+    exProtocolFeeUsd: round(exProtocolFeeUsd, 4),
+    lpNetExerciseUsd: round(lpNetExerciseUsd, 4),
+    totalTreasuryFeeUsd: round(totalTreasuryFeeUsd, 4),
+    totalTraderPaidUsd: round(totalTraderPaidUsd, 4),
+    totalLpGrossReceiptsUsd: round(totalLpGrossReceiptsUsd, 4),
+    restockOutflowUsd: round(restockOutflowUsd, 4),
+    hodlEndUsd: round(hodlEndUsd, 4),
+    lpFinalValueUsd: round(lpFinalValueUsd, 4),
+    lpPnlVsHodlUsd: round(lpPnlVsHodlUsd, 4),
+    lpPnlVsHodlBps: round(lpPnlVsHodlBps, 2),
+    lpPnlVsInitialBps: round(lpPnlVsInitialBps, 2),
+    traderAllInVsSpotBps: round(traderAllInVsSpotBps, 2),
+  };
+}
+
+// Reconstruct observed 14-day swap series + non-overlapping independent 24h & 6h windows
 function analyzeObservedSwaps(poolAddr, cfg, summaryPool) {
   const swaps = marketData.events.swaps
     .filter((s) => s.pool.toLowerCase() === poolAddr)
@@ -154,16 +310,12 @@ function analyzeObservedSwaps(poolAddr, cfg, summaryPool) {
     const baseAbs = Math.abs(amt0);
     const usdtAbs = Math.abs(amt1);
     const effPrice = baseAbs > 0 ? usdtAbs / baseAbs : postPrice;
-
-    // Realized all-in execution cost vs. pre-swap pool spot (includes 30 bps fee + slippage; no double counting)
-    // Skip i===0 where prePrice isn't independently observed before the first swap
-    let realizedAllInCostBps = null;
-    if (i > 0 && prePrice > 0) {
-      realizedAllInCostBps =
-        side === "BUY_BASE"
+    const realizedAllInCostBps =
+      i > 0 && prePrice > 0
+        ? side === "BUY_BASE"
           ? ((effPrice - prePrice) / prePrice) * BPS
-          : ((prePrice - effPrice) / prePrice) * BPS;
-    }
+          : ((prePrice - effPrice) / prePrice) * BPS
+        : null;
 
     enriched.push({
       blockNumber: s.blockNumber,
@@ -178,98 +330,90 @@ function analyzeObservedSwaps(poolAddr, cfg, summaryPool) {
     });
   }
 
-  // Compute observed forward markout (24h horizon) on BUY_BASE swaps (adverse selection proxy for LP selling base)
-  const forwardHorizonSec = 24 * 3600;
-  const buyMarkouts24hBps = [];
-  const rolling24hReturns = [];
-
-  for (let i = 0; i < enriched.length; i++) {
-    const targetTs = enriched[i].ts + forwardHorizonSec;
-    // Find last observed swap at or before targetTs (or first after if sparse)
-    let j = i;
-    while (j + 1 < enriched.length && enriched[j + 1].ts <= targetTs) {
-      j++;
-    }
-    if (j > i && enriched[j].ts - enriched[i].ts >= 3600) {
-      const retBps = ((enriched[j].postPrice - enriched[i].postPrice) / enriched[i].postPrice) * BPS;
-      rolling24hReturns.push(retBps);
-      if (enriched[i].side === "BUY_BASE") {
-        // Positive price move after selling base is adverse markout to the LP
-        buyMarkouts24hBps.push(retBps);
+  // Helper: last observed price at or before timestamp t
+  function priceAt(targetTs) {
+    let lo = 0;
+    let hi = enriched.length - 1;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (enriched[mid].ts <= targetTs) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
       }
     }
+    return enriched[best].postPrice;
   }
 
-  // 14-day HODL return & passive 50/50 V3 IL over the exact 14-day window
-  const pStart = enriched.length > 0 ? enriched[0].postPrice : summaryPool.spotPriceUsd;
-  const pEnd = enriched.length > 0 ? enriched[enriched.length - 1].postPrice : summaryPool.spotPriceUsd;
-  const priceRatio = pStart > 0 ? pEnd / pStart : 1;
+  // Build strictly NON-OVERLAPPING independent 24h windows (day 0..13) and 6h windows (0..55)
+  const { fromTimestamp, toTimestamp } = marketData.metadata.window;
+  const independent24hReturnsBps = [];
+  const independent24hWindows = [];
+  for (let t = fromTimestamp; t + SECONDS_PER_DAY <= toTimestamp; t += SECONDS_PER_DAY) {
+    const pStart = priceAt(t);
+    const pEnd = priceAt(t + SECONDS_PER_DAY);
+    const retBps = ((pEnd - pStart) / pStart) * BPS;
+    independent24hReturnsBps.push(retBps);
+    independent24hWindows.push({ startTs: t, endTs: t + SECONDS_PER_DAY, pStart, pEnd, retBps });
+  }
+
+  const sixHours = 6 * 3600;
+  const independent6hReturnsBps = [];
+  for (let t = fromTimestamp; t + sixHours <= toTimestamp; t += sixHours) {
+    const pStart = priceAt(t);
+    const pEnd = priceAt(t + sixHours);
+    independent6hReturnsBps.push(((pEnd - pStart) / pStart) * BPS);
+  }
+
+  // Empirical FIXED covered-call payoffs over independent 24h windows
+  const strikeOffsetBps = cfg.fixedOffer.strikeOffsetBps;
+  const independentFixedCallPayoffsBps = independent24hReturnsBps.map((r) =>
+    r > strikeOffsetBps ? r - strikeOffsetBps : 0,
+  );
+  const fixedItmCount = independent24hReturnsBps.filter((r) => r > strikeOffsetBps).length;
+  const fixedEmpiricalExerciseRate =
+    independent24hReturnsBps.length > 0 ? fixedItmCount / independent24hReturnsBps.length : 0;
+
+  // 14-day HODL & passive V3 benchmark
+  const pFirst = enriched[0].postPrice;
+  const pLast = enriched[enriched.length - 1].postPrice;
+  const priceRatio = pLast / pFirst;
   const hodl14dReturnPct = (priceRatio - 1) * 100;
-  // Standard full-range Uniswap V2/V3 50/50 LP value vs 50/50 HODL: IL = 2*sqrt(r)/(1+r) - 1
   const v3FullRangeIl14dPct = ((2 * Math.sqrt(priceRatio)) / (1 + priceRatio) - 1) * 100;
   const v3PassiveFee14dPct = (summaryPool.historical14d.fees14dUsd / summaryPool.tvlUsd) * 100;
-  const v3LpVs5050Hodl14dPct = v3PassiveFee14dPct + v3FullRangeIl14dPct;
 
-  // Eligibility breakdown of observed 14-day swaps
+  // Observed swap eligibility counts
   const minFillUsd = cfg.remediatedMinFillTokens * summaryPool.spotPriceUsd;
   const eligibleAtContractMin = enriched.filter((e) => e.usdtAbs >= minFillUsd);
-  const eligibleAt100 = enriched.filter((e) => e.usdtAbs >= 100);
-  const eligibleAt500 = enriched.filter((e) => e.usdtAbs >= 500);
   const eligibleAt1000 = enriched.filter((e) => e.usdtAbs >= 1_000);
 
   const validCosts = enriched
     .map((e) => e.realizedAllInCostBps)
     .filter((x) => x !== null && Number.isFinite(x) && x > -500 && x < 5000);
-  const meanRealizedCostBps =
-    validCosts.length > 0 ? validCosts.reduce((a, b) => a + b, 0) / validCosts.length : null;
   const sortedCosts = [...validCosts].sort((a, b) => a - b);
-  const medianRealizedCostBps =
-    sortedCosts.length > 0 ? sortedCosts[Math.floor(sortedCosts.length / 2)] : null;
 
-  // Compute empirical FIXED option payoff across all observed rolling 24h windows
-  const strikeOffsetBps = cfg.fixedOffer.strikeOffsetBps;
-  let fixedInTheMoneyCount = 0;
-  let fixedExpectedPayoffBps = 0;
-  if (rolling24hReturns.length > 0) {
-    for (const r of rolling24hReturns) {
-      if (r > strikeOffsetBps) {
-        fixedInTheMoneyCount++;
-        fixedExpectedPayoffBps += r - strikeOffsetBps;
-      }
-    }
-    fixedExpectedPayoffBps /= rolling24hReturns.length;
-  }
-  const fixedEmpiricalExerciseRate =
-    rolling24hReturns.length > 0 ? fixedInTheMoneyCount / rolling24hReturns.length : 0;
-
-  // Empirical average adverse markout on BUY_BASE swaps
-  const meanBuyMarkout24hBps =
-    buyMarkouts24hBps.length > 0
-      ? buyMarkouts24hBps.reduce((a, b) => a + b, 0) / buyMarkouts24hBps.length
-      : 0;
-  const positiveBuyMarkouts = buyMarkouts24hBps.filter((x) => x > 0);
-  const conditionalAdverseBuyMarkout24hBps =
-    positiveBuyMarkouts.length > 0
-      ? positiveBuyMarkouts.reduce((a, b) => a + b, 0) / positiveBuyMarkouts.length
-      : 0;
+  // Tail adverse 24h rally (90th percentile positive move) for failed-restocking stress
+  const sorted24h = [...independent24hReturnsBps].sort((a, b) => a - b);
+  const p90AdverseRally24hBps = Math.max(0, quantileSorted(sorted24h, 0.9) ?? 0);
 
   return {
     observedSwapCount: enriched.length,
     observed14dVolumeUsd: round(summaryPool.historical14d.totalVolUsd, 2),
     observedAvgDailyVolUsd: round(summaryPool.historical14d.avgDailyVolUsd, 2),
     observedMaxSwapUsd: round(summaryPool.historical14d.swapSizeStatsUsd.max, 2),
-    observedP99SwapUsd: round(summaryPool.historical14d.swapSizeStatsUsd.p99, 2),
-    realizedStartPriceUsd: round(pStart, 6),
-    realizedEndPriceUsd: round(pEnd, 6),
+    realizedStartPriceUsd: round(pFirst, 6),
+    realizedEndPriceUsd: round(pLast, 6),
     hodl14dReturnPct: round(hodl14dReturnPct, 3),
     v3PassiveFee14dPct: round(v3PassiveFee14dPct, 4),
     v3PassiveFeeAprPct: round(summaryPool.historical14d.lpFeeAprPct, 3),
     v3FullRangeIl14dPct: round(v3FullRangeIl14dPct, 4),
-    v3LpVs5050Hodl14dPct: round(v3LpVs5050Hodl14dPct, 4),
+    v3LpVs5050Hodl14dPct: round(v3PassiveFee14dPct + v3FullRangeIl14dPct, 4),
     realizedSwapCostStatsBps: {
       sampleCount: validCosts.length,
-      medianBps: round(medianRealizedCostBps, 2),
-      meanBps: round(meanRealizedCostBps, 2),
+      medianBps: round(quantileSorted(sortedCosts, 0.5), 2),
+      meanBps: round(validCosts.reduce((a, b) => a + b, 0) / validCosts.length, 2),
     },
     eligibility: {
       contractMinFillTokens: cfg.remediatedMinFillTokens,
@@ -279,172 +423,369 @@ function analyzeObservedSwaps(poolAddr, cfg, summaryPool) {
         eligibleAtContractMin.reduce((a, b) => a + b.usdtAbs, 0),
         2,
       ),
-      eligibleSwapsAt100Usd: eligibleAt100.length,
-      eligibleVolumeAt100Usd: round(eligibleAt100.reduce((a, b) => a + b.usdtAbs, 0), 2),
-      eligibleSwapsAt500Usd: eligibleAt500.length,
-      eligibleVolumeAt500Usd: round(eligibleAt500.reduce((a, b) => a + b.usdtAbs, 0), 2),
       eligibleSwapsAt1000Usd: eligibleAt1000.length,
       eligibleVolumeAt1000Usd: round(eligibleAt1000.reduce((a, b) => a + b.usdtAbs, 0), 2),
     },
-    empirical24hPathStats: {
-      rollingWindowCount: rolling24hReturns.length,
-      meanBuyMarkout24hBps: round(meanBuyMarkout24hBps, 2),
-      conditionalAdverseBuyMarkout24hBps: round(conditionalAdverseBuyMarkout24hBps, 2),
-      fixedStrikeOffsetBps: strikeOffsetBps,
+    independentWindows: {
+      count24h: independent24hWindows.length,
+      count6h: independent6hReturnsBps.length,
+      mean24hReturnBps: round(
+        independent24hReturnsBps.reduce((a, b) => a + b, 0) / independent24hReturnsBps.length,
+        2,
+      ),
+      mean6hReturnBps: round(
+        independent6hReturnsBps.reduce((a, b) => a + b, 0) / independent6hReturnsBps.length,
+        2,
+      ),
+      p90AdverseRally24hBps: round(p90AdverseRally24hBps, 2),
       fixedEmpiricalExerciseRate: round(fixedEmpiricalExerciseRate, 4),
-      fixedEmpiricalExpectedCallPayoffBps: round(fixedExpectedPayoffBps, 2),
+      fixedCallPayoff24hCI90: bootstrapMeanCI90(independentFixedCallPayoffsBps, 101),
+      independent24hReturnsBps,
+      independent6hReturnsBps,
+      independentFixedCallPayoffsBps,
     },
   };
 }
 
-// Simulate Tranche FLOATING and FIXED economics for a given pool, trade size, and scenario
+// Simulate FLOATING or FIXED block ticket using exact two-token balance sheet
 function simulateTrancheTrade({
   cfg,
   summaryPool,
   observed,
   tradeUsd,
   scenario,
-  mode, // "FLOATING" | "FIXED"
+  mode,
+  maxAnnualTurnsCap = null,
 }) {
   const durationSec = scenario.durationHours * 3600;
-  const f = scenario.protocolFeeBps / BPS;
-
-  // Lookup exact V3 all-in execution cost from on-chain tick curve (already includes 30 bps fee + slippage)
+  const p0 = summaryPool.spotPriceUsd;
   const impactRow = summaryPool.priceImpactTable.find((r) => r.tradeUsd === tradeUsd);
-  const v3BuyAllInExGasBps = impactRow ? impactRow.buyBase.allInCostBps : null;
-  const v3GasBps = (V3_SWAP_GAS_USD / tradeUsd) * BPS;
-  const v3TotalAllInBps = v3BuyAllInExGasBps !== null ? v3BuyAllInExGasBps + v3GasBps : null;
+  const v3TotalAllInBps = impactRow
+    ? impactRow.buyBase.allInCostBps + (V3_SWAP_GAS_USD / tradeUsd) * BPS
+    : null;
 
-  // Check LP vault depth feasibility: require tradeUsd <= 50% of pool's base-side TVL
-  const poolBaseTvlUsd = summaryPool.tvlUsd / 2;
-  const feasibleOnCurrentPoolTvl = tradeUsd <= poolBaseTvlUsd;
-
-  const traderGasBps = (TRADER_GAS_USD / tradeUsd) * BPS;
-  const lpGasBps = (LP_CYCLE_GAS_USD / tradeUsd) * BPS;
+  const rawTurnsPerYear = ((DAYS_PER_YEAR * 24) / scenario.durationHours) * scenario.utilization;
+  const effectiveAnnualTurns =
+    maxAnnualTurnsCap !== null ? Math.min(rawTurnsPerYear, maxAnnualTurnsCap) : rawTurnsPerYear;
 
   const rebalBps = cfg.lpRebalBpsBase * scenario.rebalMultiplier;
 
   if (mode === "FLOATING") {
     const { basePremiumBps, dailyPremiumBps, spreadBps } = cfg.floatingOffer;
-    const effPremBps = effPremiumBpsFormula(basePremiumBps, dailyPremiumBps, durationSec);
+    const markoutBps = cfg.promptOracleLagMarkoutBpsBase * scenario.markoutMultiplier;
+    const pEx = p0;
+    const hedgePrice = pEx * (1 + markoutBps / BPS);
 
-    // Trader pays grossPremium + grossPayment (protocol fee is deducted from LP, NOT double-charged to trader)
-    const traderAllInBps = effPremBps + spreadBps + traderGasBps;
-    const traderSavingsVsV3Bps = v3TotalAllInBps !== null ? v3TotalAllInBps - traderAllInBps : null;
+    const full = evaluateTwoTokenCycle({
+      notionalUsd: tradeUsd,
+      p0,
+      pEx,
+      pEnd: p0,
+      fillFraction: 1.0,
+      mode: "FLOATING",
+      basePremiumBps,
+      dailyPremiumBps,
+      durationSeconds: durationSec,
+      spreadOrStrikeBps: spreadBps,
+      protocolFeeBps: scenario.protocolFeeBps,
+      restockCostBps: rebalBps,
+      hedgeDelayPrice: hedgePrice,
+      lpGasUsd: LP_CYCLE_GAS_USD,
+      traderGasUsd: TRADER_GAS_FULL_USD,
+    });
 
-    // LP expected net P&L per reserved unit (in bps of notional)
-    const pEx = scenario.exerciseProbFloating;
-    const markoutBps = cfg.floatingMarkoutBpsBase * scenario.markoutMultiplier;
+    const expired = evaluateTwoTokenCycle({
+      notionalUsd: tradeUsd,
+      p0,
+      pEx,
+      pEnd: p0,
+      fillFraction: 0.0,
+      mode: "FLOATING",
+      basePremiumBps,
+      dailyPremiumBps,
+      durationSeconds: durationSec,
+      spreadOrStrikeBps: spreadBps,
+      protocolFeeBps: scenario.protocolFeeBps,
+      restockCostBps: 0,
+      hedgeDelayPrice: null,
+      lpGasUsd: LP_CYCLE_GAS_USD,
+      traderGasUsd: TRADER_GAS_RESERVE_ONLY_USD,
+    });
 
-    // Exact remediated CommitmentManager formula:
-    // LP keeps (1 - f) of grossPremium; on exercise, LP receives (1 + spread)*(1 - f) of spot notional
-    // => spread*(1 - f) - protocolFeeBps relative to 1.0x oracle spot, minus markout, rebal, and LP gas
-    const lpNetPerReservedBps =
-      effPremBps * (1 - f) +
-      pEx * (spreadBps * (1 - f) - scenario.protocolFeeBps - markoutBps - rebalBps) -
-      lpGasBps;
-
-    const cyclesPerYear = (DAYS_PER_YEAR * 24) / scenario.durationHours;
-    const lpAnnualizedAprPct = (lpNetPerReservedBps / BPS) * scenario.utilization * cyclesPerYear * 100;
-    const lp14dYieldPct = (lpAnnualizedAprPct * 14) / DAYS_PER_YEAR;
-    const protocolFeePerReservedBps =
-      effPremBps * f + pEx * ((1 + spreadBps / BPS) * scenario.protocolFeeBps);
+    const pExProb = scenario.exerciseProbFloating;
+    const expectedLpNetBps =
+      pExProb * full.lpPnlVsHodlBps + (1 - pExProb) * expired.lpPnlVsHodlBps;
+    const lpAnnualizedAprPct = (expectedLpNetBps / BPS) * effectiveAnnualTurns * 100;
 
     return {
       mode,
       tradeUsd,
-      feasibleOnCurrentPoolTvl,
       v3TotalAllInBps: round(v3TotalAllInBps, 2),
-      trancheTraderAllInBps: round(traderAllInBps, 2),
-      traderSavingsVsV3Bps: round(traderSavingsVsV3Bps, 2),
-      effPremiumBps: effPremBps,
+      trancheTraderAllInBps: full.traderAllInVsSpotBps,
+      traderSavingsVsV3Bps: v3TotalAllInBps !== null ? round(v3TotalAllInBps - full.traderAllInVsSpotBps, 2) : null,
+      effPremiumBps: full.effPremiumBps,
       spreadOrStrikeBps: spreadBps,
-      exerciseProb: pEx,
+      exerciseProb: pExProb,
       markoutBps: round(markoutBps, 2),
       rebalBps: round(rebalBps, 2),
-      protocolFeeBpsCollected: round(protocolFeePerReservedBps, 2),
-      lpNetPerCycleBps: round(lpNetPerReservedBps, 2),
+      lpNetIfFullExerciseBps: full.lpPnlVsHodlBps,
+      lpNetIfExpiredBps: expired.lpPnlVsHodlBps,
+      lpNetPerCycleBps: round(expectedLpNetBps, 2),
+      effectiveAnnualTurns: round(effectiveAnnualTurns, 2),
       lpAnnualizedAprPct: round(lpAnnualizedAprPct, 2),
-      lp14dYieldPct: round(lp14dYieldPct, 3),
       beatsPassiveV3FeeApr: lpAnnualizedAprPct > observed.v3PassiveFeeAprPct,
+      fullCycleAccounting: full,
     };
   } else {
-    // FIXED mode: LP sells a covered call at strike K = spot * (1 + strikeOffsetBps).
-    // Uses empirical 14-day rolling 24h option payoff scaled by sqrt(duration/24h) and scenario markoutMultiplier.
+    // FIXED mode: evaluate exact two-token balance sheet across every independent 24h window
     const { basePremiumBps, dailyPremiumBps, strikeOffsetBps } = cfg.fixedOffer;
-    const effPremBps = effPremiumBpsFormula(basePremiumBps, dailyPremiumBps, durationSec);
-
-    // For a trader who exercises immediately / near-spot to lock depth, all-in cost vs current spot:
-    const traderAllInBps = effPremBps + strikeOffsetBps + traderGasBps;
-    const traderSavingsVsV3Bps = v3TotalAllInBps !== null ? v3TotalAllInBps - traderAllInBps : null;
-
-    // Empirical option convexity cost from 14-day historical price series (scaled by sqrt(T/24h) for non-24h sensitivity)
     const timeScale = Math.sqrt(scenario.durationHours / 24);
-    const empiricalCallPayoffBps =
-      observed.empirical24hPathStats.fixedEmpiricalExpectedCallPayoffBps *
-      timeScale *
-      scenario.markoutMultiplier;
-    const pEx = Math.min(
-      0.99,
-      Math.max(0.15, observed.empirical24hPathStats.fixedEmpiricalExerciseRate * timeScale),
-    );
+    const windowPnlsVsHodlBps = observed.independentWindows.independent24hReturnsBps.map((ret24h) => {
+      const scaledRetBps = ret24h * timeScale * scenario.markoutMultiplier;
+      const pEnd = p0 * (1 + scaledRetBps / BPS);
+      const exercised = scaledRetBps > strikeOffsetBps;
+      const res = evaluateTwoTokenCycle({
+        notionalUsd: tradeUsd,
+        p0,
+        pEx: pEnd,
+        pEnd,
+        fillFraction: exercised ? 1.0 : 0.0,
+        mode: "FIXED",
+        basePremiumBps,
+        dailyPremiumBps,
+        durationSeconds: durationSec,
+        spreadOrStrikeBps: strikeOffsetBps,
+        protocolFeeBps: scenario.protocolFeeBps,
+        restockCostBps: rebalBps,
+        hedgeDelayPrice: exercised ? pEnd : null,
+        lpGasUsd: LP_CYCLE_GAS_USD,
+        traderGasUsd: exercised ? TRADER_GAS_FULL_USD : TRADER_GAS_RESERVE_ONLY_USD,
+      });
+      return res.lpPnlVsHodlBps;
+    });
 
-    // LP net return relative to HODL:
-    // + premium*(1-f) + pEx * [strikeOffset*(1-f) - protocolFeeBps - rebal] - optionUpsideForgone - lpGas
-    // Note: empiricalCallPayoffBps already measures E[max(0, P_T - K)], i.e. exact upside forgone above K!
-    // When exercised (P_T > K), LP sells at K (capturing strikeOffset above P_0) and pays protocolFee + rebal,
-    // while giving up (P_T - K) vs HODL.
-    const lpNetVsHodlPerCycleBps =
-      effPremBps * (1 - f) +
-      pEx * (strikeOffsetBps * (1 - f) - scenario.protocolFeeBps - rebalBps) -
-      empiricalCallPayoffBps -
-      lpGasBps;
+    const ci = bootstrapMeanCI90(windowPnlsVsHodlBps, 202 + scenario.durationHours);
+    const lpNetPerCycleBps = ci.sampleMean;
+    const lpAnnualizedAprPct = (lpNetPerCycleBps / BPS) * effectiveAnnualTurns * 100;
 
-    const cyclesPerYear = (DAYS_PER_YEAR * 24) / scenario.durationHours;
-    const lpAnnualizedAprVsHodlPct =
-      (lpNetVsHodlPerCycleBps / BPS) * scenario.utilization * cyclesPerYear * 100;
-    const lp14dYieldVsHodlPct = (lpAnnualizedAprVsHodlPct * 14) / DAYS_PER_YEAR;
-    const protocolFeePerReservedBps =
-      effPremBps * f + pEx * ((1 + strikeOffsetBps / BPS) * scenario.protocolFeeBps);
+    // Immediate near-spot FIXED trader execution cost for comparison vs V3
+    const immediateFixed = evaluateTwoTokenCycle({
+      notionalUsd: tradeUsd,
+      p0,
+      pEx: p0,
+      pEnd: p0,
+      fillFraction: 1.0,
+      mode: "FIXED",
+      basePremiumBps,
+      dailyPremiumBps,
+      durationSeconds: durationSec,
+      spreadOrStrikeBps: strikeOffsetBps,
+      protocolFeeBps: scenario.protocolFeeBps,
+      restockCostBps: rebalBps,
+      hedgeDelayPrice: p0,
+      lpGasUsd: LP_CYCLE_GAS_USD,
+      traderGasUsd: TRADER_GAS_FULL_USD,
+    });
 
     return {
       mode,
       tradeUsd,
-      feasibleOnCurrentPoolTvl,
       v3TotalAllInBps: round(v3TotalAllInBps, 2),
-      trancheTraderAllInBps: round(traderAllInBps, 2),
-      traderSavingsVsV3Bps: round(traderSavingsVsV3Bps, 2),
-      effPremiumBps: effPremBps,
+      trancheTraderAllInBps: immediateFixed.traderAllInVsSpotBps,
+      traderSavingsVsV3Bps:
+        v3TotalAllInBps !== null
+          ? round(v3TotalAllInBps - immediateFixed.traderAllInVsSpotBps, 2)
+          : null,
+      effPremiumBps: immediateFixed.effPremiumBps,
       spreadOrStrikeBps: strikeOffsetBps,
-      exerciseProb: round(pEx, 3),
-      empiricalOptionCostBps: round(empiricalCallPayoffBps, 2),
-      rebalBps: round(rebalBps, 2),
-      protocolFeeBpsCollected: round(protocolFeePerReservedBps, 2),
-      lpNetPerCycleBps: round(lpNetVsHodlPerCycleBps, 2),
-      lpAnnualizedAprPct: round(lpAnnualizedAprVsHodlPct, 2),
-      lp14dYieldPct: round(lp14dYieldVsHodlPct, 3),
-      beatsPassiveV3FeeApr: lpAnnualizedAprVsHodlPct > observed.v3PassiveFeeAprPct,
+      empiricalExerciseRate24h: observed.independentWindows.fixedEmpiricalExerciseRate,
+      lpNetPerCycleBps,
+      lpNetPerCycleCI90: ci,
+      effectiveAnnualTurns: round(effectiveAnnualTurns, 2),
+      lpAnnualizedAprPct: round(lpAnnualizedAprPct, 2),
+      beatsPassiveV3FeeApr: lpAnnualizedAprPct > observed.v3PassiveFeeAprPct,
     };
   }
 }
 
-// Sensitivity sweeps for $10k FLOATING & FIXED on each pool
+// Stress hedging assumptions on $10k FLOATING (full exercise): prompt (1x/2x/3x rebal), 6h delayed, 24h unhedged, failed restock
+function runHedgingStress(cfg, summaryPool, observed) {
+  const tradeUsd = 10_000;
+  const p0 = summaryPool.spotPriceUsd;
+  const { basePremiumBps, dailyPremiumBps, spreadBps } = cfg.floatingOffer;
+  const durationSec = SECONDS_PER_DAY;
+  const protocolFeeBps = 5;
+
+  const promptAtMult = (rebalMult) => {
+    const hedgePrice = p0 * (1 + cfg.promptOracleLagMarkoutBpsBase / BPS);
+    const res = evaluateTwoTokenCycle({
+      notionalUsd: tradeUsd,
+      p0,
+      pEx: p0,
+      pEnd: p0,
+      fillFraction: 1.0,
+      mode: "FLOATING",
+      basePremiumBps,
+      dailyPremiumBps,
+      durationSeconds: durationSec,
+      spreadOrStrikeBps: spreadBps,
+      protocolFeeBps,
+      restockCostBps: cfg.lpRebalBpsBase * rebalMult,
+      hedgeDelayPrice: hedgePrice,
+      lpGasUsd: LP_CYCLE_GAS_USD,
+      traderGasUsd: TRADER_GAS_FULL_USD,
+    });
+    return {
+      restockCostBps: cfg.lpRebalBpsBase * rebalMult,
+      oracleLagMarkoutBps: cfg.promptOracleLagMarkoutBpsBase,
+      lpPnlVsHodlBps: res.lpPnlVsHodlBps,
+      lpAprAt25PctUtilPct: round((res.lpPnlVsHodlBps / BPS) * 91.25 * 100, 2),
+    };
+  };
+
+  // Delayed hedging (6h delay across independent 6h windows)
+  const delayed6hSamples = observed.independentWindows.independent6hReturnsBps.map((r6) => {
+    const p6 = p0 * (1 + r6 / BPS);
+    return evaluateTwoTokenCycle({
+      notionalUsd: tradeUsd,
+      p0,
+      pEx: p0,
+      pEnd: p6,
+      fillFraction: 1.0,
+      mode: "FLOATING",
+      basePremiumBps,
+      dailyPremiumBps,
+      durationSeconds: durationSec,
+      spreadOrStrikeBps: spreadBps,
+      protocolFeeBps,
+      restockCostBps: cfg.lpRebalBpsBase,
+      hedgeDelayPrice: p6,
+      lpGasUsd: LP_CYCLE_GAS_USD,
+      traderGasUsd: TRADER_GAS_FULL_USD,
+    }).lpPnlVsHodlBps;
+  });
+
+  // Zero hedging (LP holds USDT proceeds for 24h across independent 24h windows; compared vs HODL)
+  const zeroHedge24hSamples = observed.independentWindows.independent24hReturnsBps.map((r24) => {
+    const p24 = p0 * (1 + r24 / BPS);
+    return evaluateTwoTokenCycle({
+      notionalUsd: tradeUsd,
+      p0,
+      pEx: p0,
+      pEnd: p24,
+      fillFraction: 1.0,
+      mode: "FLOATING",
+      basePremiumBps,
+      dailyPremiumBps,
+      durationSeconds: durationSec,
+      spreadOrStrikeBps: spreadBps,
+      protocolFeeBps,
+      restockCostBps: 0,
+      hedgeDelayPrice: null,
+      lpGasUsd: LP_CYCLE_GAS_USD,
+      traderGasUsd: TRADER_GAS_FULL_USD,
+    }).lpPnlVsHodlBps;
+  });
+
+  // Failed restocking (tail stress: LP forced to restock after p90 adverse 24h rally at 3x restock cost)
+  const pTail = p0 * (1 + observed.independentWindows.p90AdverseRally24hBps / BPS);
+  const failedRestock = evaluateTwoTokenCycle({
+    notionalUsd: tradeUsd,
+    p0,
+    pEx: p0,
+    pEnd: pTail,
+    fillFraction: 1.0,
+    mode: "FLOATING",
+    basePremiumBps,
+    dailyPremiumBps,
+    durationSeconds: durationSec,
+    spreadOrStrikeBps: spreadBps,
+    protocolFeeBps,
+    restockCostBps: cfg.lpRebalBpsBase * 3,
+    hedgeDelayPrice: pTail,
+    lpGasUsd: LP_CYCLE_GAS_USD,
+    traderGasUsd: TRADER_GAS_FULL_USD,
+  });
+
+  return {
+    promptHedge_1xRebal: promptAtMult(1),
+    promptHedge_2xRebal: promptAtMult(2),
+    promptHedge_3xRebal: promptAtMult(3),
+    delayedHedge_6hEmpiricalCI90: bootstrapMeanCI90(delayed6hSamples, 303),
+    zeroHedge_24hEmpiricalCI90: bootstrapMeanCI90(zeroHedge24hSamples, 404),
+    failedRestock_p90Rally_3xRebal: {
+      adverseRally24hBps: observed.independentWindows.p90AdverseRally24hBps,
+      restockCostBps: cfg.lpRebalBpsBase * 3,
+      lpPnlVsHodlBps: failedRestock.lpPnlVsHodlBps,
+      lpPnlVsHodlUsd: failedRestock.lpPnlVsHodlUsd,
+    },
+  };
+}
+
+// Reservation fill-behavior breakdown: 100% exercised, 50% partial, 0% expired
+function runReservationBehaviorMatrix(cfg, summaryPool) {
+  const tradeUsd = 10_000;
+  const p0 = summaryPool.spotPriceUsd;
+  const { basePremiumBps, dailyPremiumBps, spreadBps } = cfg.floatingOffer;
+  const hedgePrice = p0 * (1 + cfg.promptOracleLagMarkoutBpsBase / BPS);
+
+  return [1.0, 0.5, 0.0].map((fillFraction) =>
+    evaluateTwoTokenCycle({
+      notionalUsd: tradeUsd,
+      p0,
+      pEx: p0,
+      pEnd: p0,
+      fillFraction,
+      mode: "FLOATING",
+      basePremiumBps,
+      dailyPremiumBps,
+      durationSeconds: SECONDS_PER_DAY,
+      spreadOrStrikeBps: spreadBps,
+      protocolFeeBps: 5,
+      restockCostBps: cfg.lpRebalBpsBase,
+      hedgeDelayPrice: fillFraction > 0 ? hedgePrice : null,
+      lpGasUsd: LP_CYCLE_GAS_USD,
+      traderGasUsd: fillFraction > 0 ? TRADER_GAS_FULL_USD : TRADER_GAS_RESERVE_ONLY_USD,
+    }),
+  );
+}
+
+// Turnover-capped duration, utilization, and fee sensitivities ($10k)
 function runSensitivities(cfg, summaryPool, observed) {
   const baseScenario = SCENARIOS[0];
   const tradeUsd = 10_000;
+  // Cap annual turns at 91.25x (25% utilization of 1-day-equivalent demand) so 1h duration cannot extrapolate to 2,190x
+  const MAX_REALISTIC_ANNUAL_TURNS_BASE = 91.25;
 
   const durationHoursSweep = [1, 6, 24, 72].map((durationHours) => {
     const sc = { ...baseScenario, durationHours };
-    const fl = simulateTrancheTrade({ cfg, summaryPool, observed, tradeUsd, scenario: sc, mode: "FLOATING" });
-    const fx = simulateTrancheTrade({ cfg, summaryPool, observed, tradeUsd, scenario: sc, mode: "FIXED" });
+    const fl = simulateTrancheTrade({
+      cfg,
+      summaryPool,
+      observed,
+      tradeUsd,
+      scenario: sc,
+      mode: "FLOATING",
+      maxAnnualTurnsCap: MAX_REALISTIC_ANNUAL_TURNS_BASE,
+    });
+    const fx = simulateTrancheTrade({
+      cfg,
+      summaryPool,
+      observed,
+      tradeUsd,
+      scenario: sc,
+      mode: "FIXED",
+      maxAnnualTurnsCap: MAX_REALISTIC_ANNUAL_TURNS_BASE,
+    });
     return {
       durationHours,
+      cappedAnnualTurns: fl.effectiveAnnualTurns,
       floatingTraderAllInBps: fl.trancheTraderAllInBps,
       floatingLpNetBps: fl.lpNetPerCycleBps,
-      floatingLpAprPct: fl.lpAnnualizedAprPct,
+      floatingLpAprCappedPct: fl.lpAnnualizedAprPct,
       fixedTraderAllInBps: fx.trancheTraderAllInBps,
       fixedLpNetBps: fx.lpNetPerCycleBps,
-      fixedLpAprPct: fx.lpAnnualizedAprPct,
+      fixedLpAprCappedPct: fx.lpAnnualizedAprPct,
     };
   });
 
@@ -454,6 +795,7 @@ function runSensitivities(cfg, summaryPool, observed) {
     const fx = simulateTrancheTrade({ cfg, summaryPool, observed, tradeUsd, scenario: sc, mode: "FIXED" });
     return {
       utilizationPct: utilization * 100,
+      impliedAnnualTurns: fl.effectiveAnnualTurns,
       floatingLpAprPct: fl.lpAnnualizedAprPct,
       fixedLpAprPct: fx.lpAnnualizedAprPct,
       passiveV3FeeAprPct: observed.v3PassiveFeeAprPct,
@@ -480,12 +822,8 @@ function runSensitivities(cfg, summaryPool, observed) {
 const poolResults = {};
 
 for (const [poolAddr, cfg] of Object.entries(POOL_CONFIGS)) {
-  const summaryPool = Object.values(summary.pools).find(
-    (p) => p.address.toLowerCase() === poolAddr,
-  );
-  if (!summaryPool) {
-    throw new Error(`Missing pool ${poolAddr} in analysis_summary.json`);
-  }
+  const summaryPool = Object.values(summary.pools).find((p) => p.address.toLowerCase() === poolAddr);
+  if (!summaryPool) throw new Error(`Missing pool ${poolAddr} in analysis_summary.json`);
 
   const observed = analyzeObservedSwaps(poolAddr, cfg, summaryPool);
 
@@ -502,9 +840,10 @@ for (const [poolAddr, cfg] of Object.entries(POOL_CONFIGS)) {
     };
   }
 
+  const hedgingStress = runHedgingStress(cfg, summaryPool, observed);
+  const reservationBehavior = runReservationBehaviorMatrix(cfg, summaryPool);
   const sensitivities = runSensitivities(cfg, summaryPool, observed);
 
-  // Evaluate pre-registered criteria on $5k/$10k Base FLOATING & observed retail flow
   const baseFloat5k = scenariosOut.base.floating.find((r) => r.tradeUsd === 5_000);
   const baseFloat10k = scenariosOut.base.floating.find((r) => r.tradeUsd === 10_000);
   const baseFixed10k = scenariosOut.base.fixed.find((r) => r.tradeUsd === 10_000);
@@ -521,18 +860,23 @@ for (const [poolAddr, cfg] of Object.entries(POOL_CONFIGS)) {
       observed.eligibility.eligibleSwapsAt1000Usd >= PASS_CRITERIA.C4_minObserved14dEligibleSwapsAt1k,
   };
 
+  // Strip raw arrays from JSON summary for readability while keeping all CIs
+  const { independent24hReturnsBps, independent6hReturnsBps, independentFixedCallPayoffsBps, ...cleanWindows } =
+    observed.independentWindows;
+
   poolResults[cfg.symbol] = {
     poolAddress: poolAddr,
     spotPriceUsd: round(summaryPool.spotPriceUsd, 6),
     tvlUsd: round(summaryPool.tvlUsd, 2),
-    observed14d: observed,
+    observed14d: { ...observed, independentWindows: cleanWindows },
     scenarios: scenariosOut,
+    hedgingStress,
+    reservationBehavior,
     sensitivities,
     criteriaCheck,
   };
 }
 
-// Compute overall verdict strictly from pre-registered criteria
 const allPoolsPassUnitEconOnBlockFloat = Object.values(poolResults).every(
   (p) =>
     p.criteriaCheck.C1_traderSavingsGe25Bps_at10kFloat &&
@@ -553,26 +897,20 @@ const overallVerdict = !allPoolsPassUnitEconOnBlockFloat
     : "INCONCLUSIVE";
 
 const output = {
-  experiment: "Experiment 1 — Historical HSKSwap vs. Tranche Economic Backtest",
+  experiment: "Experiment 1A — Current Tranche Vault-Backed Ticket Counterfactual (Balance-Sheet & Bootstrapped)",
   generatedAtIso: new Date().toISOString(),
   dataProvenance: {
     sourceFiles: ["scripts/market-analysis/market_data_14d.json", "scripts/market-analysis/analysis_summary.json"],
     chainId: marketData.metadata.chainId,
     window: marketData.metadata.window,
     gasPriceGwei: summary.gasSummary.gasPriceGwei,
-    trancheTraderGasUsd: round(TRADER_GAS_USD, 5),
+    trancheTraderGasFullUsd: round(TRADER_GAS_FULL_USD, 5),
+    trancheTraderGasReserveOnlyUsd: round(TRADER_GAS_RESERVE_ONLY_USD, 5),
     trancheLpCycleGasUsd: round(LP_CYCLE_GAS_USD, 5),
     v3MedianSwapGasUsd: round(V3_SWAP_GAS_USD, 5),
   },
   passCriteria: PASS_CRITERIA,
   overallVerdict,
-  verdictSummary: {
-    allPoolsPassUnitEconOnBlockFloat,
-    allPoolsSurviveAdverseSelection,
-    anyPoolHasObservedRetailBlockDemand,
-    interpretation:
-      "CONDITIONAL UNIT-ECONOMICS PASS ON BLOCK FLOW ($5k-$25k FLOATING) / FAIL ON OBSERVED RETAIL SWAP FLOW & ADVERSE SELECTION: Under remediated 5 bps fees, Tranche FLOATING delivers massive trader savings (+199 to +2,376 bps on $10k) and beats passive V3 APR (11%-19% vs. 0.19%-1.28%) in Base/High-Utilization scenarios, BUT (1) 99.9% of observed 14-day HSKSwap swaps are tiny retail trades (<$1,000), (2) Adverse Selection (3x markout + 2x rebal) turns LP margins negative unless spreads widen, and (3) FIXED mode on volatile WETH/WBTC suffers option-convexity drag if underpriced.",
-  },
   pools: poolResults,
 };
 
@@ -580,23 +918,11 @@ fs.writeFileSync(OUTPUT_JSON_PATH, JSON.stringify(output, null, 2), "utf8");
 console.log("Wrote:", OUTPUT_JSON_PATH);
 console.log("Overall Verdict:", overallVerdict);
 for (const [sym, p] of Object.entries(poolResults)) {
-  const b5 = p.scenarios.base.floating.find((r) => r.tradeUsd === 5_000);
-  const b10 = p.scenarios.base.floating.find((r) => r.tradeUsd === 10_000);
-  const f10 = p.scenarios.base.fixed.find((r) => r.tradeUsd === 10_000);
-  const a10 = p.scenarios.adverse_selection.floating.find((r) => r.tradeUsd === 10_000);
   console.log(`\n=== ${sym} ===`);
-  console.log("  Observed 14d:", {
-    swaps: p.observed14d.observedSwapCount,
-    volUsd: p.observed14d.observed14dVolumeUsd,
-    maxSwapUsd: p.observed14d.observedMaxSwapUsd,
-    eligibleAt1k: p.observed14d.eligibility.eligibleSwapsAt1000Usd,
-    v3FeeAprPct: p.observed14d.v3PassiveFeeAprPct,
-    hodl14dPct: p.observed14d.hodl14dReturnPct,
-    v3Il14dPct: p.observed14d.v3FullRangeIl14dPct,
-  });
-  console.log("  Base FLOATING $5k:", { v3Bps: b5.v3TotalAllInBps, trBps: b5.trancheTraderAllInBps, saveBps: b5.traderSavingsVsV3Bps, lpNetBps: b5.lpNetPerCycleBps, lpAprPct: b5.lpAnnualizedAprPct });
-  console.log("  Base FLOATING $10k:", { v3Bps: b10.v3TotalAllInBps, trBps: b10.trancheTraderAllInBps, saveBps: b10.traderSavingsVsV3Bps, lpNetBps: b10.lpNetPerCycleBps, lpAprPct: b10.lpAnnualizedAprPct });
-  console.log("  Base FIXED $10k:", { v3Bps: f10.v3TotalAllInBps, trBps: f10.trancheTraderAllInBps, saveBps: f10.traderSavingsVsV3Bps, lpNetBps: f10.lpNetPerCycleBps, lpAprPct: f10.lpAnnualizedAprPct, empOptBps: f10.empiricalOptionCostBps });
-  console.log("  Adverse FLOATING $10k:", { lpNetBps: a10.lpNetPerCycleBps, lpAprPct: a10.lpAnnualizedAprPct });
-  console.log("  Criteria:", p.criteriaCheck);
+  console.log("  Independent windows:", { n24h: p.observed14d.independentWindows.count24h, n6h: p.observed14d.independentWindows.count6h, fixedCallCI90: p.observed14d.independentWindows.fixedCallPayoff24hCI90 });
+  console.log("  Base FLOATING $10k:", { v3: p.scenarios.base.floating[2].v3TotalAllInBps, tr: p.scenarios.base.floating[2].trancheTraderAllInBps, save: p.scenarios.base.floating[2].traderSavingsVsV3Bps, lpNet: p.scenarios.base.floating[2].lpNetPerCycleBps, apr: p.scenarios.base.floating[2].lpAnnualizedAprPct });
+  console.log("  Base FIXED $10k (bootstrapped):", { lpNet: p.scenarios.base.fixed[2].lpNetPerCycleBps, ci90: p.scenarios.base.fixed[2].lpNetPerCycleCI90, apr: p.scenarios.base.fixed[2].lpAnnualizedAprPct });
+  console.log("  Hedging Stress ($10k FLOATING):", p.hedgingStress);
+  console.log("  Reservation Behavior ($10k FLOATING):", p.reservationBehavior.map(r => ({ fill: r.fillFraction, lpPnlVsHodlBps: r.lpPnlVsHodlBps, treasuryUsd: r.totalTreasuryFeeUsd, traderPaidUsd: r.totalTraderPaidUsd })));
+  console.log("  Duration Sweep (turnover-capped):", p.sensitivities.durationHoursSweep);
 }
