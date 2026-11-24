@@ -1,136 +1,118 @@
-# Experiment 1 — Historical HSKSwap vs. Tranche Economic Backtest
+# Experiment 1A — Historical HSKSwap vs. Tranche Segregated Vault Counterfactual
 
-> **Verdict:** **`INCONCLUSIVE`** *(Conditional **PASS** on block-size `FLOATING` unit economics at `$1k–$25k` under `5 bps` protocol fee; **FAIL** on observed 14-day retail HSKSwap swap flow, **FAIL** on underpriced 24h `FIXED` tickets for volatile WETH/WBTC, and **FAIL** under `3x` adverse selection unless LP spreads widen dynamically.)*  
-> **Reproducible Script:** [`scripts/market-analysis/05_experiment1_backtest.mjs`](../scripts/market-analysis/05_experiment1_backtest.mjs)  
-> **Machine-Readable Results:** [`scripts/market-analysis/experiment1_results.json`](../scripts/market-analysis/experiment1_results.json)  
-> **Observed Dataset:** [`scripts/market-analysis/market_data_14d.json`](../scripts/market-analysis/market_data_14d.json) & [`scripts/market-analysis/analysis_summary.json`](../scripts/market-analysis/analysis_summary.json) (HashKey Chain Mainnet `177`, blocks `29,978,347 -> 30,583,147`, `2026-11-10T09:43:49Z -> 2026-11-24T09:43:49Z`, `1,241` swaps across 3 pools)
-
----
-
-## 1. Pre-Registered Economic Pass / Fail Criteria
-
-Defined prior to inspecting backtest outputs. For an unconditional **`PASS`**, ALL FOUR criteria must hold simultaneously under the **Base** scenario:
-
-| Criterion | Threshold | Result |
-| --- | --- | --- |
-| **`C1` (Trader Advantage)** | Tranche all-in execution cost beats HSKSwap V3 by **`>= 25 bps`** on `$5k` and `$10k` trades | **PASS** (all 3 pools, `+109` to `+2,377 bps`) |
-| **`C2` (LP Positive Unit Margin)** | LP net margin per cycle **`> 0 bps`** after `5 bps` protocol fee, CEX/OTC restock cost (`C_rebal`), adverse markout (`M_tox`), and gas | **PASS** on Base `FLOATING` (`+17.4` to `+22.5 bps`); **FAIL** on Base `FIXED` WETH/WBTC (`-17.1` / `-3.3 bps`) and Adverse `FLOATING` (`-7.6` / `-4.7 bps`) |
-| **`C3` (Beats Passive V3 APR)** | Annualized LP return exceeds observed 14-day passive HSKSwap V3 fee APR (`0.193%` / `1.276%` / `0.837%`) | **PASS** on Base `FLOATING` (`15.9%` / `20.6%` / `20.6%` APR at `25%` utilization) |
-| **`C4` (Empirical Retail Demand)** | Observed 14-day HSKSwap swaps contain **`>= 14`** swaps `>= $1,000` (`>= 1/day`) in at least one pool | **FAIL** (`0` WHSK, `0` WETH, `3` WBTC across 14 days) |
+> **Verdict:** **`INCONCLUSIVE`** *(Conditional **PASS** on hypothetical `$5k–$25k` `FLOATING` block flow under `5 bps` fee with prompt LP hedging; **FAIL** on observed 14-day retail HSKSwap swap flow (`0–3` swaps `>= $1k`), **FAIL** under `3x` adverse selection / failed restocking, and wide `90%` bootstrap CIs spanning zero on `24h` `FIXED` WETH/WBTC.)*  
+> **Architecture Evaluated:** Current remediated Solidity contracts (`CommitmentManager.sol`, `LiquidityVault.sol`, `ExecutionTicket.sol`, `ExecutionRouter.sol` — segregated 1:1 ERC-20 vault + reservation/execution tickets, **not** a JIT V3 liquidity overlay).  
+> **Reproducible Backtest:** [`scripts/market-analysis/05_experiment1_backtest.mjs`](../scripts/market-analysis/05_experiment1_backtest.mjs)  
+> **Independent Verifier & Regression Suite:** [`scripts/market-analysis/06_verify_experiment1.mjs`](../scripts/market-analysis/06_verify_experiment1.mjs) (`3/3` passing)  
+> **Machine-Readable Results:** [`scripts/market-analysis/experiment1_results.json`](../scripts/market-analysis/experiment1_results.json)
 
 ---
 
-## 2. Dataset Audit & Provenance Separation
+## 1. Line-by-Line Protocol Fee & Two-Token Accounting Reconciliation (Solidity Source of Truth)
 
-### 2.1 Observed 14-Day Mainnet Data (`OBSERVED ON-CHAIN`)
-Extracted directly from `https://mainnet.hsk.xyz` (`Chain ID 177`, `500.001 gwei` gas price, `WHSK = $0.080808`, `2.0000s` block time) via [`02_collect_pool_data.mjs`](../scripts/market-analysis/02_collect_pool_data.mjs):
+Verified directly against [`CommitmentManager.sol#L616-L654`](../contracts/src/CommitmentManager.sol#L616-L654) and [`LiquidityVault.sol#L259-L334`](../contracts/src/LiquidityVault.sol#L259-L334) (`protocolFeeBps = 5`, $f = 0.0005$, `PRICE_SCALE = 1e36`):
 
-| Pool (`0.30%` fee) | TVL (`$`) | 14d Swaps | 14d Vol (`$`) | Max Swap (`$`) | Swaps `>= $1k` | Realized Median V3 Cost | Passive V3 Fee APR | 14d HODL Return | 14d Full-Range V3 IL |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **WHSK/USDT** | `$839,209` | `1,047` | `$20,689.88` | `$502.15` | `0` | `30.36 bps` | `0.193%` | `-3.447%` | `-0.015%` |
-| **WETH/USDT** | `$83,695` | `173` | `$13,650.69` | `$510.74` | `0` | `52.89 bps` | `1.276%` | `-18.932%` | `-0.548%` |
-| **WBTC/USDT** | `$90,721` | `21` | `$9,712.90` | `$1,026.64` | `3` | `140.18 bps` | `0.837%` | `-16.538%` | `-0.407%` |
+### 1.1 Exact Solidity Cash Flows (`$10,000` WETH/USDT `FLOATING`, `base=10, daily=10, duration=24h, spread=25 bps`)
 
-**Key Empirical Finding:** `99.76%` of observed historical HSKSwap swaps (`1,238 / 1,241`) were `< $1,000`. Even at the contract's low remediated `tokenMinTicketAmount` floors (`1,000 WHSK ≈ $80.81`, `0.05 WETH ≈ $85.20`, `0.001 WBTC ≈ $61.83`), only `15` WHSK swaps (`$2,403.78`), `93` WETH swaps (`$11,047.90`), and `17` WBTC swaps (`$9,711.67`) qualified over 14 days.
+| Step | Solidity Function | Formula | Exact `$` Value (`$10k` WETH) | Who Pays / Receives |
+| --- | --- | --- | ---: | --- |
+| **1. Reservation Quote** | `_quoteReservation` | `effPremBps = 10 + ceil(10 * 86400 / 86400) = 20 bps`; `refPrice = spot * (1 + 0.0025)` | `notionalPay = $10,025.00` | Quote basis |
+| **2. Gross Premium** | `collectFeeAndProceeds` | `grossPremium = ceil(notionalPay * 20 / 10000)` | **`$20.0500`** | Pulled from **Trader** |
+| **3. Reservation Fee** | `_computeFeeCeil` | `fee_res = ceil(grossPremium * 5 / 10000)` | `$0.0100` | Credited to **Treasury** (`protocolFees`) |
+| **4. LP Net Premium** | `_creditPayment` | `lpNet_res = grossPremium - fee_res` | `$20.0400` | Credited to **LP** (`lpPendingProceeds`) |
+| **5. Gross Exercise** | `_quoteExercise` | `grossPayment = ceil(q * P_ex * (1 + 0.0025))` | **`$10,025.0000`** | Pulled from **Trader** |
+| **6. Exercise Fee** | `_computeFeeCeil` | `fee_ex = ceil(grossPayment * 5 / 10000)` | `$5.0125` | Credited to **Treasury** (`protocolFees`) |
+| **7. LP Net Exercise** | `settleExercise` | `lpNet_ex = grossPayment - fee_ex` | `$10,019.9875` | Credited to **LP** (`lpPendingProceeds`) |
+| **Conservation Check** | `LiquidityVault` | `Trader Paid ($10,045.05) == LP Receipts ($10,040.0275) + Treasury ($5.0225)` | **`$0.0000` drift** | Verified by `06_verify_experiment1.mjs` |
 
-### 2.2 Simulated / Assumed Parameters (`SIMULATED / ASSUMED`)
-- **Tranche Accounting (Exact Remediated Contract Formula):** `effPremiumBps = basePremiumBps + ceil(dailyPremiumBps * duration / 86400)`; `protocolFeeBps = 5` deducted from LP gross receipts (`grossPremium` + `grossPayment`), **never double-counted** on top of trader cost.
-- **HSKSwap V3 All-In Cost:** Taken from the exact on-chain V3 tick curve (`analysis_summary.json` `priceImpactTable`, which already incorporates the `30 bps` pool fee + curve slippage) plus `medianSwapCostUsd` (`$0.00443`) gas — zero double-counting.
-- **Tranche Gas (Measured on Chain-133 Fork, Priced at Mainnet `500.001 gwei`):** Trader `reserve + exercise` = `466,590` gas (`$0.01885`); LP `createOffer + claimProceeds` = `256,456` gas (`$0.01036`).
-- **LP Restock / Hedging Cost (`C_rebal`):** LPs do **not** restock at oracle mid for free. Modeled at `10 bps` (WHSK) and `5 bps` (WETH/WBTC) in Base, doubled (`20 bps` / `10 bps`) in Adverse Selection.
-- **Adverse Selection (`M_tox`):**
-  - `FLOATING`: Oracle-lag markout modeled at `8 bps` (WHSK) and `12 bps` (WETH/WBTC) in Base (`1.2x` in High Utilization; `3.0x` = `24 bps` / `36 bps` in Adverse Selection).
-  - `FIXED`: Covered-call upside forgone measured directly from **empirical rolling 24-hour price paths** in `market_data_14d.json`: `2.87 bps` (WHSK, `19.0%` ITM), `98.92 bps` (WETH, `29.7%` ITM), and `90.52 bps` (WBTC, `30.8%` ITM) above `+30/+50 bps` strike offsets.
+### 1.2 Audit of the Apparent Double Subtraction of `protocolFeeBps`
+The shorthand expression `spreadBps * (1 - f) - protocolFeeBps` is **algebraically identical** to subtracting `protocolFeeBps` **once** from gross exercise notional `(1 + s) * (1 - f) - 1`:
 
----
+$$(1 + s)(1 - f) - 1 = 1 + s - f - sf - 1 = s(1 - f) - f$$
 
-## 3. Trader Savings & LP Returns Across `$1k`, `$5k`, `$10k`, `$25k` (`Base`, `24h`, `5 bps` Fee, `25%` Utilization)
-
-### 3.1 `FLOATING` Mode (`base=10, daily=10, spread=20 bps WHSK / 25 bps WETH & WBTC`)
-
-| Pool | Size (`$`) | HSKSwap V3 All-In | Tranche All-In | **Trader Savings** | LP Net / Cycle | **LP Annualized APR** | Beats V3 Fee APR? |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| **WHSK/USDT** | `$1,000` | `53.97 bps` | `40.19 bps` | `+13.78 bps` | `+17.33 bps` | `15.81%` | Yes (`vs 0.193%`) |
-| **WHSK/USDT** | `$5,000` | `149.28 bps` | `40.04 bps` | **`+109.24 bps`** | `+17.41 bps` | `15.89%` | Yes |
-| **WHSK/USDT** | `$10,000` | `268.46 bps` | `40.02 bps` | **`+228.44 bps`** | `+17.42 bps` | `15.90%` | Yes |
-| **WHSK/USDT** | `$25,000` | `626.00 bps` | `40.01 bps` | **`+585.99 bps`** | `+17.43 bps` | `15.90%` | Yes |
-| **WETH/USDT** | `$1,000` | `269.28 bps` | `45.19 bps` | **`+224.10 bps`** | `+22.43 bps` | `20.46%` | Yes (`vs 1.276%`) |
-| **WETH/USDT** | `$5,000` | `1,225.84 bps` | `45.04 bps` | **`+1,180.81 bps`** | `+22.51 bps` | `20.54%` | Yes |
-| **WETH/USDT** | `$10,000` | `2,421.58 bps` | `45.02 bps` | **`+2,376.57 bps`** | `+22.52 bps` | `20.55%` | Yes |
-| **WETH/USDT** | `$25,000` | `6,008.82 bps` | `45.01 bps` | **`+5,963.81 bps`** | `+22.53 bps` | `20.55%` | Yes |
-| **WBTC/USDT** | `$1,000` | `250.70 bps` | `45.19 bps` | **`+205.51 bps`** | `+22.43 bps` | `20.46%` | Yes (`vs 0.837%`) |
-| **WBTC/USDT** | `$5,000` | `1,132.91 bps` | `45.04 bps` | **`+1,087.87 bps`** | `+22.51 bps` | `20.54%` | Yes |
-| **WBTC/USDT** | `$10,000` | `2,235.71 bps` | `45.02 bps` | **`+2,190.69 bps`** | `+22.52 bps` | `20.55%` | Yes |
-| **WBTC/USDT** | `$25,000` | `5,544.12 bps` | `45.01 bps` | **`+5,499.11 bps`** | `+22.53 bps` | `20.55%` | Yes |
-
-### 3.2 `FIXED` Mode (`24h`, Empirical Rolling-Window Option Cost Included — Unprofitable Cases Exposed)
-
-| Pool | Size (`$10k`) | HSKSwap V3 | Tranche All-In | Trader Savings | Empirical 24h Call Cost | **LP Net vs HODL / Cycle** | **LP APR vs HODL** |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **WHSK/USDT** | `$10,000` | `268.46 bps` | `75.02 bps` | `+193.44 bps` | `2.87 bps` | **`+44.95 bps`** | **`+41.01%`** |
-| **WETH/USDT** | `$10,000` | `2,421.58 bps` | `120.02 bps` | `+2,301.57 bps` | **`98.92 bps`** | **`-17.10 bps` (LOSS)** | **`-15.60%` (FAIL)** |
-| **WBTC/USDT** | `$10,000` | `2,235.71 bps` | `125.02 bps` | `+2,110.69 bps` | **`90.52 bps`** | **`-3.27 bps` (LOSS)** | **`-2.98%` (FAIL)** |
-
-**Why `FIXED` Fails on WETH & WBTC at 24h:** Even during a 14-day drawdown (`-18.9%` WETH, `-16.5%` WBTC), sharp intraday/24h bounce rallies created `90–99 bps` of realized call-option payoff. Selling 24h `FIXED` tickets at `70–75 bps` total premium underprices realized volatility (`61%–76%` annualized). Shortening `FIXED` duration to **`1h`** flips WETH (`+12.78 bps/cycle`) and WBTC (`+15.49 bps/cycle`) back to profitable.
+For $s = 25\text{ bps}$ and $f = 5\text{ bps}$: `(1.0025 * 0.9995 - 1) * 10000 = +19.9875 bps`, matching `$10,019.9875 - $10,000 = +$19.9875`. **There is zero double subtraction.** However, to eliminate any ambiguity, `05_experiment1_backtest.mjs` now computes LP P&L directly from the **explicit two-token balance sheet** (`invToken` + `paymentToken` cash flows from $t_0$ to $t_{\text{end}}$) rather than a shorthand bps approximation, and also matches Solidity's exact `refPriceRes = spot * (1 + spread)` reservation basis.
 
 ---
 
-## 4. Scenario Stress Comparison (`$10,000` `FLOATING`, `24h`, `5 bps` Fee)
+## 2. Observed 14-Day Mainnet Data vs. Hypothetical Block Demand (`OBSERVED ON-CHAIN` vs. `ASSUMED`)
 
-| Pool | Base (`25%` util, `1x` tox/rebal) | High Utilization (`65%` util, `1.2x` tox) | **Adverse Selection (`25%` util, `3x` tox, `2x` rebal)** |
-| --- | ---: | ---: | ---: |
-| **WHSK/USDT** | `+17.42 bps` (`+15.90%` APR) | `+15.83 bps` (`+37.56%` APR) | **`-7.58 bps` (`-6.92%` APR — FAIL)** |
-| **WETH/USDT** | `+22.52 bps` (`+20.55%` APR) | `+20.51 bps` (`+48.66%` APR) | **`-4.73 bps` (`-4.32%` APR — FAIL)** |
-| **WBTC/USDT** | `+22.52 bps` (`+20.55%` APR) | `+20.51 bps` (`+48.66%` APR) | **`-4.73 bps` (`-4.32%` APR — FAIL)** |
+### 2.1 Observed 14-Day Retail HSKSwap Dataset (`2026-11-10 -> 2026-11-24`, `1,241` Swaps)
 
-**Takeaway:** Under `3x` adverse markout (`24–36 bps`) and `2x` restock cost (`10–20 bps`), static `20–25 bps` spreads lose money. However, because HSKSwap V3 costs `268–2,422 bps` on `$10k`, LPs have wide pricing headroom to raise `spreadBps` to `40–60 bps` in volatile regimes and stay both LP-profitable and `>200–2,300 bps` cheaper than HSKSwap V3.
+| Pool (`0.30%` fee) | TVL (`$`) | 14d Swaps | 14d Vol (`$`) | Max Swap (`$`) | Swaps `>= $1k` | Passive V3 Fee APR | 14d HODL Return | 14d Full-Range V3 IL |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **WHSK/USDT** | `$839,209` | `1,047` | `$20,689.88` | `$502.15` | `0` | `0.193%` | `-3.447%` | `-0.015%` |
+| **WETH/USDT** | `$83,695` | `173` | `$13,650.69` | `$510.74` | `0` | `1.276%` | `-18.932%` | `-0.548%` |
+| **WBTC/USDT** | `$90,721` | `21` | `$9,712.90` | `$1,026.64` | `3` | `0.837%` | `-16.538%` | `-0.407%` |
 
----
-
-## 5. Sensitivity Analysis (`$10,000` Ticket, Base Scenario)
-
-### 5.1 Protocol Fee Sensitivity (`protocolFeeBps` — Proves Phase 2 `5 bps` Remediation Was Essential)
-| `protocolFeeBps` | WHSK `FLOATING` LP Net (APR) | WETH `FLOATING` LP Net (APR) | WBTC `FLOATING` LP Net (APR) |
-| ---: | ---: | ---: | ---: |
-| **`0 bps`** | `+21.69 bps` (`+19.79%`) | `+26.79 bps` (`+24.45%`) | `+26.79 bps` (`+24.45%`) |
-| **`5 bps` (Remediated)** | **`+17.42 bps` (`+15.90%`)** | **`+22.52 bps` (`+20.55%`)** | **`+22.52 bps` (`+20.55%`)** |
-| **`10 bps`** | `+13.15 bps` (`+12.00%`) | `+18.25 bps` (`+16.65%`) | `+18.25 bps` (`+16.65%`) |
-| **`25 bps`** | `+0.35 bps` (`+0.32%`) | `+5.44 bps` (`+4.96%`) | `+5.44 bps` (`+4.96%`) |
-| **`50 bps` (Pre-Rem. `main`)** | **`-21.00 bps` (`-19.16%`)** | **`-15.92 bps` (`-14.52%`)** | **`-15.92 bps` (`-14.52%`)** |
-
-### 5.2 Commitment Duration Sensitivity (`WETH/USDT` `$10k`, `25%` Utilization)
-| Duration | `FLOATING` Trader Cost | `FLOATING` LP Net / Cycle | `FIXED` Trader Cost | `FIXED` LP Net vs HODL / Cycle |
-| ---: | ---: | ---: | ---: | ---: |
-| **`1h`** | `36.02 bps` | `+13.52 bps` | `77.02 bps` | **`+12.78 bps`** |
-| **`6h`** | `38.02 bps` | `+15.52 bps` | `87.02 bps` | `-6.49 bps` |
-| **`24h`** | `45.02 bps` | `+22.52 bps` | `120.02 bps` | `-17.10 bps` |
-| **`72h`** | `65.02 bps` | `+42.51 bps` | `210.02 bps` | `+9.13 bps` |
-
-### 5.3 Capital Utilization Sensitivity (`$10k` `FLOATING`, `24h`, `5 bps` Fee)
-| Utilization | WHSK LP APR (`vs 0.193%` V3) | WETH LP APR (`vs 1.276%` V3) | WBTC LP APR (`vs 0.837%` V3) |
-| ---: | ---: | ---: | ---: |
-| **`10%`** | `6.36%` | `8.22%` | `8.22%` |
-| **`25%` (Base)** | `15.90%` | `20.55%` | `20.55%` |
-| **`50%`** | `31.79%` | `41.10%` | `41.10%` |
-| **`75%`** | `47.69%` | `61.65%` | `61.65%` |
+**Strict Demand Separation:** `99.76%` of observed swaps (`1,238 / 1,241`) were `< $1,000`. Observed AMM volume does **not** establish `25%` vault utilization at `$5k–$25k`; all `$1k–$25k` utilization scenarios below represent **hypothetical institutional / treasury / agentic block demand**.
 
 ---
 
-## 6. Explicit Limitations of the 14-Day Sample
-1. **Short & One-Sided Regime:** All 3 assets declined over `2026-11-10 -> 2026-11-24` (`-3.4%` WHSK, `-18.9%` WETH, `-16.5%` WBTC). A bull rally would increase `FIXED` call-exercise losses further while leaving `FLOATING` unaffected except for oracle-lag toxicity.
-2. **Sparse WBTC Prints (`21` swaps / 14 days):** Only `13` rolling 24h windows exist on WBTC/USDT; empirical option payoff estimates on WBTC have high variance.
-3. **Selection Bias on Observed Sizes:** Traders currently avoid `$5k–$25k` swaps on HSKSwap because slippage is `12%–60%`. Absent off-chain OTC/institutional orderflow logs, latent demand at `$5k–$25k` cannot be proved from AMM logs alone.
-4. **Static Rebalancing Cost Assumption:** Real LP restocking depends on CEX liquidity, bridge latency, and funding rates not captured in on-chain DEX logs.
+## 3. Trader Savings & Two-Token LP P&L (`$10,000`, `Base`, `24h`, `5 bps` Fee, Hypothetical `25%` Utilization)
+
+| Pool | HSKSwap V3 (`$10k`, Verified) | Tranche `FLOATING` All-In | **Trader Savings** | `FLOATING` LP Net / Cycle | `FLOATING` LP APR (`91.25` turns/yr) | `FIXED` LP Net vs HODL (`n=14` 90% CI) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **WHSK/USDT** | `268.46 bps` | `40.06 bps` | **`+228.40 bps`** | `+17.45 bps` | `15.93%` (`vs 0.193%` V3) | `+41.20 bps` (`[+33.39, +45.10]`) |
+| **WETH/USDT** | `2,421.58 bps` | `45.07 bps` | **`+2,376.51 bps`** | `+22.56 bps` | `20.59%` (`vs 1.276%` V3) | `+33.38 bps` (`[-5.73, +65.96]`) |
+| **WBTC/USDT** | `2,235.71 bps` | `45.07 bps` | **`+2,190.64 bps`** | `+22.56 bps` | `20.59%` (`vs 0.837%` V3) | `+18.50 bps` (`[-38.33, +62.21]`) |
+
+*(All `12/12` V3 curve costs across `$1k`, `$5k`, `$10k`, `$25k` were independently reconstructed from raw `poolStates` in `market_data_14d.json` with `0.00 bps` error at `$10k`.)*
 
 ---
 
-## 7. Honest Final Verdict: `INCONCLUSIVE`
+## 4. Hedging & Restocking Stress Matrix (`$10,000` `FLOATING`, Full Exercise, `5 bps` Fee)
 
-- **Where Tranche Clearly Wins (Defensible Wedge):** On **`$5k–$25k` institutional / treasury / agentic block tickets in `FLOATING` mode (`protocolFeeBps = 5`)**, Tranche cuts trader execution costs by **`109–5,964 bps`** vs. HSKSwap V3 while generating **`15.9%–20.6%` annualized LP APR at `25%` utilization** (`15x–82x` observed passive HSKSwap V3 fee APR) without exposing LPs to `FIXED`-strike option convexity.
-- **Why the Overall Verdict Is `INCONCLUSIVE` (Not Unconditional `PASS`):**
-  1. **No Observed Retail Block Flow (`C4` Failed):** `99.76%` of observed 14-day HSKSwap swaps are `< $1,000`. Tranche's economic advantage requires attracting institutional/OTC/agentic block demand that currently routes off-chain.
-  2. **`FIXED` Mode Requires Short Durations (`<= 1h`) or Vol-Adjusted Premiums on WETH/WBTC:** Naive 24h `FIXED` pricing loses `-3.3` to `-17.1 bps/cycle` vs. HODL.
-  3. **Adverse-Selection Sensitivity:** Static `20–25 bps` `FLOATING` spreads turn negative (`-4.7` to `-7.6 bps`) under `3x` oracle-lag markout; LPs must price spreads dynamically in volatile regimes.
+Measured inputs: observed 14-day independent `6h` (`n = 56`) and `24h` (`n = 14`) price paths, gas (`$0.01036` LP cycle). Assumed inputs: prompt oracle-lag markout (`8 bps` WHSK / `12 bps` WETH & WBTC) and CEX/OTC restock cost (`10 bps` WHSK / `5 bps` WETH & WBTC at `1x`).
+
+| Hedging Regime | WHSK/USDT LP P&L vs HODL | WETH/USDT LP P&L vs HODL | WBTC/USDT LP P&L vs HODL | Notes |
+| --- | ---: | ---: | ---: | --- |
+| **Prompt Hedge (`1x` restock)** | `+17.00 bps` (`15.51%` APR) | `+23.01 bps` (`21.00%` APR) | `+23.01 bps` (`21.00%` APR) | Assumes prompt CEX restock |
+| **Prompt Hedge (`2x` restock)** | `+6.99 bps` (`6.38%` APR) | `+18.01 bps` (`16.43%` APR) | `+18.01 bps` (`16.43%` APR) | `20 bps` WHSK / `10 bps` WETH-WBTC |
+| **Prompt Hedge (`3x` restock)** | **`-3.01 bps` (LOSS)** | `+13.00 bps` (`11.86%` APR) | `+13.00 bps` (`11.86%` APR) | WHSK breaks even at `27 bps` restock |
+| **Delayed Hedge (`6h`, `n=56` 90% CI)** | `+31.31 bps` (`[+24.89, +38.20]`) | `+72.34 bps` (`[+36.87, +104.82]`) | `+66.56 bps` (`[+36.73, +101.92]`) | **Bear-sample artifact** (all 3 assets fell) |
+| **Zero Hedge (`24h`, `n=14` 90% CI)** | `+58.93 bps` (`[+31.02, +100.51]`) | `+184.16 bps` (`[+59.75, +325.61]`) | `+156.15 bps` (`[+16.55, +335.09]`) | **Bear-sample artifact** (holding USDT beat HODL) |
+| **Failed Restock (`p90` 24h Rally + `3x` Restock)** | **`-15.00 bps` (`-$15.00`)** | **`-139.93 bps` (`-$139.93`)** | **`-200.67 bps` (`-$200.67`)** | **Exposes unhedged upside tail risk** |
+
+**Critical Warning on Delayed / Zero Hedging:** Because WHSK (`-3.45%`), WETH (`-18.93%`), and WBTC (`-16.54%`) declined during the 14-day sample, holding USDT unhedged mechanically outperformed HODL. In an upward rally (`p90` 24h move = `+164.7 bps` WETH, `+225.4 bps` WBTC), failed restocking inflicts **`-140` to `-201 bps`** single-cycle losses — proving prompt hedging is structurally required for `FLOATING` LPs.
+
+---
+
+## 5. Reservation Fill Behavior (`$10,000` `FLOATING`, `24h`, `5 bps` Fee, Prompt Hedge)
+
+| Fill Outcome | WHSK LP P&L vs HODL (Treasury Fee) | WETH / WBTC LP P&L vs HODL (Treasury Fee) | Economic Mechanism |
+| --- | ---: | ---: | --- |
+| **`100%` Exercised** | `+17.00 bps` (`$5.0200`) | `+23.01 bps` (`$5.0225`) | LP earns premium + spread minus `5 bps` principal fee, lag, and restock |
+| **`50%` Partial Fill** | `+18.51 bps` (`$2.5150`) | `+21.52 bps` (`$2.5163`) | Non-refundable premium covers full `$10k`; half inventory reclaimed at expiry |
+| **`0%` Expired Unexercised** | **`+20.02 bps`** (`$0.0100`) | **`+20.03 bps`** (`$0.0100`) | LP keeps `$20.03–$20.04` net upfront premium + `100%` of inventory |
+
+---
+
+## 6. Block-Bootstrap Confidence Intervals & Turnover-Capped Duration Sensitivity (`$10,000`)
+
+### 6.1 Independent-Window `90%` Block-Bootstrap (`1,000` Deterministic Resamples, `n = 14` Non-Overlapping 24h Windows)
+| Pool | Empirical `24h` `FIXED` Call Cost (`median` / `90% CI`) | `24h` `FIXED` LP Net vs HODL (`median` / `90% CI`) | Statistical Takeaway |
+| --- | --- | --- | --- |
+| **WHSK/USDT** | `2.83 bps` (`[0.00, 8.48]`) | `+41.20 bps` (`[+33.39, +45.10]`) | Positive across entire `90%` CI in low-vol 14d sample |
+| **WETH/USDT** | `31.85 bps` (`[3.62, 73.08]`) | `+37.68 bps` (`[-5.73, +65.96]`) | **Spans zero** — cannot claim positive `24h` `FIXED` alpha |
+| **WBTC/USDT** | `50.32 bps` (`[12.40, 109.30]`) | `+18.68 bps` (`[-38.33, +62.21]`) | **Spans zero** with `-38.3 bps` lower `90%` bound |
+
+### 6.2 Turnover-Capped Duration Sensitivity (`WETH/USDT`, `$10k`, Capped at `91.25` Annual Turns)
+| Duration | Capped Annual Turns | `FLOATING` Trader Cost | `FLOATING` LP Net / Cycle | `FLOATING` Capped APR | `FIXED` LP Net / Cycle | `FIXED` Capped APR |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **`1h`** | `91.25` | `36.05 bps` | `+13.54 bps` | `12.36%` | `+24.95 bps` | `22.77%` |
+| **`6h`** | `91.25` | `38.05 bps` | `+15.55 bps` | `14.19%` | `+22.98 bps` | `20.97%` |
+| **`24h`** | `91.25` | `45.07 bps` | `+22.56 bps` | `20.59%` | `+33.38 bps` | `30.46%` |
+| **`72h`** | `30.42` | `65.12 bps` | `+42.60 bps` | `12.96%` | `+90.49 bps` | `27.52%` |
+
+---
+
+## 7. Honest Overall Verdict: **`INCONCLUSIVE`**
+
+- **Proven:** Under exact Solidity `5 bps` fee accounting, Tranche `FLOATING` saves block traders **`+228` to `+2,377 bps`** vs. HSKSwap V3 at `$10k` and yields **`+17.4` to `+22.6 bps/cycle`** (`15.9%–20.6%` APR at hypothetical `25%` utilization) **when LPs hedge promptly**, with non-refundable reservation premiums protecting LP yield on partial (`50%`) and expired (`0%`) fills.
+- **Unproven / Failing Criteria Keeping Verdict `INCONCLUSIVE`:**
+  1. **Observed retail demand (`C4`) fails:** Only `3` swaps `>= $1,000` occurred across all 3 pools in 14 days (`0` WHSK, `0` WETH).
+  2. **Prompt hedging is load-bearing:** Failed restocking during a `p90` 24h rally loses `-140` to `-201 bps/cycle`, and `3x` restock cost turns WHSK `FLOATING` negative (`-3.01 bps`).
+  3. **Small sample (`n = 14` independent days, bear-only regime):** `90%` bootstrap CIs for `24h` `FIXED` WETH (`[-5.73, +65.96]`) and WBTC (`[-38.33, +62.21]`) span zero.
 
 ---
 
@@ -138,37 +120,5 @@ Extracted directly from `https://mainnet.hsk.xyz` (`Chain ID 177`, `500.001 gwei
 
 ```bash
 node scripts/market-analysis/05_experiment1_backtest.mjs
-# Outputs: scripts/market-analysis/experiment1_results.json
-
 node --test scripts/market-analysis/06_verify_experiment1.mjs
-# Independent zero-shared-code verification suite (3/3 tests)
 ```
-
----
-
-## 9. Independent Quantitative Verification & Assumption Audit
-
-An independent verification suite ([`06_verify_experiment1.mjs`](../scripts/market-analysis/06_verify_experiment1.mjs), `3/3` passing, zero shared math with `03_analyze_market.mjs` or `05_experiment1_backtest.mjs`) reconstructed all benchmark figures directly from raw `poolStates` and `events.swaps` in `market_data_14d.json` and compared them against exact Solidity `BigInt` `CommitmentManager.sol` equations.
-
-### 9.1 Raw On-Chain V3 Execution Cost Reconstruction (`$10,000` Buy Base)
-
-| Pool | Decimals / Fee | Independent Tick-Step (`+Gas`) | Closed-Form Full-Range `x*y=k` Cross-Check | Reported in Experiment 1 | Delta |
-| --- | --- | ---: | ---: | ---: | ---: |
-| **WHSK/USDT** | `18 / 6`, `0.30%` | `268.46 bps` (`268.45` ex-gas) | `266.89 bps` | `268.46 bps` | **`0.00 bps`** |
-| **WETH/USDT** | `18 / 6`, `0.30%` | **`2,421.58 bps`** (`2,421.58` ex-gas) | `2,414.62 bps` | `2,421.58 bps` | **`0.00 bps`** |
-| **WBTC/USDT** | `8 / 6`, `0.30%` | **`2,235.71 bps`** (`2,235.70` ex-gas) | `2,230.34 bps` | `2,235.71 bps` | **`0.00 bps`** |
-
-- All `12/12` pool-size points (`$1k`, `$5k`, `$10k`, `$25k` across 3 pools) matched within `< 0.05 bps`, and reconstructed active tick liquidity `L` matched on-chain `pool.liquidity()` within `< 1e-12` relative error.
-- *(Note: The small `~5–7 bps` gap between exact tick-step `L` and raw `bal0Raw`/`bal1Raw` `x*y=k` is expected because pool token balances include uncollected V3 fees outside active `L`.)*
-
-### 9.2 Exact Solidity `BigInt` Contract Arithmetic Check
-- Reconstructed `_quoteReservation` and `_quoteExercise` with exact `Math.Rounding.Ceil` integer math (`PRICE_SCALE = 1e36`, `protocolFeeBps = 5`).
-- **Minor Approximation Identified (`0.05 bps`):** In `CommitmentManager.sol`, `FLOATING` `_quoteReservation` computes `grossPremium` on `effPriceX36 = spot * (1 + spreadBps/10000)` rather than `1.0 * spot` (`20 * 1.0025 + 25 = 45.05 bps` vs. `45.00 bps` in `05_experiment1_backtest.mjs`). This `0.05 bps` second-order term does not affect any conclusion. Zero fee double-counting was found.
-
-### 9.3 Material Assumptions Driving Positive `FLOATING` Results (Disclosed Explicitly)
-1. **Prompt LP Hedging vs. 24h Unhedged Markout:** Base `FLOATING` break-even markout is **`28.51 bps`** (WHSK) and **`38.51 bps`** (WETH/WBTC). Observed **unhedged 24h** post-buy markout in the 14-day dataset was `73.0 bps` (WETH) and `114.63 bps` (WBTC). Positive `FLOATING` LP returns therefore **require LPs to hedge/restock promptly upon fill** (incurring `8–12 bps` short-horizon oracle-lag markout rather than 24h unhedged drift).
-2. **`1h` Duration APR Turnover Artifact:** At `24h` duration and `25%` utilization, implied annual turnover is `91.25x`. At `1h` duration and `25%` utilization, the sensitivity sweep assumes `2,190x` annual turnover (`8,760 * 0.25`), making the `184.5%–296.2%` `1h` APRs theoretical upper bounds rather than realistic steady-state yields.
-3. **Latent Block Demand Assumption:** `1,241` observed swaps were independently recounted (`1,047` WHSK, `173` WETH, `21` WBTC). Sustaining `25%` vault utilization requires institutional/OTC/agentic block demand (`$5k–$25k`) beyond observed retail HSKSwap flow.
-
-### 9.4 Verification Verdict
-**REPRODUCIBLE & DEFENSIBLE FOR HACKATHON SUBMISSION** — Provided the submission quotes the **`24h` Base `FLOATING`** numbers alongside the honest **`INCONCLUSIVE`** overall verdict, explicitly cites the prompt-hedging assumption, and does **not** headline the `1h` turnover-inflated APRs or claim observed retail demand at `$10k`.

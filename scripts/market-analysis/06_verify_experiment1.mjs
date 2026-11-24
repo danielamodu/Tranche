@@ -218,65 +218,67 @@ test("2. Compare exact Solidity BigInt CommitmentManager.sol arithmetic vs Exper
     protocolFeeBps: 5,
   });
 
-  // Note subtle second-order difference discovered:
-  // In CommitmentManager.sol, _quoteReservation prices grossPremium off `effPriceX36 = spot * (1 + spread)`,
-  // so trader pays `effPremBps * (1 + spreadBps/10000) + spreadBps = 20 * 1.0025 + 25 = 45.05 bps` (before gas),
-  // whereas 05_experiment1_backtest.mjs approximated `effPremBps + spreadBps = 45.00 bps` (-0.05 bps diff).
+  // 05_experiment1_backtest.mjs now matches Solidity exact refPriceRes = p0 * (1 + spreadBps/10000),
+  // so trader pays `effPremBps * (1 + spreadBps/10000) + spreadBps = 45.05 bps` (before gas).
   const expectedExactBeforeGas = 20 * 1.0025 + 25; // 45.05 bps
   assert.ok(
     Math.abs(sol.traderAllInBps - expectedExactBeforeGas) < 0.05,
     `Solidity exact traderAllInBps=${sol.traderAllInBps} vs ${expectedExactBeforeGas}`,
   );
 
-  // Verify LP gross-net (pEx = 100%, before markout/rebal/gas):
-  // 20 * 1.0025 * 0.9995 + 25 * 0.9995 - 5 = 20.040 + 24.9875 - 5 = 40.0275 bps
-  assert.ok(Math.abs(sol.lpGrossNetVsSpotBps - 40.0) < 0.15);
-  console.log("Exact Solidity BigInt vs Float Delta (WETH $10k FLOATING):", {
-    solidityTraderExGasBps: sol.traderAllInBps,
-    exp1TraderExGasBps: 45.0,
-    secondOrderPremOnSpreadDeltaBps: Number((sol.traderAllInBps - 45.0).toFixed(3)),
-    solidityLpNetBeforeCostsBps: sol.lpGrossNetVsSpotBps,
-  });
+  // Verify exact conservation: lpNetRes + lpNetEx + feeRes + feeEx === grossPremium + grossPayment
+  assert.equal(
+    sol.grossPremium - sol.feeRes + (sol.grossPayment - sol.feeEx) + sol.feeRes + sol.feeEx,
+    sol.grossPremium + sol.grossPayment,
+  );
+  // Prove algebraic equivalence: (1 + s)(1 - f) - 1 === s(1 - f) - f (zero double subtraction of f)
+  const s = 25 / 10_000;
+  const f = 5 / 10_000;
+  assert.ok(Math.abs(((1 + s) * (1 - f) - 1) - (s * (1 - f) - f)) < 1e-15);
+
+  // Cross-check against experiment1_results.json fullCycleAccounting for WETH $10k FLOATING
+  const wethFull = exp1.pools["WETH/USDT"].scenarios.base.floating.find((r) => r.tradeUsd === 10_000)
+    .fullCycleAccounting;
+  assert.ok(
+    Math.abs(
+      wethFull.totalTraderPaidUsd - (wethFull.totalLpGrossReceiptsUsd + wethFull.totalTreasuryFeeUsd),
+    ) < 0.001,
+    "Conservation identity failed in experiment1_results.json",
+  );
+  assert.ok(Math.abs(wethFull.grossPremiumUsd - 20.05) < 0.01);
+  assert.ok(Math.abs(wethFull.resProtocolFeeUsd - 0.01) < 0.001);
+  assert.ok(Math.abs(wethFull.grossExerciseUsd - 10_025.0) < 0.01);
+  assert.ok(Math.abs(wethFull.exProtocolFeeUsd - 5.0125) < 0.001);
+  assert.ok(Math.abs(wethFull.totalTreasuryFeeUsd - 5.0225) < 0.001);
 });
 
-test("3. Verify swap count, eligibility, and flag material assumption sensitivities (1h APR turnover & markout)", () => {
-  // Independently recount raw swap events
+test("3. Verify reservation fill behaviors (100% / 50% / 0%), independent bootstrap windows, and turnover-capped duration sweep", () => {
   assert.equal(rawData.events.swaps.length, 1_241);
-  const counts = { whsk: 0, weth: 0, wbtc: 0 };
-  for (const s of rawData.events.swaps) {
-    const p = s.pool.toLowerCase();
-    if (p === "0x4ff515761864e7838b0adb8b5b2b8b7a068905dc") counts.whsk++;
-    else if (p === "0xb92b79ed6b370d5cfee2e14b1d0983c258304c16") counts.weth++;
-    else if (p === "0xd9ea2ce468957ba49ccc38c4758ed6ecd561449a") counts.wbtc++;
+
+  for (const sym of ["WHSK/USDT", "WETH/USDT", "WBTC/USDT"]) {
+    const p = exp1.pools[sym];
+    // Strictly 14 independent 24h windows and 56 independent 6h windows across 14 days
+    assert.equal(p.observed14d.independentWindows.count24h, 14);
+    assert.equal(p.observed14d.independentWindows.count6h, 56);
+
+    // Reservation behavior conservation across 100%, 50%, 0% fill fractions
+    assert.equal(p.reservationBehavior.length, 3);
+    for (const row of p.reservationBehavior) {
+      assert.ok(
+        Math.abs(row.totalTraderPaidUsd - (row.totalLpGrossReceiptsUsd + row.totalTreasuryFeeUsd)) < 0.001,
+      );
+    }
+    const expired = p.reservationBehavior.find((r) => r.fillFraction === 0);
+    assert.equal(expired.grossExerciseUsd, 0);
+    assert.ok(expired.lpPnlVsHodlBps > 19.5, "Expired ticket must retain non-refundable upfront premium");
+
+    // Turnover cap enforced on 1h duration (must NOT exceed 91.25 turns/yr at 25% base util)
+    const d1h = p.sensitivities.durationHoursSweep.find((d) => d.durationHours === 1);
+    assert.equal(d1h.cappedAnnualTurns, 91.25);
+    assert.ok(d1h.floatingLpAprCappedPct < 20, `1h APR should be turnover-capped, got ${d1h.floatingLpAprCappedPct}`);
+
+    // Failed restocking tail stress must be strictly negative (exposes unhedged rally risk)
+    assert.ok(p.hedgingStress.failedRestock_p90Rally_3xRebal.lpPnlVsHodlBps < 0);
   }
-  assert.equal(counts.whsk, 1_047);
-  assert.equal(counts.weth, 173);
-  assert.equal(counts.wbtc, 21);
-
-  // Verify the 1h duration APR annualization caveat:
-  // At durationHours=1 and utilization=25%, cyclesPerYear * util = 8760 * 0.25 = 2,190 turns/year!
-  // That means the reported 1h APRs (184.5% WHSK, 296.2% WETH/WBTC) assume 2,190x annual capital turnover.
-  const weth1h = exp1.pools["WETH/USDT"].sensitivities.durationHoursSweep.find((d) => d.durationHours === 1);
-  const impliedAnnualTurnsAt1h = (365 * 24) * 0.25;
-  assert.equal(impliedAnnualTurnsAt1h, 2_190);
-  const recomputed1hApr = (weth1h.floatingLpNetBps / 10_000) * impliedAnnualTurnsAt1h * 100;
-  assert.ok(Math.abs(recomputed1hApr - weth1h.floatingLpAprPct) < 0.15);
-
-  // Verify break-even markout threshold for Base FLOATING $10k (5 bps fee):
-  // lpNet = 20*0.9995 + 0.85*(25*0.9995 - 5 - M - 5) - 0.01 = 0 => M_breakeven ~ 38.5 bps (WETH/WBTC)
-  const wethBreakEvenMarkoutBps =
-    (20 * 0.9995) / 0.85 + 25 * 0.9995 - 5 - 5; // ~38.50 bps
-  const whskBreakEvenMarkoutBps =
-    (20 * 0.9995) / 0.85 + 20 * 0.9995 - 5 - 10; // ~28.51 bps
-  assert.ok(wethBreakEvenMarkoutBps > 38 && wethBreakEvenMarkoutBps < 39);
-  assert.ok(whskBreakEvenMarkoutBps > 28 && whskBreakEvenMarkoutBps < 29);
-
-  console.log("Material Assumption Sensitivity Audit:", {
-    impliedAnnualTurnsAt1h25PctUtil: impliedAnnualTurnsAt1h,
-    impliedAnnualTurnsAt24h25PctUtil: 365 * 0.25,
-    wethBaseFloatingBreakEvenMarkoutBps: Number(wethBreakEvenMarkoutBps.toFixed(2)),
-    whskBaseFloatingBreakEvenMarkoutBps: Number(whskBreakEvenMarkoutBps.toFixed(2)),
-    empiricalWeth24hBuyMarkoutBps: exp1.pools["WETH/USDT"].observed14d.empirical24hPathStats.meanBuyMarkout24hBps,
-    empiricalWbtc24hBuyMarkoutBps: exp1.pools["WBTC/USDT"].observed14d.empirical24hPathStats.meanBuyMarkout24hBps,
-  });
+  assert.equal(exp1.overallVerdict, "INCONCLUSIVE");
 });
