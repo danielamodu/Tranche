@@ -77,13 +77,16 @@ contract ExecutionTicket is ERC721, EIP712, IExecutionTicket {
         address signer = ECDSA.recover(_hashTypedDataV4(structHash), v, r, s);
         if (signer != owner && !isApprovedForAll(owner, signer)) revert InvalidSignature();
 
-        _approve(spender, tokenId, address(0), false);
+        _approve(spender, tokenId, address(0), true);
     }
 
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = _ownerOf(tokenId);
-        // Invoke compliance hook ONLY on secondary transfers (never on mint or burn).
         if (from != address(0) && to != address(0)) {
+            // Invalidate unused permit signatures across ownership transfers (M-02 / EIP-4494)
+            unchecked {
+                nonces[tokenId]++;
+            }
             Ticket memory t = ICommitmentManager(manager).getTicket(tokenId);
             if (t.complianceHook != address(0)) {
                 IComplianceHook(t.complianceHook).beforeTransfer(tokenId, from, to);

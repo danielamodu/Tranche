@@ -4,11 +4,13 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ILiquidityVault} from "./interfaces/IProtocol.sol";
 
 /// @title LiquidityVault
 /// @notice Segregated 1:1 ERC-20 custody vault enforcing strict bucket accounting and pull-based LP proceeds.
-contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
+contract LiquidityVault is ILiquidityVault, Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();
@@ -21,6 +23,7 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
 
     event ManagerSet(address indexed manager);
     event GuardianUpdated(address indexed guardian);
+    event PendingFeeCollectorSet(address indexed pendingFeeCollector);
     event FeeCollectorUpdated(address indexed feeCollector);
     event DepositsPausedSet(bool paused);
     event Deposited(address indexed lp, address indexed token, uint256 amount);
@@ -28,24 +31,18 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
     event ProceedsClaimed(address indexed lp, address indexed token, address indexed to, uint256 amount);
     event ProtocolFeesWithdrawn(address indexed token, address indexed to, uint256 amount);
 
-    address public immutable admin;
     address public manager;
     address public guardian;
     address public feeCollector;
+    address public pendingFeeCollector;
     bool public depositsPaused;
 
-    // lp => token => amount
     mapping(address => mapping(address => uint256)) public override lpFreeBalance;
-    // offerId => amount
     mapping(uint64 => uint256) public override offerBalance;
-    // ticketId => amount
     mapping(uint256 => uint256) public override ticketReserved;
-    // lp => token => amount
     mapping(address => mapping(address => uint256)) public override lpPendingProceeds;
-    // token => amount
     mapping(address => uint256) public override protocolFees;
 
-    // O(1) global per-token bucket totals
     mapping(address => uint256) public override totalLpFree;
     mapping(address => uint256) public override totalOfferAvailable;
     mapping(address => uint256) public override totalReserved;
@@ -56,39 +53,40 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         _;
     }
 
-    modifier onlyAdmin() {
-        if (msg.sender != admin) revert Unauthorized();
-        _;
-    }
-
-    constructor(address _guardian, address _feeCollector) {
+    constructor(address _owner, address _guardian, address _feeCollector) Ownable(_owner) {
         if (_guardian == address(0) || _feeCollector == address(0)) revert ZeroAddress();
-        admin = msg.sender;
         guardian = _guardian;
         feeCollector = _feeCollector;
     }
 
-    function setManager(address _manager) external onlyAdmin {
+    function setManager(address _manager) external onlyOwner {
         if (manager != address(0)) revert ManagerAlreadySet();
         if (_manager == address(0)) revert ZeroAddress();
         manager = _manager;
         emit ManagerSet(_manager);
     }
 
-    function setGuardian(address _guardian) external onlyAdmin {
+    function setGuardian(address _guardian) external onlyOwner {
         if (_guardian == address(0)) revert ZeroAddress();
         guardian = _guardian;
         emit GuardianUpdated(_guardian);
     }
 
-    function setFeeCollector(address _feeCollector) external onlyAdmin {
-        if (_feeCollector == address(0)) revert ZeroAddress();
-        feeCollector = _feeCollector;
-        emit FeeCollectorUpdated(_feeCollector);
+    function setPendingFeeCollector(address _pendingFeeCollector) external onlyOwner {
+        if (_pendingFeeCollector == address(0)) revert ZeroAddress();
+        pendingFeeCollector = _pendingFeeCollector;
+        emit PendingFeeCollectorSet(_pendingFeeCollector);
+    }
+
+    function acceptFeeCollector() external {
+        if (msg.sender != pendingFeeCollector) revert Unauthorized();
+        feeCollector = pendingFeeCollector;
+        delete pendingFeeCollector;
+        emit FeeCollectorUpdated(feeCollector);
     }
 
     function setDepositsPaused(bool paused) external override {
-        if (msg.sender != guardian && msg.sender != admin) revert Unauthorized();
+        if (msg.sender != guardian && msg.sender != owner()) revert Unauthorized();
         depositsPaused = paused;
         emit DepositsPausedSet(paused);
     }
@@ -152,7 +150,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         emit ProceedsClaimed(msg.sender, token, to, claimAmt);
     }
 
-    /// @inheritdoc ILiquidityVault
     function allocateToOffer(address lp, address token, uint64 offerId, uint256 amount)
         external
         override
@@ -171,7 +168,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         totalOfferAvailable[token] += amount;
     }
 
-    /// @inheritdoc ILiquidityVault
     function deallocateFromOffer(address lp, address token, uint64 offerId, uint256 amount)
         external
         override
@@ -190,7 +186,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         totalLpFree[token] += amount;
     }
 
-    /// @inheritdoc ILiquidityVault
     function reserveFromOffer(uint64 offerId, uint256 ticketId, address token, uint256 amount)
         external
         override
@@ -209,7 +204,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         totalReserved[token] += amount;
     }
 
-    /// @inheritdoc ILiquidityVault
     function splitTicketReserved(uint256 fromTicketId, uint256 toTicketId, address, uint256 splitAmount)
         external
         override
@@ -226,7 +220,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         ticketReserved[toTicketId] += splitAmount;
     }
 
-    /// @inheritdoc ILiquidityVault
     function releaseTicketToOffer(uint256 ticketId, uint64 offerId, address token, uint256 amount)
         external
         override
@@ -245,7 +238,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         totalOfferAvailable[token] += amount;
     }
 
-    /// @inheritdoc ILiquidityVault
     function releaseTicketToFree(uint256 ticketId, address lp, address token, uint256 amount)
         external
         override
@@ -264,7 +256,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         totalLpFree[token] += amount;
     }
 
-    /// @inheritdoc ILiquidityVault
     function collectFeeAndProceeds(
         address payer,
         address payToken,
@@ -275,7 +266,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         _creditPayment(payer, payToken, lp, lpNetProceeds, protocolFee);
     }
 
-    /// @inheritdoc ILiquidityVault
     function settleExercise(
         uint256 ticketId,
         address invToken,
@@ -301,7 +291,6 @@ contract LiquidityVault is ILiquidityVault, ReentrancyGuard {
         IERC20(invToken).safeTransfer(receiver, invAmount);
     }
 
-    /// @inheritdoc ILiquidityVault
     function withdrawProtocolFees(address token, address to) external override nonReentrant {
         if (msg.sender != feeCollector) revert Unauthorized();
         if (token == address(0) || to == address(0)) revert ZeroAddress();
