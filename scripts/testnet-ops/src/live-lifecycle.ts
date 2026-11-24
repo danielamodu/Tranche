@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   createPublicClient,
   createWalletClient,
@@ -114,7 +115,7 @@ async function approveIfNeeded(
   token: Address,
   spender: Address,
   amount: bigint,
-): Promise<void> {
+): Promise<bigint> {
   const owner = walletClient.account!.address;
   const allowance = (await publicClient.readContract({
     address: token,
@@ -122,7 +123,7 @@ async function approveIfNeeded(
     functionName: "allowance",
     args: [owner, spender],
   })) as bigint;
-  if (allowance >= amount) return;
+  if (allowance >= amount) return 0n;
   const hash = await walletClient.writeContract({
     account: walletClient.account!,
     chain: walletClient.chain,
@@ -133,12 +134,15 @@ async function approveIfNeeded(
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error(`ERC-20 approve failed: ${hash}`);
+  return receipt.gasUsed;
 }
 
 export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
   offerId: bigint;
   ticketId: bigint;
   steps: LifecycleStepProof[];
+  lpGasUsed: bigint;
+  traderGasUsed: bigint;
 }> {
   const { publicClient, lpWalletClient, traderWalletClient, addresses } = params;
   const lpAddr = lpWalletClient.account!.address;
@@ -151,9 +155,17 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
   const lpClient = new TrancheClient({ publicClient, walletClient: lpWalletClient, addresses });
   const traderClient = new TrancheClient({ publicClient, walletClient: traderWalletClient, addresses });
   const steps: LifecycleStepProof[] = [];
+  let lpGasUsed = 0n;
+  let traderGasUsed = 0n;
 
   // 1. LP Deposit into LiquidityVault
-  await approveIfNeeded(publicClient, lpWalletClient, params.inventoryToken, addresses.liquidityVault, params.depositAmount);
+  lpGasUsed += await approveIfNeeded(
+    publicClient,
+    lpWalletClient,
+    params.inventoryToken,
+    addresses.liquidityVault,
+    params.depositAmount,
+  );
   const lpFreeBefore = (await publicClient.readContract({
     address: addresses.liquidityVault,
     abi: ABIS.LiquidityVault as Abi,
@@ -162,6 +174,7 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
   })) as bigint;
 
   const depRes = await lpClient.deposit(params.inventoryToken, params.depositAmount);
+  lpGasUsed += depRes.gasUsed;
   assertEventInLogs(depRes.receipt.logs, addresses.liquidityVault, ABIS.LiquidityVault as Abi, "Deposited");
   const lpFreeAfter = (await publicClient.readContract({
     address: addresses.liquidityVault,
@@ -202,6 +215,7 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
     minPriceX36: 0n,
     maxPriceX36: 0n,
   });
+  lpGasUsed += offerRes.gasUsed;
   assertEventInLogs(offerRes.receipt.logs, addresses.commitmentManager, ABIS.CommitmentManager as Abi, "OfferCreated");
   const offerBalAfterCreate = (await publicClient.readContract({
     address: addresses.liquidityVault,
@@ -223,8 +237,15 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
 
   // 3. Trader Reservation & Ticket Issuance
   const resQuote = await traderClient.quoteReservation(offerRes.offerId, params.reserveAmount, 600);
-  await approveIfNeeded(publicClient, traderWalletClient, params.paymentToken, addresses.liquidityVault, resQuote.grossPremium);
+  traderGasUsed += await approveIfNeeded(
+    publicClient,
+    traderWalletClient,
+    params.paymentToken,
+    addresses.liquidityVault,
+    resQuote.grossPremium,
+  );
   const resTx = await traderClient.reserve(offerRes.offerId, params.reserveAmount, 600, resQuote.grossPremium, traderAddr);
+  traderGasUsed += resTx.gasUsed;
   assertEventInLogs(resTx.receipt.logs, addresses.commitmentManager, ABIS.CommitmentManager as Abi, "TicketReserved");
 
   const ticketOwner = (await publicClient.readContract({
@@ -258,7 +279,13 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
 
   // 4. Trader Exercise & Settlement
   const exQuote = await traderClient.quoteExercise(resTx.ticketId, params.reserveAmount);
-  await approveIfNeeded(publicClient, traderWalletClient, params.paymentToken, addresses.liquidityVault, exQuote.grossPayment);
+  traderGasUsed += await approveIfNeeded(
+    publicClient,
+    traderWalletClient,
+    params.paymentToken,
+    addresses.liquidityVault,
+    exQuote.grossPayment,
+  );
   const traderInvBefore = (await publicClient.readContract({
     address: params.inventoryToken,
     abi: erc20Abi,
@@ -267,6 +294,7 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
   })) as bigint;
 
   const exTx = await traderClient.exercise(resTx.ticketId, params.reserveAmount, exQuote.grossPayment, traderAddr);
+  traderGasUsed += exTx.gasUsed;
   assertEventInLogs(exTx.receipt.logs, addresses.commitmentManager, ABIS.CommitmentManager as Abi, "TicketExercised");
   const traderInvAfter = (await publicClient.readContract({
     address: params.inventoryToken,
@@ -300,6 +328,7 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
     args: [lpAddr],
   })) as bigint;
   const claimTx = await lpClient.claimProceeds(params.paymentToken, 0n, lpAddr);
+  lpGasUsed += claimTx.gasUsed;
   assertEventInLogs(claimTx.receipt.logs, addresses.liquidityVault, ABIS.LiquidityVault as Abi, "ProceedsClaimed");
   const lpPayAfter = (await publicClient.readContract({
     address: params.paymentToken,
@@ -325,7 +354,8 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
     args: [offerRes.offerId],
   })) as bigint;
   if (remOffer > 0n) {
-    await lpClient.cancelOffer(offerRes.offerId);
+    const cancelTx = await lpClient.cancelOffer(offerRes.offerId);
+    lpGasUsed += cancelTx.gasUsed;
   }
   const lpFreeToWithdraw = (await publicClient.readContract({
     address: addresses.liquidityVault,
@@ -335,6 +365,7 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
   })) as bigint;
   if (lpFreeToWithdraw > 0n) {
     const wdTx = await lpClient.withdrawFree(params.inventoryToken, lpFreeToWithdraw, lpAddr);
+    lpGasUsed += wdTx.gasUsed;
     assertEventInLogs(wdTx.receipt.logs, addresses.liquidityVault, ABIS.LiquidityVault as Abi, "WithdrawnFree");
     steps.push({
       stage: "6. LP Withdraw Unused Inventory",
@@ -349,7 +380,7 @@ export async function runLiveLifecycle(params: LiveLifecycleParams): Promise<{
   await assertVaultSolvent(publicClient, addresses.liquidityVault, params.inventoryToken);
   await assertVaultSolvent(publicClient, addresses.liquidityVault, params.paymentToken);
 
-  return { offerId: offerRes.offerId, ticketId: resTx.ticketId, steps };
+  return { offerId: offerRes.offerId, ticketId: resTx.ticketId, steps, lpGasUsed, traderGasUsed };
 }
 
 async function main(): Promise<void> {
@@ -358,7 +389,7 @@ async function main(): Promise<void> {
     deploymentStatus?: string;
     network: { chainId: number; rpcUrls: string[] };
     canonicalInfrastructure: { WHSK: { address: Address } };
-    contracts: TrancheAddresses & { tUSDT?: Address };
+    contracts: TrancheAddresses & { tWETH?: Address; tUSDT?: Address };
   };
 
   if (manifest.deploymentStatus !== "LIVE_DEPLOYED") {
@@ -371,6 +402,9 @@ async function main(): Promise<void> {
   const traderPk = process.env.TRADER_PRIVATE_KEY as Hex | undefined;
   if (!lpPk || !traderPk) {
     throw new Error("LP_PRIVATE_KEY and TRADER_PRIVATE_KEY environment variables are required.");
+  }
+  if (!manifest.contracts.tWETH || !manifest.contracts.tUSDT) {
+    throw new Error("tWETH and tUSDT addresses must be populated in deployments/hashkey-testnet.json.");
   }
 
   const rpcPool = new FailoverRpcPool({ urls: manifest.network.rpcUrls });
@@ -385,28 +419,31 @@ async function main(): Promise<void> {
   const lpWalletClient = createWalletClient({ account: privateKeyToAccount(lpPk), chain, transport });
   const traderWalletClient = createWalletClient({ account: privateKeyToAccount(traderPk), chain, transport });
 
+  // tWETH (18 dec) / tUSDT (6 dec) live demo — zero HSK wrapping required
   const result = await runLiveLifecycle({
     publicClient,
     lpWalletClient,
     traderWalletClient,
     addresses: manifest.contracts,
-    inventoryToken: manifest.canonicalInfrastructure.WHSK.address,
-    paymentToken: manifest.contracts.tUSDT!,
-    depositAmount: parseUnits("20", 18),
-    offerAmount: parseUnits("20", 18),
-    reserveAmount: parseUnits("10", 18),
-    minFillAmount: parseUnits("10", 18),
-    fixedPriceX36: 82_000n * 10n ** 18n, // $0.082/WHSK
+    inventoryToken: manifest.contracts.tWETH,
+    paymentToken: manifest.contracts.tUSDT,
+    depositAmount: parseUnits("0.02", 18),
+    offerAmount: parseUnits("0.02", 18),
+    reserveAmount: parseUnits("0.01", 18),
+    minFillAmount: parseUnits("0.001", 18),
+    fixedPriceX36: 3_000n * 10n ** 24n, // $3,000 / tWETH (18/6 dec)
   });
 
-  console.log("=== Tranche Live Testnet Lifecycle Proof ===");
+  console.log("=== Tranche Live Testnet Lifecycle Proof (tWETH/tUSDT) ===");
   for (const s of result.steps) {
     console.log(`${s.stage} | tx=${s.txHash} | gas=${s.gasUsed} | event=${s.eventVerified} | ${s.summary}`);
     console.log(`  Explorer: ${s.explorerUrl}`);
   }
+  console.log(`Total LP gasUsed: ${result.lpGasUsed}`);
+  console.log(`Total Trader gasUsed: ${result.traderGasUsed}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((err) => {
     console.error("[tranche-lifecycle]", err instanceof Error ? err.message : err);
     process.exit(1);

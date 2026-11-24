@@ -314,6 +314,11 @@ test("3. runLiveLifecycle executes LP deposit -> offer -> reserve -> exercise ->
       res.steps.map((s) => s.eventVerified),
       ["Deposited", "OfferCreated", "TicketReserved", "TicketExercised", "ProceedsClaimed", "WithdrawnFree"],
     );
+    assert.ok(res.lpGasUsed > 0n);
+    assert.ok(res.traderGasUsed > 0n);
+    console.log(
+      `[lifecycle gas] lpGasUsed=${res.lpGasUsed} traderGasUsed=${res.traderGasUsed} total=${res.lpGasUsed + res.traderGasUsed}`,
+    );
   } finally {
     proc.kill();
   }

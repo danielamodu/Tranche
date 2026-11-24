@@ -748,6 +748,159 @@ contract TestnetOperationalValidationTest is Test {
         _assertVaultSolvency(whsk);
     }
 
+    struct PreflightGas {
+        uint256 scheduleHandover;
+        uint256 executeHandover;
+        uint256 renounceAdmin;
+        uint256 mintTweth;
+        uint256 mintTusdt;
+        uint256 lpTotal;
+        uint256 traderTotal;
+    }
+
+    function test_Lifecycle_tWETH_tUSDT_AndHandoverGasBudget() public {
+        PreflightGas memory pg;
+
+        // 1. Fresh deploy on Chain-133 fork to measure exact handover + mint gas
+        DeployTestnet.DeployConfig memory cfg;
+        cfg.deployer = deployer;
+        cfg.govOwners = _addrs(govPks);
+        cfg.guardianOwners = _addrs(guardianPks);
+        cfg.treasuryOwners = _addrs(treasuryPks);
+        cfg.oracleSigners = _addrs(oraclePks);
+        cfg.hspAttestationSigner = vm.addr(HSP_PK);
+        cfg.timelockMinDelay = 60;
+        cfg.saltNonceBase = 133_2026_9999;
+
+        DeployTestnet.DeployedStack memory fresh = deployerScript.deployAll(cfg);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory payloads) =
+            deployerScript.buildAcceptOwnershipBatch(fresh);
+        bytes32 salt = keccak256("tranche.testnet.ownership.handover.v1");
+
+        uint256 g0 = gasleft();
+        _execSafeTx(
+            fresh.govSafe,
+            govPks,
+            3,
+            address(fresh.timelock),
+            abi.encodeWithSelector(
+                fresh.timelock.scheduleBatch.selector, targets, values, payloads, bytes32(0), salt, uint256(60)
+            )
+        );
+        pg.scheduleHandover = g0 - gasleft();
+
+        vm.warp(block.timestamp + 61);
+        g0 = gasleft();
+        _execSafeTx(
+            fresh.govSafe,
+            govPks,
+            3,
+            address(fresh.timelock),
+            abi.encodeWithSelector(fresh.timelock.executeBatch.selector, targets, values, payloads, bytes32(0), salt)
+        );
+        pg.executeHandover = g0 - gasleft();
+
+        bytes32 adminRole = fresh.timelock.DEFAULT_ADMIN_ROLE();
+        vm.prank(deployer);
+        g0 = gasleft();
+        fresh.timelock.renounceRole(adminRole, deployer);
+        pg.renounceAdmin = g0 - gasleft();
+
+        for (uint256 i = 0; i < 6; ++i) {
+            assertEq(LiquidityVault(targets[i]).owner(), address(fresh.timelock));
+        }
+        assertFalse(fresh.timelock.hasRole(adminRole, deployer));
+
+        // 2. Mint tWETH to LP and tUSDT to Trader1
+        vm.startPrank(deployer);
+        g0 = gasleft();
+        fresh.tWeth.mint(lp, 0.05e18);
+        pg.mintTweth = g0 - gasleft();
+        g0 = gasleft();
+        fresh.tUsdt.mint(trader1, 100e6);
+        pg.mintTusdt = g0 - gasleft();
+        vm.stopPrank();
+
+        // 3. Complete tWETH/tUSDT LP-to-Trader lifecycle (zero HSK wrapping)
+        uint64 offerId = _runTwethLpSetup(fresh, pg);
+        _runTwethTraderFlow(fresh, offerId, pg);
+        _runTwethLpSettle(fresh, offerId, pg);
+
+        console2.log("=== Exact Chain-133 Fork Gas: Handover, Mints, tWETH/tUSDT Lifecycle ===");
+        console2.log("scheduleHandover (3/5 Safe -> Timelock):", pg.scheduleHandover);
+        console2.log("executeHandover (3/5 Safe -> 6x acceptOwnership):", pg.executeHandover);
+        console2.log("renounceRole (DEFAULT_ADMIN_ROLE):", pg.renounceAdmin);
+        console2.log("tWETH.mint:", pg.mintTweth);
+        console2.log("tUSDT.mint:", pg.mintTusdt);
+        console2.log("LP total (approve+deposit+createOffer+claim+cancel+withdraw):", pg.lpTotal);
+        console2.log("Trader total (approve+reserve+exercise):", pg.traderTotal);
+    }
+
+    function _runTwethLpSetup(DeployTestnet.DeployedStack memory fresh, PreflightGas memory pg)
+        internal
+        returns (uint64 offerId)
+    {
+        vm.startPrank(lp);
+        uint256 g0 = gasleft();
+        IERC20(address(fresh.tWeth)).approve(address(fresh.vault), 0.02e18);
+        fresh.vault.deposit(address(fresh.tWeth), 0.02e18);
+        offerId = fresh.manager.createOffer(
+            CreateOfferParams({
+                inventoryToken: address(fresh.tWeth),
+                paymentToken: address(fresh.tUsdt),
+                initialAmount: 0.02e18,
+                minFillAmount: 0.001e18,
+                expiry: uint40(block.timestamp + 3_600),
+                minDuration: 60,
+                maxDuration: 1_800,
+                basePremiumBps: 50,
+                dailyPremiumBps: 0,
+                priceMode: PriceMode.FIXED,
+                spreadBps: 0,
+                oracle: address(0),
+                complianceHook: address(0),
+                fixedPriceX36: WETH_PRICE_X36,
+                minPriceX36: 0,
+                maxPriceX36: 0
+            })
+        );
+        pg.lpTotal += (g0 - gasleft());
+        vm.stopPrank();
+    }
+
+    function _runTwethTraderFlow(DeployTestnet.DeployedStack memory fresh, uint64 offerId, PreflightGas memory pg)
+        internal
+    {
+        vm.startPrank(trader1);
+        uint256 g0 = gasleft();
+        IERC20(address(fresh.tUsdt)).approve(address(fresh.vault), 100e6);
+        uint256 tid = fresh.manager.reserve(offerId, 0.01e18, 600, 1e6, trader1);
+        (uint256 filled, uint256 paid) = fresh.manager.exercise(tid, 0.01e18, 35e6, trader1);
+        pg.traderTotal += (g0 - gasleft());
+        vm.stopPrank();
+
+        assertEq(filled, 0.01e18);
+        assertEq(paid, 30e6);
+        assertEq(fresh.tWeth.balanceOf(trader1), 0.01e18);
+        assertEq(uint256(fresh.manager.getTicket(tid).status), uint256(TicketStatus.EXERCISED));
+    }
+
+    function _runTwethLpSettle(DeployTestnet.DeployedStack memory fresh, uint64 offerId, PreflightGas memory pg)
+        internal
+    {
+        vm.startPrank(lp);
+        uint256 g0 = gasleft();
+        fresh.vault.claimProceeds(address(fresh.tUsdt), 0, lp);
+        fresh.manager.cancelOffer(offerId);
+        fresh.vault.withdrawFree(address(fresh.tWeth), 0.01e18, lp);
+        pg.lpTotal += (g0 - gasleft());
+        vm.stopPrank();
+
+        assertGt(fresh.tUsdt.balanceOf(lp), 0);
+        assertEq(fresh.tWeth.balanceOf(lp), 0.04e18);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
