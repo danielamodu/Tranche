@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,57 +10,40 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Reveal } from "@/components/Reveal";
+import { StickyLifecycleStage } from "@/components/StickyLifecycleStage";
 import { TicketSpecimen } from "@/components/TicketSpecimen";
 import { TrancheLogo } from "@/components/TrancheLogo";
 import { ACTIVE_NETWORK, explorerAddressUrl } from "@/config/networks";
 import { useProtocolTelemetry } from "@/hooks/useProtocolTelemetry";
 import { cn } from "@/lib/utils";
 
-const STEPS = [
-  {
-    index: "01",
-    title: "Reserve inventory",
-    body: "Pick an LP offer and pay a small upfront premium. The vault segregates your exact token amount exclusively for you.",
-  },
-  {
-    index: "02",
-    title: "Hold the ticket",
-    body: "Your reservation is minted as an ERC-721 Execution Ticket. Hold it, split it into smaller sizes, or transfer it before expiry.",
-  },
-  {
-    index: "03",
-    title: "Exercise on your terms",
-    body: "Fill partially or in full at your locked or oracle-bounded price with zero AMM slippage. Unused inventory returns cleanly to the LP.",
-  },
-] as const;
-
 const TRADER_POINTS = [
   {
-    label: "Price certainty",
-    detail: "Lock a fixed strike or an oracle-bounded spread before committing full settlement capital.",
+    label: "Price certainty before size",
+    detail: "Lock a fixed strike or oracle-bounded spread before committing full settlement capital.",
   },
   {
     label: "Zero AMM slippage",
-    detail: "Your reserved tokens sit physically segregated in the vault until you exercise or expire.",
+    detail: "Your reserved tokens sit physically segregated in the vault until exercise or expiry.",
   },
   {
     label: "Composable bearer rights",
-    detail: "Split a ticket into smaller lots, execute partially, or transfer it like any standard ERC-721.",
+    detail: "Split a ticket into smaller lots, fill partially, or transfer it like any ERC-721.",
   },
 ] as const;
 
 const LP_POINTS = [
   {
-    label: "Upfront premiums",
-    detail: "Earn non-refundable reservation premiums immediately — even if the trader lets the ticket expire.",
+    label: "Non-refundable upfront premiums",
+    detail: "Earn reservation premiums immediately — even when a trader lets the ticket expire.",
   },
   {
-    label: "Strict inventory control",
-    detail: "Set minimum fill sizes, lock duration limits, fixed prices, or oracle min/max guardrails.",
+    label: "Strict pricing guardrails",
+    detail: "Define minimum fill sizes, lock duration bounds, fixed prices, or oracle min/max caps.",
   },
   {
-    label: "Always withdrawable",
-    detail: "Cancel uncommitted offer size and withdraw free inventory at any time without lockups.",
+    label: "Uncommitted funds stay free",
+    detail: "Cancel open offer balance and withdraw free inventory at any time with zero lockups.",
   },
 ] as const;
 
@@ -125,14 +108,38 @@ const CORE_CONTRACTS = [
   },
 ] as const;
 
+const FAQS = [
+  {
+    q: "What happens if I don't exercise my Execution Ticket before expiry?",
+    a: "The ticket expires cleanly and any keeper or LP can reclaim the reserved tokens back to the LP's offer or free balance. The upfront reservation premium is non-refundable — that's what compensates the LP for holding inventory exclusively for you.",
+  },
+  {
+    q: "How is Tranche different from swapping on an AMM?",
+    a: "On an AMM, you pay curve price impact and risk MEV at the moment you broadcast. On Tranche, you reserve physical ERC-20 inventory upfront at a known fixed or oracle-bounded price, then exercise partially or in full whenever you're ready.",
+  },
+  {
+    q: "Can an LP withdraw my reserved tokens before my ticket expires?",
+    a: "No. Once reserved, inventory moves out of the LP's Offer Available bucket into Ticket Reserved. LiquidityVault enforces INV-1 on every state transition so reserved tokens remain exclusively locked to the ERC-721 ticket holder until exercise or expiry.",
+  },
+  {
+    q: "How will the switch from HashKey Testnet to Mainnet work?",
+    a: "The entire app reads contract addresses, RPC URLs, and explorer endpoints from a single network manifest. Moving from Chain 133 Testnet to Chain 177 Mainnet is a one-file manifest swap with zero UI changes.",
+  },
+] as const;
+
 function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-export function LandingPage() {
+interface LandingPageProps {
+  onNavigate: (path: "/" | "/docs" | "/privacy" | "/terms") => void;
+}
+
+export function LandingPage({ onNavigate }: LandingPageProps) {
   const telemetry = useProtocolTelemetry();
   const [launchOpen, setLaunchOpen] = useState(false);
   const [activeBucket, setActiveBucket] = useState<string>("reserved");
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrollState, setScrollState] = useState({
     compact: false,
     showCta: false,
@@ -149,7 +156,7 @@ export function LandingPage() {
 
       setScrollState({
         compact: y > 36,
-        showCta: y > 360,
+        showCta: y > 420,
         nearFooter: distFromBottom < 220 && y > 600,
       });
     };
@@ -171,17 +178,7 @@ export function LandingPage() {
 
   return (
     <div className="relative min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
-      {/* Subtle monochrome top radial luminance (pure optical depth, no neon) */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 h-[560px] opacity-60 dark:opacity-100"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 50% 0%, rgba(248, 247, 238, 0.065) 0%, rgba(248, 247, 238, 0) 100%)",
-        }}
-      />
-
-      {/* GPU-composited Titan-inspired scroll header → Apple Liquid Glass pill (zero layout reflow) */}
+      {/* GPU-composited Titan-inspired scroll header → Apple Liquid Glass pill */}
       <header
         className={cn(
           "fixed inset-x-0 top-5 z-40 px-4 will-change-transform transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
@@ -189,26 +186,23 @@ export function LandingPage() {
             ? "-translate-y-24 opacity-0 pointer-events-none"
             : scrollState.compact
               ? "translate-y-0 opacity-100"
-              : "translate-y-3 opacity-100",
+              : "translate-y-2 opacity-100",
         )}
       >
         <div className="relative mx-auto max-w-[1080px]">
-          {/* Floating Liquid Glass Pill Backdrop (pure opacity + scaleX, zero reflow) */}
           <div
             aria-hidden="true"
             className={cn(
-              "glass-pill pointer-events-none absolute inset-y-0 left-1/2 w-full max-w-[780px] -translate-x-1/2 rounded-full will-change-[transform,opacity] transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-              scrollState.compact ? "scale-x-100 opacity-100" : "scale-x-[1.18] opacity-0",
+              "glass-pill pointer-events-none absolute inset-y-0 left-1/2 w-full max-w-[960px] -translate-x-1/2 rounded-full will-change-[transform,opacity] transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+              scrollState.compact ? "scale-x-100 opacity-100" : "scale-x-[1.12] opacity-0",
             )}
           />
 
           <nav
             aria-label="Primary"
-            className={cn(
-              "relative mx-auto grid h-14 max-w-[780px] grid-cols-[1fr_auto_1fr] items-center px-4 will-change-transform transition-transform duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-            )}
+            className="relative mx-auto grid h-14 max-w-[960px] grid-cols-[1fr_auto_1fr] items-center px-5"
           >
-            {/* Brand mark — GPU scale from hero size down to compact pill size */}
+            {/* Left: Brand mark */}
             <div className="flex items-center justify-start">
               <a
                 href="#"
@@ -217,26 +211,26 @@ export function LandingPage() {
                   "inline-flex origin-left items-center rounded-full py-1 will-change-transform transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   scrollState.compact
                     ? "translate-x-0 scale-100"
-                    : "sm:-translate-x-24 scale-[1.55] sm:scale-[1.75]",
+                    : "lg:-translate-x-12 scale-[1.3] sm:scale-[1.4]",
                 )}
               >
                 <TrancheLogo />
               </a>
             </div>
 
-            {/* Quiet centered nav links */}
-            <div className="hidden items-center justify-center gap-1 sm:flex">
-              <a
-                href="#sides"
-                className="rounded-full px-3.5 py-2 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground"
-              >
-                Overview
-              </a>
+            {/* Center: Section links */}
+            <div className="hidden items-center justify-center gap-1 md:flex">
               <a
                 href="#mechanism"
                 className="rounded-full px-3.5 py-2 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground"
               >
                 Mechanism
+              </a>
+              <a
+                href="#sides"
+                className="rounded-full px-3.5 py-2 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground"
+              >
+                Overview
               </a>
               <a
                 href="#vault"
@@ -252,21 +246,43 @@ export function LandingPage() {
               </a>
             </div>
 
-            {/* Right CTA slot — fixed layout space, GPU opacity + translateY reveal past hero */}
-            <div className="flex items-center justify-end">
+            {/* Right: Docs & Privacy (always balanced) + Launch App pill on scroll */}
+            <div className="flex items-center justify-end gap-1.5">
               <div
                 className={cn(
-                  "will-change-[transform,opacity] transition-[transform,opacity] duration-400 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                  "flex items-center gap-1 will-change-transform transition-transform duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                  scrollState.compact ? "translate-x-0" : "lg:translate-x-12",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onNavigate("/docs")}
+                  className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground cursor-pointer"
+                >
+                  Docs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("/privacy")}
+                  className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground cursor-pointer"
+                >
+                  Privacy
+                </button>
+              </div>
+
+              <div
+                className={cn(
+                  "overflow-hidden will-change-[transform,opacity] transition-[max-width,transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   scrollState.showCta
-                    ? "translate-y-0 scale-100 opacity-100"
-                    : "-translate-y-2 scale-95 opacity-0 pointer-events-none",
+                    ? "ml-1 max-w-[160px] translate-y-0 opacity-100"
+                    : "ml-0 max-w-0 -translate-y-1 opacity-0 pointer-events-none",
                 )}
               >
                 <Button
                   type="button"
                   onClick={() => setLaunchOpen(true)}
                   tabIndex={scrollState.showCta ? 0 : -1}
-                  className="h-10 whitespace-nowrap rounded-full px-5 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+                  className="h-9 whitespace-nowrap rounded-full px-4 text-xs font-medium active:scale-[0.985] transition-transform cursor-pointer"
                 >
                   Launch App
                   <ArrowUpRight data-icon="inline-end" />
@@ -277,57 +293,59 @@ export function LandingPage() {
         </div>
       </header>
 
-      <main className="relative mx-auto flex max-w-[1080px] flex-col px-6 pt-44 pb-28 sm:pt-52">
-        {/* 1. Hero Section */}
-        <section className="grid grid-cols-1 items-center gap-16 lg:grid-cols-12 lg:gap-12">
-          <div className="flex flex-col items-start gap-7 lg:col-span-7">
-            <h1 className="font-display text-[3rem] font-bold leading-[0.98] tracking-[-0.04em] text-foreground sm:text-[4.25rem]">
-              <span className="block overflow-hidden pb-1">
-                <span className="block animate-mask-up">Reserve liquidity.</span>
-              </span>
-              <span className="block overflow-hidden pb-1">
-                <span className="block animate-mask-up-delay text-muted-foreground">
-                  Execute on your terms.
-                </span>
-              </span>
-            </h1>
+      {/* 1. Full-Bleed 100vh Poster Hero (Jeton asymmetric anchoring + Ethena centered centerpiece) */}
+      <section className="relative flex min-h-[100svh] flex-col justify-between gap-12 overflow-hidden px-6 pt-32 pb-16 sm:pt-36 sm:pb-20">
+        {/* Subtle monochrome studio rim glow behind centerpiece */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[75vh]"
+          style={{
+            background:
+              "radial-gradient(48% 42% at 50% 34%, rgba(248, 247, 238, 0.09) 0%, rgba(248, 247, 238, 0) 100%)",
+          }}
+        />
 
-            <p className="animate-rise-delay-1 max-w-[500px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Lock on-chain token inventory at a fixed or bounded price via an ERC-721 execution
-              ticket. Exercise when you are ready — zero AMM slippage, segregated vault accounting.
+        {/* Upper-center sculptural focal artifact */}
+        <div className="relative z-10 mx-auto my-auto flex w-full max-w-[1080px] items-center justify-center py-10 sm:py-14">
+          <div className="animate-rise w-full max-w-[420px]">
+            <TicketSpecimen stage={0} mode="FIXED" />
+          </div>
+        </div>
+
+        {/* Bottom-anchored asymmetric poster typography + single crisp CTA */}
+        <div className="relative z-10 mx-auto grid w-full max-w-[1080px] grid-cols-1 items-end gap-10 lg:grid-cols-12">
+          <h1 className="font-display text-[2.85rem] font-bold leading-[0.98] tracking-[-0.045em] text-foreground sm:text-[4.4rem] lg:col-span-7">
+            <span className="block overflow-hidden pb-1">
+              <span className="block animate-mask-up">Reserve liquidity.</span>
+            </span>
+            <span className="block overflow-hidden pb-1">
+              <span className="block animate-mask-up-delay text-muted-foreground">
+                Execute on your terms.
+              </span>
+            </span>
+          </h1>
+
+          <div className="animate-rise-delay-2 flex flex-col items-start gap-6 lg:col-span-5 lg:items-end lg:text-right">
+            <p className="max-w-[360px] text-base leading-relaxed text-muted-foreground">
+              Lock on-chain token inventory at a fixed or bounded price via an ERC-721 ticket.
+              Zero AMM slippage.
             </p>
-
-            <div className="animate-rise-delay-2 flex flex-wrap items-center gap-3 pt-2">
-              <Button
-                type="button"
-                size="lg"
-                onClick={() => setLaunchOpen(true)}
-                className="h-12 rounded-full px-7 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-              >
-                Launch App
-                <ArrowUpRight data-icon="inline-end" />
-              </Button>
-
-              <a
-                href={explorerAddressUrl(ACTIVE_NETWORK.contracts.liquidityVault)}
-                target="_blank"
-                rel="noreferrer"
-                className="glass-pill glass-pill-interactive inline-flex h-12 items-center gap-2 rounded-full px-6 text-sm font-medium text-foreground"
-              >
-                Read Contracts
-                <ArrowUpRight className="size-4 text-muted-foreground" />
-              </a>
-            </div>
+            <Button
+              type="button"
+              size="lg"
+              onClick={() => setLaunchOpen(true)}
+              className="h-12 rounded-full px-8 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+            >
+              Launch App
+              <ArrowUpRight data-icon="inline-end" />
+            </Button>
           </div>
+        </div>
+      </section>
 
-          {/* Interactive Serrated ExecutionTicket Specimen */}
-          <div className="animate-rise-delay-2 lg:col-span-5">
-            <TicketSpecimen />
-          </div>
-        </section>
-
-        {/* 2. Live On-Chain Telemetry Strip */}
-        <section id="protocol" className="mt-32 scroll-mt-32">
+      {/* 2. Live On-Chain Telemetry Strip */}
+      <section id="protocol" className="mx-auto max-w-[1080px] px-6 py-28 sm:py-36">
+        <Reveal>
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] border border-border bg-border sm:grid-cols-4">
             <div className="flex flex-col gap-1.5 bg-card p-6 sm:p-7">
               <span className="text-xs text-muted-foreground">Active Network</span>
@@ -369,115 +387,99 @@ export function LandingPage() {
               <span className="text-xs text-muted-foreground">3-of-5 Gov · Zero EOA</span>
             </div>
           </div>
-        </section>
+        </Reveal>
+      </section>
 
-        {/* 3. Two Sides of the Market — Traders & Liquidity Providers */}
-        <section id="sides" className="mt-36 scroll-mt-32">
-          <Reveal className="flex flex-col gap-3">
-            <span className="tabular-nums-mono text-xs uppercase tracking-[0.12em] text-muted-foreground">
+      {/* 3. Scroll-Scrubbed Sticky Lifecycle Stage (Jeton Pill Stepper × Ethena Pinned Stage) */}
+      <StickyLifecycleStage />
+
+      {/* 4. Full-Bleed Archival Cream Polarity Cut (Ethena / Jeton Chapter Contrast) */}
+      <section
+        id="sides"
+        className="mt-32 scroll-mt-20 bg-[#f8f7ee] text-[#050505] py-36 sm:py-48"
+      >
+        <div className="mx-auto max-w-[1080px] px-6">
+          <Reveal className="flex flex-col gap-4">
+            <span className="tabular-nums-mono text-xs uppercase tracking-[0.14em] text-[#050505]/55">
               Two-Sided Execution
             </span>
-            <h2 className="font-display text-3xl font-bold tracking-[-0.035em] sm:text-5xl">
-              Built for size on both sides.
+            <h2 className="font-display max-w-2xl text-4xl font-semibold leading-[1.0] tracking-[-0.04em] sm:text-6xl">
+              Built for size
+              <br />
+              <span className="text-[#050505]/45">on both sides.</span>
             </h2>
           </Reveal>
 
-          <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Traders Card */}
-            <Reveal delayMs={40}>
-              <div className="flex h-full flex-col justify-between gap-8 rounded-[24px] border border-border bg-card p-8 transition-colors duration-300 hover:border-foreground/20 sm:p-10">
-                <div className="flex flex-col gap-3">
-                  <span className="tabular-nums-mono text-xs uppercase tracking-[0.1em] text-muted-foreground">
-                    For Traders
-                  </span>
-                  <h3 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
-                    Lock inventory before you move size.
-                  </h3>
-                </div>
+          <div className="mt-16 grid grid-cols-1 gap-12 border-t border-[#050505]/15 pt-14 lg:grid-cols-2 lg:gap-16">
+            {/* For Traders */}
+            <Reveal delayMs={40} className="flex flex-col gap-8">
+              <div className="flex flex-col gap-2">
+                <span className="tabular-nums-mono text-xs uppercase tracking-[0.12em] text-[#050505]/55">
+                  For Traders
+                </span>
+                <h3 className="font-display text-2xl font-bold tracking-[-0.03em] sm:text-3xl">
+                  Lock inventory before you move.
+                </h3>
+              </div>
 
-                <div className="flex flex-col gap-6">
-                  {TRADER_POINTS.map((point, idx) => (
-                    <div key={point.label} className="flex flex-col gap-5">
-                      {idx > 0 && <Separator />}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">{point.label}</span>
-                        <p className="text-sm leading-relaxed text-muted-foreground">
-                          {point.detail}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="flex flex-col">
+                {TRADER_POINTS.map((point, idx) => (
+                  <div
+                    key={point.label}
+                    className={cn(
+                      "flex flex-col gap-1.5 py-5",
+                      idx > 0 && "border-t border-[#050505]/12",
+                    )}
+                  >
+                    <span className="text-base font-semibold text-[#050505]">{point.label}</span>
+                    <p className="text-sm leading-relaxed text-[#050505]/65">{point.detail}</p>
+                  </div>
+                ))}
               </div>
             </Reveal>
 
-            {/* LPs Card */}
-            <Reveal delayMs={120}>
-              <div className="flex h-full flex-col justify-between gap-8 rounded-[24px] border border-border bg-card p-8 transition-colors duration-300 hover:border-foreground/20 sm:p-10">
-                <div className="flex flex-col gap-3">
-                  <span className="tabular-nums-mono text-xs uppercase tracking-[0.1em] text-muted-foreground">
-                    For Liquidity Providers
-                  </span>
-                  <h3 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
-                    Get paid upfront to stand ready.
-                  </h3>
-                </div>
+            {/* For LPs */}
+            <Reveal delayMs={120} className="flex flex-col gap-8">
+              <div className="flex flex-col gap-2">
+                <span className="tabular-nums-mono text-xs uppercase tracking-[0.12em] text-[#050505]/55">
+                  For Liquidity Providers
+                </span>
+                <h3 className="font-display text-2xl font-bold tracking-[-0.03em] sm:text-3xl">
+                  Get paid upfront to stand ready.
+                </h3>
+              </div>
 
-                <div className="flex flex-col gap-6">
-                  {LP_POINTS.map((point, idx) => (
-                    <div key={point.label} className="flex flex-col gap-5">
-                      {idx > 0 && <Separator />}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">{point.label}</span>
-                        <p className="text-sm leading-relaxed text-muted-foreground">
-                          {point.detail}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="flex flex-col">
+                {LP_POINTS.map((point, idx) => (
+                  <div
+                    key={point.label}
+                    className={cn(
+                      "flex flex-col gap-1.5 py-5",
+                      idx > 0 && "border-t border-[#050505]/12",
+                    )}
+                  >
+                    <span className="text-base font-semibold text-[#050505]">{point.label}</span>
+                    <p className="text-sm leading-relaxed text-[#050505]/65">{point.detail}</p>
+                  </div>
+                ))}
               </div>
             </Reveal>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* 4. Mechanism — 3-Step Editorial Ledger */}
-        <section id="mechanism" className="mt-36 scroll-mt-32">
-          <Reveal className="flex flex-col gap-3">
-            <span className="tabular-nums-mono text-xs uppercase tracking-[0.12em] text-muted-foreground">
-              How it works
-            </span>
-            <h2 className="font-display text-3xl font-bold tracking-[-0.035em] sm:text-5xl">
-              Three steps. One bearer ticket.
-            </h2>
-          </Reveal>
-
-          <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
-            {STEPS.map((step, i) => (
-              <Reveal key={step.index} delayMs={i * 70}>
-                <div className="flex h-full flex-col gap-4 rounded-[22px] border border-border bg-card p-8 transition-colors duration-300 hover:border-foreground/20">
-                  <span className="tabular-nums-mono text-xs font-medium text-muted-foreground">
-                    {step.index}
-                  </span>
-                  <h3 className="font-display text-xl font-semibold text-foreground">
-                    {step.title}
-                  </h3>
-                  <p className="text-sm leading-relaxed text-muted-foreground">{step.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
+      {/* Back to Pure Obsidian */}
+      <main className="mx-auto flex max-w-[1080px] flex-col px-6 pt-44 pb-36 sm:pt-56 sm:pb-44">
         {/* 5. Segregated Vault Architecture (Interactive INV-1 Highlighter) */}
-        <section id="vault" className="mt-36 scroll-mt-32">
+        <section id="vault" className="scroll-mt-32">
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:items-start">
             <Reveal className="flex flex-col gap-5 lg:col-span-5 lg:sticky lg:top-32">
               <span className="tabular-nums-mono text-xs uppercase tracking-[0.12em] text-muted-foreground">
                 Segregated Accounting
               </span>
-              <h2 className="font-display text-3xl font-bold tracking-[-0.035em] sm:text-4xl">
-                Every token has one bucket. Never commingled.
+              <h2 className="font-display text-3xl font-semibold leading-[1.04] tracking-[-0.035em] sm:text-4xl">
+                Every token has one bucket.{" "}
+                <span className="text-muted-foreground">Never commingled.</span>
               </h2>
               <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
                 LiquidityVault tracks every wei across five isolated accounting states. Hover any
@@ -488,7 +490,7 @@ export function LandingPage() {
                   Invariant INV-1
                 </span>
                 <p className="tabular-nums-mono mt-2.5 flex flex-wrap items-center gap-1.5 text-xs leading-relaxed text-muted-foreground">
-                  <span className="text-foreground font-medium">balanceOf(token) ≥</span>
+                  <span className="font-medium text-foreground">balanceOf(token) ≥</span>
                   {VAULT_BUCKETS.map((b, idx) => (
                     <span key={b.term} className="inline-flex items-center gap-1.5">
                       {idx > 0 && <span>+</span>}
@@ -528,7 +530,7 @@ export function LandingPage() {
                         <span
                           className={cn(
                             "tabular-nums-mono pt-0.5 text-xs transition-colors duration-200",
-                            isActive ? "text-foreground font-medium" : "text-muted-foreground",
+                            isActive ? "font-medium text-foreground" : "text-muted-foreground",
                           )}
                         >
                           {bucket.code}
@@ -551,14 +553,14 @@ export function LandingPage() {
         </section>
 
         {/* 6. Live Deployed Contracts */}
-        <section id="contracts" className="mt-36 scroll-mt-32">
+        <section id="contracts" className="mt-48 scroll-mt-32 sm:mt-56">
           <Reveal>
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
               <div className="flex flex-col gap-2">
                 <span className="tabular-nums-mono text-xs uppercase tracking-[0.12em] text-muted-foreground">
                   On-Chain Deployment
                 </span>
-                <h2 className="font-display text-3xl font-bold tracking-[-0.035em] sm:text-4xl">
+                <h2 className="font-display text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
                   {`Live on ${ACTIVE_NETWORK.name}.`}
                 </h2>
               </div>
@@ -594,12 +596,62 @@ export function LandingPage() {
           </Reveal>
         </section>
 
-        {/* 7. Closing Editorial CTA */}
-        <section className="mt-36">
+        {/* 7. Questions, answered. (Ethena-style Single-Column Accordion) */}
+        <section className="mt-48 sm:mt-56">
+          <Reveal className="mx-auto max-w-3xl">
+            <h2 className="font-display text-center text-3xl font-semibold tracking-[-0.04em] sm:text-5xl">
+              Questions, <span className="text-muted-foreground">answered.</span>
+            </h2>
+
+            <div className="mt-12 flex flex-col gap-3">
+              {FAQS.map((item, idx) => {
+                const isOpen = openFaq === idx;
+                return (
+                  <div
+                    key={item.q}
+                    className="overflow-hidden rounded-[18px] border border-border bg-card transition-colors duration-200 hover:border-foreground/20"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setOpenFaq(isOpen ? null : idx)}
+                      aria-expanded={isOpen}
+                      className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left cursor-pointer"
+                    >
+                      <span className="text-sm font-medium text-foreground sm:text-base">
+                        {item.q}
+                      </span>
+                      <Plus
+                        className={cn(
+                          "size-4 shrink-0 text-muted-foreground transition-transform duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                          isOpen && "rotate-45 text-foreground",
+                        )}
+                      />
+                    </button>
+                    <div
+                      className={cn(
+                        "grid transition-[grid-template-rows,opacity] duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                        isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                      )}
+                    >
+                      <div className="overflow-hidden">
+                        <p className="px-6 pb-6 text-sm leading-relaxed text-muted-foreground">
+                          {item.a}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Reveal>
+        </section>
+
+        {/* 8. Closing Editorial CTA */}
+        <section className="mt-48 sm:mt-56">
           <Reveal>
             <div className="flex flex-col items-center gap-6 rounded-[28px] border border-border bg-card px-8 py-20 text-center sm:px-16">
               <TrancheLogo className="scale-110" />
-              <h2 className="font-display max-w-lg text-3xl font-bold tracking-[-0.04em] text-foreground sm:text-5xl">
+              <h2 className="font-display max-w-lg text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl">
                 Lock your next execution.
               </h2>
               <p className="max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
@@ -626,7 +678,6 @@ export function LandingPage() {
       <footer className="border-t border-border bg-card/40">
         <div className="mx-auto max-w-[1080px] px-6 pt-16 pb-12">
           <div className="grid grid-cols-2 gap-10 sm:grid-cols-12">
-            {/* Brand column */}
             <div className="col-span-2 flex flex-col items-start gap-4 sm:col-span-5">
               <TrancheLogo />
               <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
@@ -646,18 +697,17 @@ export function LandingPage() {
               </a>
             </div>
 
-            {/* Product column */}
             <div className="flex flex-col gap-3 sm:col-span-2">
               <span className="text-xs font-medium text-foreground">Protocol</span>
               <ul className="flex flex-col gap-2.5 text-sm text-muted-foreground">
                 <li>
-                  <a href="#sides" className="transition-colors hover:text-foreground">
-                    Overview
+                  <a href="#mechanism" className="transition-colors hover:text-foreground">
+                    Mechanism
                   </a>
                 </li>
                 <li>
-                  <a href="#mechanism" className="transition-colors hover:text-foreground">
-                    Mechanism
+                  <a href="#sides" className="transition-colors hover:text-foreground">
+                    Overview
                   </a>
                 </li>
                 <li>
@@ -673,7 +723,6 @@ export function LandingPage() {
               </ul>
             </div>
 
-            {/* Contracts column */}
             <div className="flex flex-col gap-3 sm:col-span-3">
               <span className="text-xs font-medium text-foreground">On-Chain</span>
               <ul className="flex flex-col gap-2.5 text-sm text-muted-foreground">
@@ -724,10 +773,36 @@ export function LandingPage() {
               </ul>
             </div>
 
-            {/* App & Resources column */}
             <div className="flex flex-col gap-3 sm:col-span-2">
-              <span className="text-xs font-medium text-foreground">Access</span>
+              <span className="text-xs font-medium text-foreground">Resources</span>
               <ul className="flex flex-col gap-2.5 text-sm text-muted-foreground">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("/docs")}
+                    className="transition-colors hover:text-foreground cursor-pointer"
+                  >
+                    Documentation
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("/privacy")}
+                    className="transition-colors hover:text-foreground cursor-pointer"
+                  >
+                    Privacy Policy
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("/terms")}
+                    className="transition-colors hover:text-foreground cursor-pointer"
+                  >
+                    Terms of Use
+                  </button>
+                </li>
                 <li>
                   <button
                     type="button"
@@ -745,17 +820,6 @@ export function LandingPage() {
                     className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
                   >
                     Blockscout
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={explorerAddressUrl(ACTIVE_NETWORK.contracts.govSafe)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
-                  >
-                    Gov Safe (3/5)
                     <ArrowUpRight className="size-3.5" />
                   </a>
                 </li>
