@@ -1,0 +1,28 @@
+{
+  "name": "@tranche/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Tranche — inventory-backed time-bounded execution commitments",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/sdk.integration.test.ts",
+    "example": "tsx examples/basic-lifecycle.ts"
+  },
+  "dependencies": {
+    "viem": "^2.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
