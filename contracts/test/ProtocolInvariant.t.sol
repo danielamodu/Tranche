@@ -161,7 +161,12 @@ contract ProtocolHandler is Test {
         if (t.status != TicketStatus.ACTIVE || block.timestamp > t.expiresAt) return;
 
         address owner = ticketNft.ownerOf(tid);
-        uint256 fill = bound(uint256(rawFill), 1e15, t.remainingAmount);
+        uint256 fill;
+        if (t.remainingAmount >= 200e18) {
+            fill = bound(uint256(rawFill), 100e18, t.remainingAmount - 100e18);
+        } else {
+            fill = t.remainingAmount;
+        }
 
         if (viaRouter) {
             ExecutionRouter.ExerciseLeg[] memory legs = new ExecutionRouter.ExerciseLeg[](1);
@@ -226,14 +231,18 @@ contract ProtocolInvariantTest is StdInvariant, Test {
         vm.warp(1_795_500_000);
         whsk = new MockWHSK();
         usdt = new MockERC20("Tether USD", "USDT", 6);
-        vault = new LiquidityVault(makeAddr("guardian"), makeAddr("feeCollector"));
-        manager = new CommitmentManager(address(vault), makeAddr("guardian"), 50, 100e18);
+        vault = new LiquidityVault(address(this), makeAddr("guardian"), makeAddr("feeCollector"));
+        manager = new CommitmentManager(address(this), address(vault), makeAddr("guardian"), 5);
         ticketNft = new ExecutionTicket(address(manager));
         vault.setManager(address(manager));
         manager.setTicketNft(address(ticketNft));
+        manager.setTokenMinTicketAmount(address(whsk), 100e18);
 
         router = new ExecutionRouter(address(manager), address(whsk));
+        manager.setApprovedRouter(address(router), true);
+
         oracle = new MockStaticPriceOracle(WHSK_PRICE_X36, block.timestamp, true);
+        manager.setApprovedOracle(address(oracle), true);
 
         handler = new ProtocolHandler(vault, manager, ticketNft, router, whsk, usdt, oracle);
         targetContract(address(handler));
