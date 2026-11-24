@@ -1,4 +1,4 @@
-import testnetManifest from "../../../deployments/hashkey-testnet.json";
+import testnetManifest from "./hashkey-testnet.json";
 
 export type NetworkKey = "testnet" | "mainnet";
 
