@@ -31,6 +31,7 @@ import { useWallet } from "@/context/WalletContext";
 import {
   COMMITMENT_MANAGER_ABI,
   createTrancheWalletClient,
+  decodeQuoteReservationResult,
   fetchAllOffers,
   fetchRecentActivity,
   tranchePublicClient,
@@ -204,11 +205,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
       })
       .then((res) => {
         if (!cancelled) {
-          setQuote({
-            grossPremium: res[0],
-            protocolFee: res[1],
-            lpNetPremium: res[2],
-          });
+          setQuote(decodeQuoteReservationResult(res));
         }
       })
       .catch(() => {
