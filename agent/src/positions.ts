@@ -1,8 +1,19 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import type { Address, Hex } from "viem";
 import { PRICE_SCALE, ceilDiv } from "./hskswap.js";
-import type { RiskPortfolioState } from "./risk.js";
+import type { RiskLimits, RiskPortfolioState } from "./risk.js";
+import type { StrategyConfig } from "./strategy.js";
 
 export interface PendingTxRecord {
   id: string;
@@ -10,7 +21,27 @@ export interface PendingTxRecord {
   action: "RESERVE_TRANCHE" | "SWAP_HSKSWAP" | "EXERCISE_TICKET" | "EXIT_POSITION";
   createdAt: number;
   status: "IN_FLIGHT" | "UNCERTAIN_TIMEOUT";
+  chainId?: number;
+  signer?: Address;
+  nonce?: number;
+  txHash?: Hex;
   note?: string;
+}
+
+export interface PersistedPolicyVersion {
+  version: number;
+  timestamp: number;
+  source: "initial" | "api" | "llm" | "rollback";
+  instruction?: string;
+  strategy: StrategyConfig;
+  riskLimits: RiskLimits;
+}
+
+export interface PersistedRuntimeSnapshot {
+  strategy: StrategyConfig;
+  riskLimits: RiskLimits;
+  policyVersion: number;
+  policyHistory: PersistedPolicyVersion[];
 }
 
 export interface TrackedPosition {
@@ -32,6 +63,8 @@ export interface TrackedPosition {
   sourceTicketId?: bigint;
   entryTxHashes: Hex[];
   exitTxHashes: Hex[];
+  estimatedEntryCostPayment?: bigint;
+  actualGasUsed?: bigint;
 }
 
 export interface TrackedTicket {
@@ -64,6 +97,7 @@ export interface PersistedAgentState {
   pendingTxs: PendingTxRecord[];
   daily: DailyAccounting;
   executedDecisionKeys: string[];
+  runtimeConfig?: PersistedRuntimeSnapshot;
   lastUpdatedAt: number;
 }
 
@@ -97,12 +131,16 @@ export class PositionStore {
   private pendingTxs: PendingTxRecord[] = [];
   private daily: DailyAccounting;
   private executedKeys = new Set<string>();
+  private runtimeConfig?: PersistedRuntimeSnapshot;
   private stateCorrupted = false;
   private corruptionError: string | null = null;
+  private lockHeld = false;
   private readonly filePath?: string;
+  private readonly lockPath?: string;
 
   constructor(filePath?: string, nowSec: number = Math.floor(Date.now() / 1000)) {
     this.filePath = filePath;
+    this.lockPath = filePath ? `${filePath}.lock` : undefined;
     this.daily = {
       dateUtc: utcDateKey(nowSec),
       premiumSpentPayment: 0n,
@@ -112,6 +150,86 @@ export class PositionStore {
     if (filePath && existsSync(filePath)) {
       this.load();
     }
+  }
+
+  /**
+   * Acquires an exclusive process lockfile preventing multiple runtime instances
+   * from controlling the same persisted agent state simultaneously.
+   */
+  acquireLock(): void {
+    if (!this.lockPath || this.lockHeld) return;
+    const dir = path.dirname(this.lockPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    try {
+      const fd = openSync(this.lockPath, "wx");
+      writeFileSync(fd, JSON.stringify({ pid: process.pid, acquiredAt: Date.now() }));
+      closeSync(fd);
+      this.lockHeld = true;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "EEXIST") {
+        throw new Error(
+          `STATE_LOCKED: Another runtime instance already holds lock ${this.lockPath}`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  releaseLock(): void {
+    if (!this.lockPath || !this.lockHeld) return;
+    try {
+      if (existsSync(this.lockPath)) unlinkSync(this.lockPath);
+    } finally {
+      this.lockHeld = false;
+    }
+  }
+
+  getPersistedRuntimeConfig(): PersistedRuntimeSnapshot | undefined {
+    return this.runtimeConfig;
+  }
+
+  saveRuntimeConfig(
+    strategy: StrategyConfig,
+    riskLimits: RiskLimits,
+    meta?: { source?: PersistedPolicyVersion["source"]; instruction?: string },
+  ): PersistedPolicyVersion {
+    const prevVersion = this.runtimeConfig?.policyVersion ?? 0;
+    const nextVersion = prevVersion + 1;
+    const entry: PersistedPolicyVersion = {
+      version: nextVersion,
+      timestamp: Math.floor(Date.now() / 1000),
+      source: meta?.source ?? "api",
+      instruction: meta?.instruction,
+      strategy: { ...strategy },
+      riskLimits: { ...riskLimits },
+    };
+    const history = [...(this.runtimeConfig?.policyHistory ?? []), entry].slice(-25);
+    this.runtimeConfig = {
+      strategy: { ...strategy },
+      riskLimits: { ...riskLimits },
+      policyVersion: nextVersion,
+      policyHistory: history,
+    };
+    this.save();
+    return entry;
+  }
+
+  rollbackPolicy(targetVersion: number): PersistedPolicyVersion | null {
+    if (!this.runtimeConfig) return null;
+    const target = this.runtimeConfig.policyHistory.find((p) => p.version === targetVersion);
+    if (!target) return null;
+    // Never allow rollback to clear an active kill switch
+    const currentKillSwitch = this.runtimeConfig.riskLimits.killSwitch;
+    const restoredLimits: RiskLimits = {
+      ...target.riskLimits,
+      killSwitch: currentKillSwitch || target.riskLimits.killSwitch,
+      paused: currentKillSwitch ? true : target.riskLimits.paused,
+    };
+    return this.saveRuntimeConfig(target.strategy, restoredLimits, {
+      source: "rollback",
+      instruction: `Rollback to policy v${targetVersion}`,
+    });
   }
 
   isStateCorrupted(): boolean {
@@ -368,6 +486,7 @@ export class PositionStore {
       pendingTxs: this.pendingTxs,
       daily: this.daily,
       executedDecisionKeys: Array.from(this.executedKeys),
+      runtimeConfig: this.runtimeConfig,
       lastUpdatedAt: Math.floor(Date.now() / 1000),
     };
     const tmpPath = `${this.filePath}.tmp`;
@@ -396,6 +515,7 @@ export class PositionStore {
       this.pendingTxs = Array.isArray(parsed.pendingTxs) ? parsed.pendingTxs : [];
       this.daily = parsed.daily ?? this.daily;
       this.executedKeys = new Set(parsed.executedDecisionKeys ?? []);
+      this.runtimeConfig = parsed.runtimeConfig;
       this.stateCorrupted = false;
       this.corruptionError = null;
     } catch (err) {
