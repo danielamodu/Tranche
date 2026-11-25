@@ -532,6 +532,7 @@ test("10 & 11. Duplicate execution prevention, state persistence across restart,
       agent: h2.agent,
       pollIntervalMs: 60_000,
       maxConsecutiveErrors: 3,
+      transientRpcRetries: 0,
       onError: () => {
         errorsCaught += 1;
       },
