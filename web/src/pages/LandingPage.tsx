@@ -137,12 +137,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   function handleLaunchApp() {
-    // Returning users go straight into their saved workspace
+    if (!isConnected || isWrongNetwork) {
+      onNavigate("/connect");
+      return;
+    }
     if (selectedRole) {
       onNavigate(selectedRole === "agent" ? "/agent" : selectedRole === "lp" ? "/vault" : "/trade");
       return;
     }
-    onNavigate(isConnected && !isWrongNetwork ? "/start" : "/connect");
+    onNavigate("/start");
   }
   const [scrollState, setScrollState] = useState({
     compact: false,
@@ -334,26 +337,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               The autonomous trading agent on HashKey Chain that compares HSKSwap V3 pools against
               on-chain reserved inventory — routing every trade to the better venue, or walking away.
             </p>
-            <div className="flex flex-wrap items-center gap-2.5 lg:justify-end">
-              <Button
-                type="button"
-                size="lg"
-                onClick={() => onNavigate("/agent")}
-                className="h-12 rounded-full px-7 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-              >
-                Open Agent Console
-                <ArrowUpRight data-icon="inline-end" />
-              </Button>
-              <Button
-                type="button"
-                size="lg"
-                variant="outline"
-                onClick={handleLaunchApp}
-                className="h-12 rounded-full px-6 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-              >
-                Protocol Desk
-              </Button>
-            </div>
+            <Button
+              type="button"
+              size="lg"
+              onClick={handleLaunchApp}
+              className="h-12 rounded-full px-7 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+            >
+              Launch App
+              <ArrowUpRight data-icon="inline-end" />
+            </Button>
           </div>
         </div>
       </section>
@@ -711,24 +703,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 Launch Tranche Agent to inspect dual-venue routing and risk controls, or open the
                 Protocol Desk to reserve tickets and supply inventory on HashKey Chain.
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <div className="pt-2">
                 <Button
                   type="button"
                   size="lg"
-                  onClick={() => onNavigate("/agent")}
+                  onClick={handleLaunchApp}
                   className="h-12 rounded-full px-8 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
                 >
-                  Open Agent Console
+                  Launch App
                   <ArrowUpRight data-icon="inline-end" />
-                </Button>
-                <Button
-                  type="button"
-                  size="lg"
-                  variant="outline"
-                  onClick={handleLaunchApp}
-                  className="h-12 rounded-full px-6 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-                >
-                  Protocol Desk
                 </Button>
               </div>
             </div>
@@ -854,19 +837,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <li>
                   <button
                     type="button"
-                    onClick={() => onNavigate("/agent")}
-                    className="transition-colors hover:text-foreground cursor-pointer"
-                  >
-                    Agent Console
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
                     onClick={handleLaunchApp}
                     className="transition-colors hover:text-foreground cursor-pointer"
                   >
-                    Protocol Desk
+                    Launch App
                   </button>
                 </li>
                 <li>
