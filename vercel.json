@@ -1,0 +1,11 @@
+{
+  "installCommand": "cd web && npm install --include=dev",
+  "buildCommand": "cd web && npm run build",
+  "outputDirectory": "web/dist",
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
