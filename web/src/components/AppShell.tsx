@@ -104,7 +104,7 @@ export function AppShell({
   }
 
   useEffect(() => {
-    if (!address) {
+    if (!address || !ACTIVE_NETWORK.isLive) {
       setTicketCount(0);
       return;
     }
@@ -203,12 +203,16 @@ export function AppShell({
             Explorer
           </span>
           <a
-            href={explorerAddressUrl(ACTIVE_NETWORK.contracts.liquidityVault)}
+            href={
+              ACTIVE_NETWORK.isLive
+                ? explorerAddressUrl(ACTIVE_NETWORK.contracts.liquidityVault)
+                : ACTIVE_NETWORK.explorerUrl
+            }
             target="_blank"
             rel="noreferrer"
             className="flex h-9 w-full items-center justify-between rounded-[10px] px-3 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
           >
-            <span>Blockscout Vault</span>
+            <span>{ACTIVE_NETWORK.isLive ? "Blockscout Vault" : "Blockscout Explorer"}</span>
             <ArrowUpRight className="size-3.5" />
           </a>
 
@@ -349,6 +353,16 @@ export function AppShell({
             )}
           </div>
         </header>
+
+        {/* Mainnet Deployment Pending Banner (when VITE_NETWORK=mainnet and contracts are not deployed) */}
+        {!ACTIVE_NETWORK.isLive && activeRoute !== "/agent" && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-6 py-3 text-xs text-amber-200">
+            <span>
+              {ACTIVE_NETWORK.name} (Chain {ACTIVE_NETWORK.chainId}) protocol contracts are not yet
+              deployed. On-chain reads and transactions are disabled to prevent zero-address calls.
+            </span>
+          </div>
+        )}
 
         {/* Wrong Network Banner */}
         {isWrongNetwork && (
