@@ -89,12 +89,26 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
   const [slipInput, setSlipInput] = useState("100");
   const [formSynced, setFormSynced] = useState(false);
 
+  // Bounded NL Policy Proposal state
+  const [nlInstruction, setNlInstruction] = useState("");
+  const [nlProposal, setNlProposal] = useState<{
+    instruction: string;
+    proposedPatch: Record<string, unknown>;
+    valid: boolean;
+    rejectedFields: string[];
+  } | null>(null);
+  const [policyVersion, setPolicyVersion] = useState<number>(1);
+
   const loadSnapshot = useCallback(
     async (isManual = false) => {
       if (isManual) setRefreshing(true);
       try {
-        const data = await client.fetchSnapshot();
+        const [data, hist] = await Promise.all([
+          client.fetchSnapshot(),
+          client.getPolicyHistory().catch(() => ({ currentVersion: 1, history: [] })),
+        ]);
         setSnapshot(data);
+        setPolicyVersion(hist.currentVersion || 1);
         setDisconnected(false);
         setConnError(null);
         if (!formSynced) {
@@ -643,6 +657,103 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               >
                 Apply Validated Policy
               </Button>
+            </div>
+
+            <Separator />
+
+            {/* Bounded NL Policy Translator (Propose -> Apply -> Rollback) */}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-medium text-foreground">
+                  Natural-Language Policy Translator (v{policyVersion})
+                </span>
+                {policyVersion > 1 && (
+                  <button
+                    type="button"
+                    disabled={disconnected || actionBusy}
+                    onClick={() =>
+                      void runControl(`Rollback to v${policyVersion - 1}`, () =>
+                        client.rollbackPolicy(policyVersion - 1),
+                      )
+                    }
+                    className="text-muted-foreground underline underline-offset-4 hover:text-foreground cursor-pointer"
+                  >
+                    Rollback to v{policyVersion - 1}
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder='e.g. "momentum, take profit 4%, stop loss 2%, avoid elevated volatility"'
+                  value={nlInstruction}
+                  onChange={(e) => setNlInstruction(e.target.value)}
+                  className="h-9 rounded-[10px] bg-background text-xs"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={disconnected || actionBusy || !nlInstruction.trim()}
+                  onClick={async () => {
+                    setActionBusy(true);
+                    setActionFeedback(null);
+                    try {
+                      const prop = await client.proposePolicy(nlInstruction.trim());
+                      setNlProposal({
+                        instruction: prop.instruction,
+                        proposedPatch: prop.proposedPatch,
+                        valid: prop.validation.valid,
+                        rejectedFields: prop.validation.rejectedFields,
+                      });
+                    } catch (err) {
+                      setActionFeedback({
+                        kind: "err",
+                        text: err instanceof Error ? err.message : "Proposal failed",
+                      });
+                    } finally {
+                      setActionBusy(false);
+                    }
+                  }}
+                  className="h-9 shrink-0 rounded-full px-3.5 text-xs cursor-pointer"
+                >
+                  Propose
+                </Button>
+              </div>
+              {nlProposal && (
+                <div className="flex flex-col gap-2 rounded-[12px] border border-border bg-background p-3 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">
+                      Proposed Patch ({nlProposal.valid ? "Valid" : "Rejected"})
+                    </span>
+                    {nlProposal.valid && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={actionBusy}
+                        onClick={async () => {
+                          await runControl("Apply NL policy", () =>
+                            client.applyPolicy(nlProposal.instruction),
+                          );
+                          setNlProposal(null);
+                          setNlInstruction("");
+                        }}
+                        className="h-7 rounded-full px-3 text-[11px] cursor-pointer"
+                      >
+                        Authorize &amp; Apply
+                      </Button>
+                    )}
+                  </div>
+                  <pre className="overflow-x-auto font-mono text-[10px] text-muted-foreground">
+                    {JSON.stringify(nlProposal.proposedPatch, null, 2)}
+                  </pre>
+                  {nlProposal.rejectedFields.length > 0 && (
+                    <span className="text-destructive">
+                      Blocked by hard bounds: {nlProposal.rejectedFields.join(", ")}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {actionFeedback && (

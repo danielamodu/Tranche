@@ -131,10 +131,10 @@ export function AppShell({
     icon: typeof ArrowLeftRight;
     badge?: number;
   }[] = [
+    { path: "/agent", label: "Agent", icon: Bot },
     { path: "/trade", label: "Trade", icon: ArrowLeftRight },
     { path: "/tickets", label: "Tickets", icon: Ticket, badge: ticketCount },
     { path: "/vault", label: "Vault", icon: Vault },
-    { path: "/agent", label: "Agent", icon: Bot },
   ];
 
   const sidebarBody = (

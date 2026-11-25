@@ -25,6 +25,9 @@ export interface PendingTxItem {
 
 export interface AgentStatus {
   running: boolean;
+  rpcHealthy?: boolean;
+  lastSuccessfulCycleAt?: number | null;
+  recoveryState?: string;
   mode: AgentExecutionMode;
   dataSource: AgentDataSourceMode;
   chainId: number;
@@ -391,5 +394,44 @@ export class AgentApiClient {
       resolution: string;
       remainingPendingTxs: number;
     }>("POST", "/agent/reconcile", { pendingTxId, resolution });
+  }
+
+  proposePolicy(instruction: string) {
+    return this.request<{
+      provider: string;
+      instruction: string;
+      proposedPatch: Record<string, unknown>;
+      validation: { valid: boolean; sanitizedPatch: Record<string, unknown>; rejectedFields: string[] };
+      applied: boolean;
+    }>("POST", "/agent/policy/propose", { instruction });
+  }
+
+  applyPolicy(instruction: string) {
+    return this.request<{
+      ok: boolean;
+      policyVersion: number;
+      instruction: string;
+      appliedPatch: Record<string, unknown>;
+    }>("POST", "/agent/policy/apply", { instruction });
+  }
+
+  rollbackPolicy(version: number) {
+    return this.request<{
+      ok: boolean;
+      policyVersion: number;
+      restoredFromVersion: number;
+    }>("POST", "/agent/policy/rollback", { version });
+  }
+
+  getPolicyHistory() {
+    return this.request<{
+      currentVersion: number;
+      history: Array<{
+        version: number;
+        timestamp: number;
+        source: string;
+        instruction?: string;
+      }>;
+    }>("GET", "/agent/policy/history");
   }
 }
