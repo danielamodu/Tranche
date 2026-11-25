@@ -320,19 +320,19 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         <div className="relative z-10 mx-auto grid w-full max-w-[1080px] grid-cols-1 items-end gap-10 lg:grid-cols-12">
           <h1 className="font-display text-[2.85rem] font-bold leading-[0.98] tracking-[-0.045em] text-foreground sm:text-[4.4rem] lg:col-span-7">
             <span className="block overflow-hidden pb-1">
-              <span className="block animate-mask-up">Reserve liquidity.</span>
+              <span className="block animate-mask-up">Lock the price.</span>
             </span>
             <span className="block overflow-hidden pb-1">
               <span className="block animate-mask-up-delay text-muted-foreground">
-                Execute on your terms.
+                Buy when you&apos;re ready.
               </span>
             </span>
           </h1>
 
           <div className="animate-rise-delay-2 flex flex-col items-start gap-6 lg:col-span-5 lg:items-end lg:text-right">
-            <p className="max-w-[360px] text-base leading-relaxed text-muted-foreground">
-              Lock on-chain token inventory at a fixed or bounded price via an ERC-721 ticket.
-              Zero AMM slippage.
+            <p className="max-w-[380px] text-base leading-relaxed text-muted-foreground">
+              Pay a small hold fee to lock someone&apos;s tokens at a set price. Buy them before
+              the timer runs out — or walk away.
             </p>
             <Button
               type="button"
