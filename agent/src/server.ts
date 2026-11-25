@@ -397,6 +397,7 @@ export class AgentApiServer {
           realizedVolatilityBps: last.snapshot.realizedVolatilityBps,
           momentumReturnBps: last.snapshot.momentumReturnBps,
           dislocationVsTwapBps: last.snapshot.dislocationVsTwapBps,
+          marketRegime: last.snapshot.marketRegime,
           anomalies: last.snapshot.anomalies,
           venueComparison: last.venueSelection,
         });
