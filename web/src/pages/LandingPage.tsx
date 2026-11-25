@@ -137,9 +137,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   function handleLaunchApp() {
-    // Returning users go straight into their dashboard (reconnect in-dash if needed)
+    // Returning users go straight into their saved workspace
     if (selectedRole) {
-      onNavigate(selectedRole === "lp" ? "/vault" : "/trade");
+      onNavigate(selectedRole === "agent" ? "/agent" : selectedRole === "lp" ? "/vault" : "/trade");
       return;
     }
     onNavigate(isConnected && !isWrongNetwork ? "/start" : "/connect");
@@ -377,9 +377,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="flex flex-col gap-1.5 bg-card p-6 sm:p-7">
               <span className="text-xs text-muted-foreground">Protocol Fee</span>
               <span className="tabular-nums-mono text-lg font-semibold text-foreground">
-                {telemetry.protocolFeeBps !== null
-                  ? `${(telemetry.protocolFeeBps / 100).toFixed(2)}%`
-                  : "0.05%"}
+                {!ACTIVE_NETWORK.isLive
+                  ? "Pending"
+                  : telemetry.protocolFeeBps !== null
+                    ? `${(telemetry.protocolFeeBps / 100).toFixed(2)}%`
+                    : telemetry.loading
+                      ? "Syncing…"
+                      : "Unavailable"}
               </span>
               <span className="text-xs text-muted-foreground">Hard-capped at 1.00%</span>
             </div>
@@ -387,8 +391,18 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="flex flex-col gap-1.5 bg-card p-6 sm:p-7">
               <span className="text-xs text-muted-foreground">Vault Solvency (INV-1)</span>
               <span className="inline-flex items-center gap-1.5 text-lg font-semibold text-foreground">
-                <CheckCircle2 className="size-4 text-status-live" />
-                {telemetry.vaultSolvent === false ? "Check" : "Verified"}
+                {ACTIVE_NETWORK.isLive && telemetry.vaultSolvent === true && (
+                  <CheckCircle2 className="size-4 text-status-live" />
+                )}
+                {!ACTIVE_NETWORK.isLive
+                  ? "Pending"
+                  : telemetry.vaultSolvent === true
+                    ? "Verified"
+                    : telemetry.vaultSolvent === false
+                      ? "Check"
+                      : telemetry.loading
+                        ? "Syncing…"
+                        : "Unavailable"}
               </span>
               <span className="text-xs text-muted-foreground">balanceOf ≥ all buckets</span>
             </div>
@@ -396,8 +410,18 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="flex flex-col gap-1.5 bg-card p-6 sm:p-7">
               <span className="text-xs text-muted-foreground">Ownership</span>
               <span className="inline-flex items-center gap-1.5 text-lg font-semibold text-foreground">
-                <ShieldCheck className="size-4 text-status-live" />
-                {telemetry.timelockOwned === false ? "Pending" : "Timelock"}
+                {ACTIVE_NETWORK.isLive && telemetry.timelockOwned === true && (
+                  <ShieldCheck className="size-4 text-status-live" />
+                )}
+                {!ACTIVE_NETWORK.isLive
+                  ? "Pending"
+                  : telemetry.timelockOwned === true
+                    ? "Timelock"
+                    : telemetry.timelockOwned === false
+                      ? "Pending"
+                      : telemetry.loading
+                        ? "Syncing…"
+                        : "Unavailable"}
               </span>
               <span className="text-xs text-muted-foreground">3-of-5 Gov · Zero EOA</span>
             </div>
@@ -576,7 +600,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   On-Chain Deployment
                 </span>
                 <h2 className="font-display text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
-                  {`Live on ${ACTIVE_NETWORK.name}.`}
+                  {ACTIVE_NETWORK.isLive
+                    ? `Live on ${ACTIVE_NETWORK.name}.`
+                    : `${ACTIVE_NETWORK.name} deployment pending.`}
                 </h2>
               </div>
               <span className="glass-pill inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-xs text-muted-foreground">
@@ -588,23 +614,35 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               {CORE_CONTRACTS.map((item, idx) => (
                 <div key={item.name}>
                   {idx > 0 && <Separator />}
-                  <a
-                    href={explorerAddressUrl(item.address)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group flex flex-col justify-between gap-2 px-7 py-5 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center"
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium text-foreground">{item.name}</span>
-                      <span className="text-xs text-muted-foreground">{item.note}</span>
-                    </div>
-                    <div className="inline-flex items-center gap-2">
-                      <span className="tabular-nums-mono text-xs text-muted-foreground group-hover:text-foreground">
-                        {shortAddr(item.address)}
+                  {ACTIVE_NETWORK.isLive ? (
+                    <a
+                      href={explorerAddressUrl(item.address)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group flex flex-col justify-between gap-2 px-7 py-5 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm font-medium text-foreground">{item.name}</span>
+                        <span className="text-xs text-muted-foreground">{item.note}</span>
+                      </div>
+                      <div className="inline-flex items-center gap-2">
+                        <span className="tabular-nums-mono text-xs text-muted-foreground group-hover:text-foreground">
+                          {shortAddr(item.address)}
+                        </span>
+                        <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="flex flex-col justify-between gap-2 px-7 py-5 sm:flex-row sm:items-center">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm font-medium text-foreground">{item.name}</span>
+                        <span className="text-xs text-muted-foreground">{item.note}</span>
+                      </div>
+                      <span className="tabular-nums-mono text-xs text-muted-foreground">
+                        Pending deployment
                       </span>
-                      <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
                     </div>
-                  </a>
+                  )}
                 </div>
               ))}
             </div>
@@ -667,21 +705,30 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="flex flex-col items-center gap-6 rounded-[28px] border border-border bg-card px-8 py-20 text-center sm:px-16">
               <TrancheLogo className="scale-110" />
               <h2 className="font-display max-w-lg text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl">
-                Lock your next execution.
+                Programmable execution for autonomous trading.
               </h2>
               <p className="max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Connect a wallet on HashKey Chain to browse live offers, mint execution tickets, or
-                supply inventory to the vault.
+                Launch Tranche Agent to inspect dual-venue routing and risk controls, or open the
+                Protocol Desk to reserve tickets and supply inventory on HashKey Chain.
               </p>
-              <div className="pt-2">
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <Button
                   type="button"
                   size="lg"
-                  onClick={handleLaunchApp}
+                  onClick={() => onNavigate("/agent")}
                   className="h-12 rounded-full px-8 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
                 >
-                  Launch App
+                  Open Agent Console
                   <ArrowUpRight data-icon="inline-end" />
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  onClick={handleLaunchApp}
+                  className="h-12 rounded-full px-6 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+                >
+                  Protocol Desk
                 </Button>
               </div>
             </div>
@@ -696,8 +743,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="col-span-2 flex flex-col items-start gap-4 sm:col-span-5">
               <TrancheLogo />
               <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Segregated on-chain execution commitments and ERC-721 bearer tickets built for
-                HashKey Chain.
+                Programmable execution infrastructure for autonomous trading on HashKey Chain —
+                powering Tranche Agent and inventory-backed settlement.
               </p>
               <a
                 href={ACTIVE_NETWORK.explorerUrl}
@@ -705,9 +752,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 rel="noreferrer"
                 className="glass-pill glass-pill-interactive inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
               >
-                <span className="size-1.5 rounded-full bg-status-live" />
+                <span
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    ACTIVE_NETWORK.isLive ? "bg-status-live" : "bg-amber-400",
+                  )}
+                />
                 <span className="tabular-nums-mono">
                   {ACTIVE_NETWORK.shortName} · Chain {ACTIVE_NETWORK.chainId}
+                  {!ACTIVE_NETWORK.isLive ? " (Pending)" : ""}
                 </span>
               </a>
             </div>
@@ -741,50 +794,30 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="flex flex-col gap-3 sm:col-span-3">
               <span className="text-xs font-medium text-foreground">On-Chain</span>
               <ul className="flex flex-col gap-2.5 text-sm text-muted-foreground">
-                <li>
-                  <a
-                    href={explorerAddressUrl(ACTIVE_NETWORK.contracts.liquidityVault)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
-                  >
-                    LiquidityVault
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={explorerAddressUrl(ACTIVE_NETWORK.contracts.commitmentManager)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
-                  >
-                    CommitmentManager
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={explorerAddressUrl(ACTIVE_NETWORK.contracts.executionTicket)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
-                  >
-                    ExecutionTicket
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={explorerAddressUrl(ACTIVE_NETWORK.contracts.timelock)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
-                  >
-                    TimelockController
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </li>
+                {(
+                  [
+                    ["LiquidityVault", ACTIVE_NETWORK.contracts.liquidityVault],
+                    ["CommitmentManager", ACTIVE_NETWORK.contracts.commitmentManager],
+                    ["ExecutionTicket", ACTIVE_NETWORK.contracts.executionTicket],
+                    ["TimelockController", ACTIVE_NETWORK.contracts.timelock],
+                  ] as const
+                ).map(([label, addr]) => (
+                  <li key={label}>
+                    {ACTIVE_NETWORK.isLive ? (
+                      <a
+                        href={explorerAddressUrl(addr)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                      >
+                        {label}
+                        <ArrowUpRight className="size-3.5" />
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground/70">{label} (Pending)</span>
+                    )}
+                  </li>
+                ))}
               </ul>
             </div>
 
@@ -821,10 +854,19 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <li>
                   <button
                     type="button"
+                    onClick={() => onNavigate("/agent")}
+                    className="transition-colors hover:text-foreground cursor-pointer"
+                  >
+                    Agent Console
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
                     onClick={handleLaunchApp}
                     className="transition-colors hover:text-foreground cursor-pointer"
                   >
-                    Launch App
+                    Protocol Desk
                   </button>
                 </li>
                 <li>
