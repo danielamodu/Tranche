@@ -8,6 +8,9 @@ export interface AgentPolicyPatch {
   stopLossBps?: number;
   maxSlippageBps?: number;
   maxPositionSizeInventory?: bigint;
+  maxVolatilityBps?: number;
+  maxTotalExposurePayment?: bigint;
+  maxDailyRealizedLossPayment?: bigint;
   paused?: boolean;
 }
 
@@ -18,6 +21,9 @@ export interface PolicyValidationBounds {
   maxStopLossBps: number;
   minTakeProfitBps: number;
   maxTakeProfitBps: number;
+  hardMaxVolatilityBps?: number;
+  hardMaxTotalExposurePayment?: bigint;
+  hardMaxDailyRealizedLossPayment?: bigint;
 }
 
 export interface PolicyValidationResult {
@@ -105,6 +111,37 @@ export function validatePolicyPatch(
     }
   }
 
+  if (patch.maxVolatilityBps !== undefined) {
+    const volCap = bounds.hardMaxVolatilityBps ?? 3000;
+    if (
+      Number.isInteger(patch.maxVolatilityBps) &&
+      patch.maxVolatilityBps >= 50 &&
+      patch.maxVolatilityBps <= volCap
+    ) {
+      sanitized.maxVolatilityBps = patch.maxVolatilityBps;
+    } else {
+      rejectedFields.push(`maxVolatilityBps:${patch.maxVolatilityBps}`);
+    }
+  }
+
+  if (patch.maxTotalExposurePayment !== undefined) {
+    const expCap = bounds.hardMaxTotalExposurePayment ?? 100_000_000n;
+    if (patch.maxTotalExposurePayment > 0n && patch.maxTotalExposurePayment <= expCap) {
+      sanitized.maxTotalExposurePayment = patch.maxTotalExposurePayment;
+    } else {
+      rejectedFields.push(`maxTotalExposurePayment:${patch.maxTotalExposurePayment}`);
+    }
+  }
+
+  if (patch.maxDailyRealizedLossPayment !== undefined) {
+    const lossCap = bounds.hardMaxDailyRealizedLossPayment ?? 25_000_000n;
+    if (patch.maxDailyRealizedLossPayment > 0n && patch.maxDailyRealizedLossPayment <= lossCap) {
+      sanitized.maxDailyRealizedLossPayment = patch.maxDailyRealizedLossPayment;
+    } else {
+      rejectedFields.push(`maxDailyRealizedLossPayment:${patch.maxDailyRealizedLossPayment}`);
+    }
+  }
+
   if (patch.paused !== undefined) {
     sanitized.paused = Boolean(patch.paused);
   }
@@ -131,9 +168,16 @@ export function applyValidatedPolicyPatch(
   if (s.strategyType !== undefined) strategy.type = s.strategyType;
   if (s.takeProfitBps !== undefined) strategy.takeProfitBps = s.takeProfitBps;
   if (s.stopLossBps !== undefined) strategy.stopLossBps = s.stopLossBps;
+  if (s.maxVolatilityBps !== undefined) strategy.maxVolatilityBps = s.maxVolatilityBps;
   if (s.maxSlippageBps !== undefined) limits.maxSlippageBps = s.maxSlippageBps;
   if (s.maxPositionSizeInventory !== undefined) {
     limits.maxPositionSizeInventory = s.maxPositionSizeInventory;
+  }
+  if (s.maxTotalExposurePayment !== undefined) {
+    limits.maxTotalExposurePayment = s.maxTotalExposurePayment;
+  }
+  if (s.maxDailyRealizedLossPayment !== undefined) {
+    limits.maxDailyRealizedLossPayment = s.maxDailyRealizedLossPayment;
   }
   if (s.paused !== undefined && !limits.killSwitch) {
     // Kill switch can never be cleared via natural language
@@ -176,6 +220,24 @@ export class LocalRuleBasedLlmProvider implements LlmProvider {
     if (slipMatch) {
       const val = Number(slipMatch[1]);
       patch.maxSlippageBps = slipMatch[2] === "bps" ? Math.round(val) : Math.round(val * 100);
+    }
+
+    const volMatch = text.match(/max[\s-]?volatility\s+(\d+(?:\.\d+)?)\s*(%|bps)?/);
+    if (volMatch) {
+      const val = Number(volMatch[1]);
+      patch.maxVolatilityBps = volMatch[2] === "%" ? Math.round(val * 100) : Math.round(val);
+    } else if (text.includes("avoid") && text.includes("elevated volatility")) {
+      patch.maxVolatilityBps = 350;
+    }
+
+    const expMatch = text.match(/(?:limit|max)\s+exposure(?:\s+to)?\s+\$?(\d+(?:\.\d+)?)/);
+    if (expMatch) {
+      patch.maxTotalExposurePayment = BigInt(Math.round(Number(expMatch[1]) * 1_000_000));
+    }
+
+    const lossMatch = text.match(/daily[\s-]?loss(?:\s+(?:to|cap|limit))?\s+\$?(\d+(?:\.\d+)?)/);
+    if (lossMatch) {
+      patch.maxDailyRealizedLossPayment = BigInt(Math.round(Number(lossMatch[1]) * 1_000_000));
     }
 
     return patch;
