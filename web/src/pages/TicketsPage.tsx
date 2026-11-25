@@ -36,8 +36,10 @@ import {
   COMMITMENT_MANAGER_ABI,
   EXECUTION_TICKET_ABI,
   createTrancheWalletClient,
+  decodeQuoteExerciseResult,
   fetchUserTickets,
   tranchePublicClient,
+  type ExerciseQuote,
   type OnChainTicket,
 } from "@/lib/protocol";
 import type { AppRoute } from "@/App";
@@ -68,11 +70,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
   // Exercise Sheet state
   const [exerciseTicket, setExerciseTicket] = useState<OnChainTicket | null>(null);
   const [fillInput, setFillInput] = useState("");
-  const [exQuote, setExQuote] = useState<{
-    effectivePriceX36: bigint;
-    grossPayment: bigint;
-    protocolFee: bigint;
-  } | null>(null);
+  const [exQuote, setExQuote] = useState<ExerciseQuote | null>(null);
   const [exQuoteLoading, setExQuoteLoading] = useState(false);
   const [payBalance, setPayBalance] = useState<bigint | null>(null);
   const [exStep, setExStep] = useState<"idle" | "approving" | "exercising" | "done">("idle");
@@ -181,11 +179,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
       })
       .then((res) => {
         if (!cancelled) {
-          setExQuote({
-            effectivePriceX36: res[0],
-            grossPayment: res[1],
-            protocolFee: res[2],
-          });
+          setExQuote(decodeQuoteExerciseResult(res));
         }
       })
       .catch(() => {
