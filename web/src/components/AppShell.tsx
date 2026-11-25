@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
+  Bot,
   Check,
   Droplets,
   Loader2,
@@ -32,7 +33,7 @@ import { cn } from "@/lib/utils";
 import type { AppRoute } from "@/App";
 
 interface AppShellProps {
-  activeRoute: "/trade" | "/tickets" | "/vault";
+  activeRoute: "/trade" | "/tickets" | "/vault" | "/agent";
   title: string;
   subtitle?: string;
   onNavigate: (path: AppRoute) => void;
@@ -125,7 +126,7 @@ export function AppShell({
   }, [address, activeRoute, refreshing]);
 
   const navItems: {
-    path: "/trade" | "/tickets" | "/vault";
+    path: "/trade" | "/tickets" | "/vault" | "/agent";
     label: string;
     icon: typeof ArrowLeftRight;
     badge?: number;
@@ -133,6 +134,7 @@ export function AppShell({
     { path: "/trade", label: "Trade", icon: ArrowLeftRight },
     { path: "/tickets", label: "Tickets", icon: Ticket, badge: ticketCount },
     { path: "/vault", label: "Vault", icon: Vault },
+    { path: "/agent", label: "Agent", icon: Bot },
   ];
 
   const sidebarBody = (

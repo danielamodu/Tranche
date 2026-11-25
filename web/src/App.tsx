@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { WalletProvider } from "@/context/WalletContext";
+import { AgentPage } from "@/pages/AgentPage";
 import { ConnectWalletPage } from "@/pages/ConnectWalletPage";
 import { DocsPage } from "@/pages/DocsPage";
 import { LandingPage } from "@/pages/LandingPage";
@@ -19,7 +20,8 @@ export type AppRoute =
   | "/start"
   | "/trade"
   | "/tickets"
-  | "/vault";
+  | "/vault"
+  | "/agent";
 
 function resolveRoute(pathname: string): AppRoute {
   if (pathname === "/docs") return "/docs";
@@ -30,6 +32,7 @@ function resolveRoute(pathname: string): AppRoute {
   if (pathname === "/trade") return "/trade";
   if (pathname === "/tickets") return "/tickets";
   if (pathname === "/vault") return "/vault";
+  if (pathname === "/agent") return "/agent";
   return "/";
 }
 
@@ -58,6 +61,7 @@ function AppRouter() {
   if (route === "/trade") return <TradePage onNavigate={navigate} />;
   if (route === "/tickets") return <TicketsPage onNavigate={navigate} />;
   if (route === "/vault") return <VaultPage onNavigate={navigate} />;
+  if (route === "/agent") return <AgentPage onNavigate={navigate} />;
   if (route === "/docs") return <DocsPage onNavigate={navigate} />;
   if (route === "/privacy") return <PrivacyPage onNavigate={navigate} />;
   if (route === "/terms") return <TermsPage onNavigate={navigate} />;
