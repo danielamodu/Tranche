@@ -227,3 +227,91 @@ export async function fetchUserTickets(userAddress: Address): Promise<OnChainTic
     .filter((t) => t.owner?.toLowerCase() === lower)
     .reverse();
 }
+
+export interface ProtocolActivityItem {
+  id: string;
+  type: "OfferCreated" | "TicketReserved" | "TicketExercised";
+  txHash: `0x${string}`;
+  blockNumber: bigint;
+  label: string;
+  detail: string;
+}
+
+const ACTIVITY_EVENTS = parseAbi([
+  "event OfferCreated(uint64 indexed offerId, address indexed lp, uint8 priceMode)",
+  "event TicketReserved(uint256 indexed ticketId, uint64 indexed offerId, address indexed recipient, uint256 amount, uint40 expiresAt, uint256 grossPremium)",
+  "event TicketExercised(uint256 indexed ticketId, uint64 indexed offerId, address indexed exerciser, uint256 fillAmount, uint256 grossPayment, uint256 remainingAmount)",
+]);
+
+export async function fetchRecentActivity(): Promise<{
+  totalTickets: number;
+  items: ProtocolActivityItem[];
+}> {
+  const { commitmentManager } = ACTIVE_NETWORK.contracts;
+  const [latestBlock, nextTicketId] = await Promise.all([
+    tranchePublicClient.getBlockNumber(),
+    tranchePublicClient.readContract({
+      address: commitmentManager,
+      abi: COMMITMENT_MANAGER_ABI,
+      functionName: "nextTicketId",
+    }),
+  ]);
+
+  const totalTickets = Math.max(0, Number(nextTicketId) - 1);
+  const fromBlock = latestBlock > 60_000n ? latestBlock - 60_000n : 0n;
+
+  try {
+    const [createdLogs, reservedLogs, exercisedLogs] = await Promise.all([
+      tranchePublicClient.getLogs({
+        address: commitmentManager,
+        event: ACTIVITY_EVENTS[0],
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+      tranchePublicClient.getLogs({
+        address: commitmentManager,
+        event: ACTIVITY_EVENTS[1],
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+      tranchePublicClient.getLogs({
+        address: commitmentManager,
+        event: ACTIVITY_EVENTS[2],
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+    ]);
+
+    const items: ProtocolActivityItem[] = [
+      ...createdLogs.map((l) => ({
+        id: `offer-${l.transactionHash}-${l.logIndex}`,
+        type: "OfferCreated" as const,
+        txHash: l.transactionHash,
+        blockNumber: l.blockNumber,
+        label: `Offer #${l.args.offerId?.toString() ?? "?"} published`,
+        detail: `${Number(l.args.priceMode) === 0 ? "FIXED" : "FLOATING"} · LP ${l.args.lp?.slice(0, 6)}…${l.args.lp?.slice(-4)}`,
+      })),
+      ...reservedLogs.map((l) => ({
+        id: `res-${l.transactionHash}-${l.logIndex}`,
+        type: "TicketReserved" as const,
+        txHash: l.transactionHash,
+        blockNumber: l.blockNumber,
+        label: `Ticket #${l.args.ticketId?.toString() ?? "?"} reserved`,
+        detail: `Offer #${l.args.offerId?.toString() ?? "?"} · ${l.args.recipient?.slice(0, 6)}…${l.args.recipient?.slice(-4)}`,
+      })),
+      ...exercisedLogs.map((l) => ({
+        id: `ex-${l.transactionHash}-${l.logIndex}`,
+        type: "TicketExercised" as const,
+        txHash: l.transactionHash,
+        blockNumber: l.blockNumber,
+        label: `Ticket #${l.args.ticketId?.toString() ?? "?"} settled`,
+        detail: `Offer #${l.args.offerId?.toString() ?? "?"} · Exercised on-chain`,
+      })),
+    ];
+
+    items.sort((a, b) => Number(b.blockNumber - a.blockNumber));
+    return { totalTickets, items: items.slice(0, 8) };
+  } catch {
+    return { totalTickets, items: [] };
+  }
+}
