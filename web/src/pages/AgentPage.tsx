@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  ArrowUpRight,
   Bot,
   CheckCircle2,
+  History,
   OctagonAlert,
   Pause,
   Play,
@@ -21,9 +23,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { explorerTxUrl } from "@/config/networks";
 import {
   AgentApiClient,
   AgentApiError,
+  DEFAULT_AGENT_API_URL,
+  isHostedHttpsToLocalApi,
+  isLocalAgentApiUrl,
+  normalizeAgentApiUrl,
   type AgentDashboardSnapshot,
   type StrategyType,
 } from "@/lib/agentApi";
@@ -34,12 +41,17 @@ interface AgentPageProps {
   onNavigate: (path: AppRoute) => void;
 }
 
-function fmtUsd6(raw: string | undefined | null): string {
-  if (!raw) return "Unavailable";
+const TOKEN_STORAGE_KEY = "tranche-agent-token";
+const API_URL_STORAGE_KEY = "tranche-agent-api-url";
+const BASE_POLL_MS = 15_000;
+const RATE_LIMITED_POLL_MS = 35_000;
+
+function fmtPayment6(raw: string | undefined | null, symbol = "USDT"): string {
+  if (raw === undefined || raw === null || raw === "") return "Unavailable";
   try {
     const val = Number(BigInt(raw)) / 1e6;
     if (!Number.isFinite(val)) return "Unavailable";
-    return `$${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+    return `${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${symbol}`;
   } catch {
     return "Unavailable";
   }
@@ -54,6 +66,11 @@ function fmtTime(sec: number | null | undefined): string {
   });
 }
 
+function shortHash(hash: string): string {
+  if (hash.length <= 14) return hash;
+  return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
+}
+
 function pctBar(numRaw: string, denRaw: string): number {
   try {
     const n = Number(BigInt(numRaw));
@@ -66,15 +83,30 @@ function pctBar(numRaw: string, denRaw: string): number {
 }
 
 export function AgentPage({ onNavigate }: AgentPageProps) {
+  const [apiUrlInput, setApiUrlInput] = useState<string>(() => {
+    const saved = sessionStorage.getItem(API_URL_STORAGE_KEY);
+    return saved ? normalizeAgentApiUrl(saved) : normalizeAgentApiUrl(DEFAULT_AGENT_API_URL);
+  });
   const [tokenInput, setTokenInput] = useState<string>(
-    () => sessionStorage.getItem("tranche-agent-token") ?? "",
+    () => sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? "",
   );
-  const client = useMemo(() => new AgentApiClient({ token: tokenInput }), [tokenInput]);
+
+  const normalizedApiUrl = useMemo(() => normalizeAgentApiUrl(apiUrlInput), [apiUrlInput]);
+  const client = useMemo(
+    () => new AgentApiClient({ baseUrl: normalizedApiUrl, token: tokenInput }),
+    [normalizedApiUrl, tokenInput],
+  );
+  const isLocalApi = useMemo(() => isLocalAgentApiUrl(normalizedApiUrl), [normalizedApiUrl]);
+  const hostedLocalMismatch = useMemo(
+    () => isHostedHttpsToLocalApi(normalizedApiUrl),
+    [normalizedApiUrl],
+  );
 
   const [snapshot, setSnapshot] = useState<AgentDashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
   const [connError, setConnError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ kind: "ok" | "err"; text: string } | null>(
@@ -82,12 +114,14 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
   );
   const [killDialogOpen, setKillDialogOpen] = useState(false);
 
-  // Strategy form state (synced from engine config on first load)
+  // Strategy form state (re-synced whenever backend policyVersion changes)
   const [strategyType, setStrategyType] = useState<StrategyType>("price_threshold");
   const [tpInput, setTpInput] = useState("500");
   const [slInput, setSlInput] = useState("300");
   const [slipInput, setSlipInput] = useState("100");
-  const [formSynced, setFormSynced] = useState(false);
+  const [maxPosInput, setMaxPosInput] = useState("");
+  const lastSyncedVersionRef = useRef<number | null>(null);
+  const requestSeqRef = useRef(0);
 
   // Bounded NL Policy Proposal state
   const [nlInstruction, setNlInstruction] = useState("");
@@ -97,61 +131,104 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
     valid: boolean;
     rejectedFields: string[];
   } | null>(null);
-  const [policyVersion, setPolicyVersion] = useState<number>(1);
+
+  const syncFormFromSnapshot = useCallback((data: AgentDashboardSnapshot) => {
+    setStrategyType(data.config.strategy.type);
+    setTpInput(String(data.config.strategy.takeProfitBps));
+    setSlInput(String(data.config.strategy.stopLossBps));
+    setSlipInput(String(data.config.riskLimits.maxSlippageBps));
+    setMaxPosInput(data.config.riskLimits.maxPositionSizeInventory);
+    lastSyncedVersionRef.current = data.policyHistory.currentVersion;
+  }, []);
 
   const loadSnapshot = useCallback(
-    async (isManual = false) => {
+    async (isManual = false, forceFormSync = false) => {
+      const seq = ++requestSeqRef.current;
       if (isManual) setRefreshing(true);
       try {
-        const [data, hist] = await Promise.all([
-          client.fetchSnapshot(),
-          client.getPolicyHistory().catch(() => ({ currentVersion: 1, history: [] })),
-        ]);
+        const data = await client.fetchSnapshot();
+        if (seq !== requestSeqRef.current) return; // Discard out-of-order stale response
         setSnapshot(data);
-        setPolicyVersion(hist.currentVersion || 1);
         setDisconnected(false);
+        setRateLimited(false);
         setConnError(null);
-        if (!formSynced) {
-          setStrategyType(data.config.strategy.type);
-          setTpInput(String(data.config.strategy.takeProfitBps));
-          setSlInput(String(data.config.strategy.stopLossBps));
-          setSlipInput(String(data.config.riskLimits.maxSlippageBps));
-          setFormSynced(true);
+        if (
+          forceFormSync ||
+          lastSyncedVersionRef.current === null ||
+          lastSyncedVersionRef.current !== data.policyHistory.currentVersion
+        ) {
+          syncFormFromSnapshot(data);
         }
       } catch (err) {
-        setDisconnected(true);
-        setConnError(
-          err instanceof Error
-            ? err.message
-            : `Local Agent API unreachable at ${client.getBaseUrl()}`,
-        );
+        if (seq !== requestSeqRef.current) return;
+        if (err instanceof AgentApiError && err.status === 429) {
+          setRateLimited(true);
+          setConnError("Rate limit exceeded (HTTP 429). Polling backed off automatically.");
+        } else {
+          setDisconnected(true);
+          setRateLimited(false);
+          setConnError(
+            err instanceof Error
+              ? err.message
+              : `Agent API unreachable at ${client.getBaseUrl()}`,
+          );
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (seq === requestSeqRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [client, formSynced],
+    [client, syncFormFromSnapshot],
   );
 
+  // Polling with tab-visibility pause and 429 backoff
   useEffect(() => {
     void loadSnapshot(false);
-    const id = setInterval(() => void loadSnapshot(false), 10_000);
-    return () => clearInterval(id);
-  }, [loadSnapshot]);
+    const intervalMs = rateLimited ? RATE_LIMITED_POLL_MS : BASE_POLL_MS;
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void loadSnapshot(false);
+    }, intervalMs);
+
+    const onVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        void loadSnapshot(false);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [loadSnapshot, rateLimited]);
+
+  function handleSaveApiUrl(val: string) {
+    setApiUrlInput(val);
+    const cleaned = val.trim();
+    if (cleaned) sessionStorage.setItem(API_URL_STORAGE_KEY, cleaned);
+    else sessionStorage.removeItem(API_URL_STORAGE_KEY);
+    lastSyncedVersionRef.current = null;
+  }
 
   function handleSaveToken(val: string) {
     setTokenInput(val);
-    if (val.trim()) sessionStorage.setItem("tranche-agent-token", val.trim());
-    else sessionStorage.removeItem("tranche-agent-token");
+    if (val.trim()) sessionStorage.setItem(TOKEN_STORAGE_KEY, val.trim());
+    else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
   }
 
-  async function runControl(label: string, fn: () => Promise<unknown>) {
+  async function runControl(
+    label: string,
+    fn: () => Promise<unknown>,
+    opts?: { forceFormSync?: boolean },
+  ) {
     setActionBusy(true);
     setActionFeedback(null);
     try {
       await fn();
       setActionFeedback({ kind: "ok", text: `${label} succeeded.` });
-      await loadSnapshot(true);
+      await loadSnapshot(true, opts?.forceFormSync ?? false);
     } catch (err) {
       const msg =
         err instanceof AgentApiError
@@ -169,22 +246,47 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
     const takeProfitBps = Number(tpInput);
     const stopLossBps = Number(slInput);
     const maxSlippageBps = Number(slipInput);
-    await runControl("Strategy update", () =>
-      client.updateStrategy({
-        strategyType,
-        takeProfitBps,
-        stopLossBps,
-        maxSlippageBps,
-      }),
+    const trimmedMaxPos = maxPosInput.trim();
+    await runControl(
+      "Strategy update",
+      () =>
+        client.updateStrategy({
+          strategyType,
+          takeProfitBps,
+          stopLossBps,
+          maxSlippageBps,
+          ...(trimmedMaxPos ? { maxPositionSizeInventory: trimmedMaxPos } : {}),
+        }),
+      { forceFormSync: true },
     );
   }
 
-  const isStale = snapshot ? Date.now() - snapshot.fetchedAt > 25_000 : false;
+  const isStale = snapshot ? Date.now() - snapshot.fetchedAt > 40_000 : false;
   const isDryRun = (snapshot?.status.mode ?? "dry_run") === "dry_run";
+  const health = snapshot?.health;
+  const ready = snapshot?.ready;
   const status = snapshot?.status;
   const metrics = snapshot?.metrics;
   const markets = snapshot?.markets;
   const config = snapshot?.config;
+  const policyVersion = snapshot?.policyHistory.currentVersion ?? 0;
+  const policyHistory = snapshot?.policyHistory.history ?? [];
+  const paymentSymbol = status?.market?.split("/")[1] || "USDT";
+
+  const canStart =
+    !disconnected &&
+    !actionBusy &&
+    !status?.running &&
+    !status?.killSwitch &&
+    !status?.stateCorrupted;
+
+  const canResume =
+    !disconnected &&
+    !actionBusy &&
+    Boolean(status?.paused) &&
+    !status?.killSwitch &&
+    !status?.stateCorrupted &&
+    (status?.pendingTxs.length ?? 0) === 0;
 
   return (
     <AppShell
@@ -195,7 +297,19 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
       onRefresh={() => void loadSnapshot(true)}
       refreshing={refreshing}
       headerActions={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {!disconnected && ready && (
+            <span
+              className={cn(
+                "tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                ready.ready
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-300",
+              )}
+            >
+              {ready.ready ? "READY" : `NOT READY (${ready.httpStatus})`}
+            </span>
+          )}
           <span
             className={cn(
               "tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium",
@@ -227,32 +341,110 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
       }
     >
       <div className="flex flex-col gap-6">
-        {/* Disconnection / Stale / Corrupted Banners */}
-        {disconnected && (
+        {/* Hosted HTTPS -> Localhost Guidance Banner */}
+        {hostedLocalMismatch && disconnected && (
+          <div className="flex flex-col gap-2 rounded-[16px] border border-amber-500/40 bg-amber-500/10 px-5 py-4 text-xs text-amber-200">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertTriangle className="size-4 shrink-0" />
+              <span>Hosted HTTPS page cannot automatically call a localhost Agent API</span>
+            </div>
+            <p className="leading-relaxed text-amber-100/85">
+              Browsers block mixed-content requests from <code className="font-mono">https://</code>{" "}
+              to <code className="font-mono">{normalizedApiUrl}</code>, and the local Agent API
+              restricts CORS to <code className="font-mono">localhost:5173</code> /{" "}
+              <code className="font-mono">127.0.0.1:5173</code> by default. To operate Tranche
+              Agent:
+            </p>
+            <ul className="list-disc space-y-1 pl-5 text-[11px] text-amber-100/85">
+              <li>
+                <strong>Local operator mode (recommended):</strong> run{" "}
+                <code className="rounded bg-background/60 px-1.5 py-0.5 font-mono">
+                  cd agent && npm run api
+                </code>{" "}
+                and{" "}
+                <code className="rounded bg-background/60 px-1.5 py-0.5 font-mono">
+                  cd web && npm run dev
+                </code>
+                , then open <code className="font-mono">http://localhost:5173/agent</code>.
+              </li>
+              <li>
+                <strong>Remote API mode:</strong> enter a reachable HTTPS Agent API URL below whose{" "}
+                <code className="font-mono">AGENT_API_ALLOWED_ORIGINS</code> includes this origin.
+              </li>
+            </ul>
+          </div>
+        )}
+
+        {/* Generic Disconnection Banner */}
+        {disconnected && !hostedLocalMismatch && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-destructive/40 bg-destructive/10 px-5 py-3.5 text-xs text-destructive">
             <div className="flex items-center gap-2.5">
               <WifiOff className="size-4 shrink-0" />
               <span>
-                Local Agent API disconnected ({client.getBaseUrl()}): {connError ?? "Unavailable"}. Start it with{" "}
-                <code className="rounded bg-background/60 px-1.5 py-0.5 font-mono">cd agent && npm run api</code>.
+                Agent API unreachable at{" "}
+                <code className="rounded bg-background/60 px-1.5 py-0.5 font-mono">
+                  {client.getBaseUrl()}
+                </code>{" "}
+                ({connError ?? "Unavailable"}). Start the local server with{" "}
+                <code className="rounded bg-background/60 px-1.5 py-0.5 font-mono">
+                  cd agent && npm run api
+                </code>{" "}
+                or update the API URL in Risk Controls &amp; Policy.
               </span>
             </div>
           </div>
         )}
 
-        {!disconnected && isStale && (
-          <div className="flex items-center gap-2.5 rounded-[16px] border border-amber-500/40 bg-amber-500/10 px-5 py-3 text-xs text-amber-300">
+        {/* HTTP 429 Rate Limit Banner (distinct from disconnected) */}
+        {rateLimited && !disconnected && (
+          <div className="flex items-center gap-2.5 rounded-[16px] border border-amber-500/40 bg-amber-500/10 px-5 py-3 text-xs text-amber-200">
             <AlertTriangle className="size-4 shrink-0" />
-            <span>Agent telemetry is stale (&gt;25s since last successful poll).</span>
+            <span>
+              Agent API rate limit reached (HTTP 429). Polling automatically backed off to 35s;
+              close extra Agent Console tabs if open.
+            </span>
           </div>
         )}
 
+        {/* Stale Telemetry Banner */}
+        {!disconnected && isStale && (
+          <div className="flex items-center gap-2.5 rounded-[16px] border border-amber-500/40 bg-amber-500/10 px-5 py-3 text-xs text-amber-300">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>Agent telemetry is stale (&gt;40s since last successful poll).</span>
+          </div>
+        )}
+
+        {/* Corrupted Persisted State Banner */}
+        {status?.stateCorrupted && (
+          <div className="flex items-start gap-2.5 rounded-[16px] border border-destructive/50 bg-destructive/15 px-5 py-3.5 text-xs text-destructive">
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+            <span>
+              <strong>Persisted State Corrupted:</strong> Fail-closed safety lock active. Runtime
+              Start and Resume are disabled until persisted state is repaired on disk.
+            </span>
+          </div>
+        )}
+
+        {/* Authoritative Kill Switch Banner */}
+        {status?.killSwitch && (
+          <div className="flex items-start gap-2.5 rounded-[16px] border border-destructive/50 bg-destructive/15 px-5 py-3.5 text-xs text-destructive">
+            <OctagonAlert className="mt-0.5 size-4 shrink-0" />
+            <span>
+              <strong>Kill Switch Active (Authoritative Halt):</strong> All entries, exercises, and
+              exits are blocked. Unlike ordinary Pause, the kill switch cannot be cleared via
+              Resume.
+            </span>
+          </div>
+        )}
+
+        {/* Pending Transactions Blocking Banner */}
         {status && status.pendingTxs.length > 0 && (
           <div className="flex flex-col gap-3 rounded-[16px] border border-amber-500/40 bg-amber-500/10 p-4 text-xs">
             <div className="flex items-center gap-2 font-medium text-amber-200">
               <AlertTriangle className="size-4" />
               <span>
-                {status.pendingTxs.length} Uncertain Pending Transaction(s) Blocking New Entries
+                {status.pendingTxs.length} Uncertain Pending Transaction(s) Blocking New Entries &amp;
+                Resume
               </span>
             </div>
             {status.pendingTxs.map((ptx) => (
@@ -264,7 +456,9 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                   <span className="tabular-nums-mono font-medium text-foreground">
                     {ptx.id} · {ptx.action} ({ptx.status})
                   </span>
-                  <span className="text-[11px] text-muted-foreground">{ptx.note ?? "Awaiting reconciliation"}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {ptx.note ?? "Awaiting reconciliation"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -304,7 +498,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-[18px] border border-border bg-card p-4">
             <span className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Runtime &amp; Mode
+              Runtime &amp; Readiness
             </span>
             <div className="mt-2 flex items-center justify-between">
               <span className="font-display text-lg font-semibold">
@@ -312,18 +506,29 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                   ? "Connecting…"
                   : status?.killSwitch
                     ? "KILLED"
-                    : status?.paused
-                      ? "PAUSED"
-                      : status?.running
-                        ? "RUNNING"
-                        : "IDLE"}
+                    : status?.stateCorrupted
+                      ? "CORRUPTED"
+                      : status?.paused
+                        ? "PAUSED"
+                        : status?.running
+                          ? "RUNNING"
+                          : "IDLE"}
               </span>
               <span className="tabular-nums-mono text-[11px] text-muted-foreground">
                 {status?.mode ?? "—"}
               </span>
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Strategy: <span className="text-foreground">{status?.activeStrategy ?? "Unavailable"}</span>
+              RPC:{" "}
+              <span
+                className={cn(
+                  "font-medium",
+                  health?.rpcHealthy === false ? "text-destructive" : "text-foreground",
+                )}
+              >
+                {health ? (health.rpcHealthy ? "Healthy" : "Unhealthy") : "Unavailable"}
+              </span>{" "}
+              · Recovery: <span className="text-foreground">{health?.recoveryState ?? "—"}</span>
             </p>
           </div>
 
@@ -340,7 +545,9 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               </span>
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Last action: <span className="text-foreground">{status?.lastDecisionAction ?? "—"}</span>
+              Strategy:{" "}
+              <span className="text-foreground">{status?.activeStrategy ?? "Unavailable"}</span> ·
+              Last: <span className="text-foreground">{status?.lastDecisionAction ?? "—"}</span>
             </p>
           </div>
 
@@ -350,14 +557,15 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
             </span>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="tabular-nums-mono font-display text-lg font-semibold">
-                {fmtUsd6(metrics?.totalRealizedPnlPayment)}
+                {fmtPayment6(metrics?.totalRealizedPnlPayment, paymentSymbol)}
               </span>
               <span className="tabular-nums-mono text-xs text-muted-foreground">
-                / {fmtUsd6(metrics?.totalUnrealizedPnlPayment)}
+                / {fmtPayment6(metrics?.totalUnrealizedPnlPayment, paymentSymbol)}
               </span>
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Exposure: {fmtUsd6(metrics?.currentTotalExposurePayment)} · Cycles: {metrics?.totalCycles ?? "—"}
+              Exposure: {fmtPayment6(metrics?.currentTotalExposurePayment, paymentSymbol)} · Cycles:{" "}
+              {metrics?.totalCycles ?? "—"}
             </p>
           </div>
 
@@ -374,11 +582,22 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                   : "—"}
               </span>
               <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                {fmtTime(status?.lastCycleTimestamp)}
+                OK {fmtTime(health?.lastSuccessfulCycleAt ?? status?.lastCycleTimestamp)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              W/L: {metrics ? `${metrics.wins}W / ${metrics.losses}L` : "Unavailable"}
+            <p className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>W/L: {metrics ? `${metrics.wins}W / ${metrics.losses}L` : "Unavailable"}</span>
+              {status?.lastTxHash && (
+                <a
+                  href={explorerTxUrl(status.lastTxHash)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
+                >
+                  {shortHash(status.lastTxHash)}
+                  <ArrowUpRight className="size-3" />
+                </a>
+              )}
             </p>
           </div>
         </div>
@@ -387,16 +606,23 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         <div className="grid gap-5 lg:grid-cols-2">
           {/* Market Intelligence */}
           <section className="flex flex-col gap-4 rounded-[20px] border border-border bg-card p-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
                 <h2 className="font-display text-base font-semibold">Market Intelligence</h2>
                 <p className="text-xs text-muted-foreground">
-                  Live Tranche vs. HSKSwap venue economics &amp; oracle health
+                  Live Tranche vs. HSKSwap venue economics, regime &amp; oracle health
                 </p>
               </div>
-              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                {markets?.available ? `Updated ${fmtTime(markets.timestamp)}` : "Unavailable"}
-              </span>
+              <div className="flex items-center gap-2">
+                {markets?.marketRegime && (
+                  <span className="tabular-nums-mono rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-medium text-foreground">
+                    {markets.marketRegime}
+                  </span>
+                )}
+                <span className="tabular-nums-mono text-[11px] text-muted-foreground">
+                  {markets?.available ? `Updated ${fmtTime(markets.timestamp)}` : "Unavailable"}
+                </span>
+              </div>
             </div>
 
             {markets?.available && markets.venueComparison ? (
@@ -410,11 +636,19 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                       </span>
                     </div>
                     <p className="mt-2 tabular-nums-mono text-base font-semibold">
-                      {fmtUsd6(markets.venueComparison.tranche.acquisitionCostPayment)}
+                      {fmtPayment6(
+                        markets.venueComparison.tranche.acquisitionCostPayment,
+                        paymentSymbol,
+                      )}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Prem {fmtUsd6(markets.venueComparison.tranche.reservationPremiumPayment)} + Ex{" "}
-                      {fmtUsd6(markets.venueComparison.tranche.exercisePayment)}
+                      Prem{" "}
+                      {fmtPayment6(
+                        markets.venueComparison.tranche.reservationPremiumPayment,
+                        paymentSymbol,
+                      )}{" "}
+                      + Ex{" "}
+                      {fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       Offers discovered: {markets.trancheOffersCount ?? 0}
@@ -429,18 +663,22 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                       </span>
                     </div>
                     <p className="mt-2 tabular-nums-mono text-base font-semibold">
-                      {fmtUsd6(markets.venueComparison.hskswap.acquisitionCostPayment)}
+                      {fmtPayment6(
+                        markets.venueComparison.hskswap.acquisitionCostPayment,
+                        paymentSymbol,
+                      )}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       Impact: {markets.venueComparison.hskswap.priceImpactBps ?? "—"} bps
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Exit quote: {fmtUsd6(markets.dexSellQuote?.paymentAmountOut)}
+                      Exit quote:{" "}
+                      {fmtPayment6(markets.dexSellQuote?.paymentAmountOut, paymentSymbol)}
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 rounded-[12px] border border-border bg-background px-3.5 py-2.5 text-[11px]">
+                <div className="grid grid-cols-2 gap-2 rounded-[12px] border border-border bg-background px-3.5 py-2.5 text-[11px] sm:grid-cols-5">
                   <div>
                     <span className="text-muted-foreground">Oracle Age</span>
                     <div className="tabular-nums-mono font-medium text-foreground">
@@ -452,7 +690,8 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                   <div>
                     <span className="text-muted-foreground">Oracle Dev</span>
                     <div className="tabular-nums-mono font-medium text-foreground">
-                      {markets.oracleDeviationBps !== null && markets.oracleDeviationBps !== undefined
+                      {markets.oracleDeviationBps !== null &&
+                      markets.oracleDeviationBps !== undefined
                         ? `${markets.oracleDeviationBps} bps`
                         : "Unavailable"}
                     </div>
@@ -460,7 +699,25 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                   <div>
                     <span className="text-muted-foreground">Volatility</span>
                     <div className="tabular-nums-mono font-medium text-foreground">
-                      {markets.realizedVolatilityBps ?? 0} bps
+                      {markets.realizedVolatilityBps !== undefined
+                        ? `${markets.realizedVolatilityBps} bps`
+                        : "Unavailable"}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Momentum</span>
+                    <div className="tabular-nums-mono font-medium text-foreground">
+                      {markets.momentumReturnBps !== undefined
+                        ? `${markets.momentumReturnBps >= 0 ? "+" : ""}${markets.momentumReturnBps} bps`
+                        : "Unavailable"}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">TWAP Disloc.</span>
+                    <div className="tabular-nums-mono font-medium text-foreground">
+                      {markets.dislocationVsTwapBps !== undefined
+                        ? `${markets.dislocationVsTwapBps >= 0 ? "+" : ""}${markets.dislocationVsTwapBps} bps`
+                        : "Unavailable"}
                     </div>
                   </div>
                 </div>
@@ -478,7 +735,8 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               </div>
             ) : (
               <div className="rounded-[14px] border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
-                Market snapshot unavailable. Start the local Agent API to observe live quotes.
+                Market snapshot unavailable. Connect to a running Agent API to observe live quotes
+                and venue comparisons.
               </div>
             )}
           </section>
@@ -505,15 +763,35 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               </Button>
             </div>
 
-            {/* Local API Token input for state-changing POST endpoints */}
-            <div className="flex items-center gap-2">
-              <Input
-                type="password"
-                placeholder="Local API Bearer Token (for Start / Pause / Strategy)"
-                value={tokenInput}
-                onChange={(e) => handleSaveToken(e.target.value)}
-                className="tabular-nums-mono h-9 rounded-[10px] bg-background text-xs"
-              />
+            {/* Agent API URL + Bearer Token Configuration */}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>Agent API URL</span>
+                  <span className="tabular-nums-mono">
+                    {isLocalApi ? "Localhost" : "Remote API"}
+                  </span>
+                </div>
+                <Input
+                  type="url"
+                  placeholder={DEFAULT_AGENT_API_URL}
+                  value={apiUrlInput}
+                  onChange={(e) => handleSaveApiUrl(e.target.value)}
+                  className="tabular-nums-mono h-9 rounded-[10px] bg-background text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-muted-foreground">
+                  Bearer Token (sessionStorage only)
+                </span>
+                <Input
+                  type="password"
+                  placeholder="Required for Start / Pause / Policy"
+                  value={tokenInput}
+                  onChange={(e) => handleSaveToken(e.target.value)}
+                  className="tabular-nums-mono h-9 rounded-[10px] bg-background text-xs"
+                />
+              </div>
             </div>
 
             {/* Runtime Controls */}
@@ -521,7 +799,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               <Button
                 type="button"
                 size="sm"
-                disabled={disconnected || actionBusy || status?.running || status?.killSwitch}
+                disabled={!canStart}
                 onClick={() => void runControl("Start runtime", () => client.start())}
                 className="h-9 rounded-full px-4 text-xs cursor-pointer"
               >
@@ -543,7 +821,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={disconnected || actionBusy || !status?.paused || status?.killSwitch}
+                disabled={!canResume}
                 onClick={() => void runControl("Resume entries", () => client.resume())}
                 className="h-9 rounded-full px-4 text-xs cursor-pointer"
               >
@@ -558,8 +836,8 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                   <div className="flex justify-between text-[11px]">
                     <span className="text-muted-foreground">Exposure Cap</span>
                     <span className="tabular-nums-mono">
-                      {fmtUsd6(metrics.currentTotalExposurePayment)} /{" "}
-                      {fmtUsd6(config.riskLimits.maxTotalExposurePayment)}
+                      {fmtPayment6(metrics.currentTotalExposurePayment, paymentSymbol)} /{" "}
+                      {fmtPayment6(config.riskLimits.maxTotalExposurePayment, paymentSymbol)}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -575,8 +853,8 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                   <div className="flex justify-between text-[11px]">
                     <span className="text-muted-foreground">Daily Loss Cap</span>
                     <span className="tabular-nums-mono">
-                      {fmtUsd6(metrics.dailyRealizedLossPayment)} /{" "}
-                      {fmtUsd6(config.riskLimits.maxDailyRealizedLossPayment)}
+                      {fmtPayment6(metrics.dailyRealizedLossPayment, paymentSymbol)} /{" "}
+                      {fmtPayment6(config.riskLimits.maxDailyRealizedLossPayment, paymentSymbol)}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -617,7 +895,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                 ))}
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] text-muted-foreground">Take Profit (bps)</label>
                   <Input
@@ -626,6 +904,11 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                     onChange={(e) => setTpInput(e.target.value)}
                     className="tabular-nums-mono h-9 rounded-[10px] bg-background text-xs"
                   />
+                  {config && (
+                    <span className="tabular-nums-mono text-[10px] text-muted-foreground">
+                      {config.policyBounds.minTakeProfitBps}–{config.policyBounds.maxTakeProfitBps}
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] text-muted-foreground">Stop Loss (bps)</label>
@@ -635,6 +918,11 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                     onChange={(e) => setSlInput(e.target.value)}
                     className="tabular-nums-mono h-9 rounded-[10px] bg-background text-xs"
                   />
+                  {config && (
+                    <span className="tabular-nums-mono text-[10px] text-muted-foreground">
+                      {config.policyBounds.minStopLossBps}–{config.policyBounds.maxStopLossBps}
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] text-muted-foreground">Max Slippage (bps)</label>
@@ -644,6 +932,26 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                     onChange={(e) => setSlipInput(e.target.value)}
                     className="tabular-nums-mono h-9 rounded-[10px] bg-background text-xs"
                   />
+                  {config && (
+                    <span className="tabular-nums-mono text-[10px] text-muted-foreground">
+                      ≤ {config.policyBounds.hardMaxSlippageBps}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] text-muted-foreground">Max Position (raw)</label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={maxPosInput}
+                    onChange={(e) => setMaxPosInput(e.target.value)}
+                    className="tabular-nums-mono h-9 rounded-[10px] bg-background text-xs"
+                  />
+                  {config && (
+                    <span className="tabular-nums-mono truncate text-[10px] text-muted-foreground">
+                      ≤ {config.policyBounds.hardMaxPositionSizeInventory}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -667,25 +975,14 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                 <span className="font-medium text-foreground">
                   Natural-Language Policy Translator (v{policyVersion})
                 </span>
-                {policyVersion > 1 && (
-                  <button
-                    type="button"
-                    disabled={disconnected || actionBusy}
-                    onClick={() =>
-                      void runControl(`Rollback to v${policyVersion - 1}`, () =>
-                        client.rollbackPolicy(policyVersion - 1),
-                      )
-                    }
-                    className="text-muted-foreground underline underline-offset-4 hover:text-foreground cursor-pointer"
-                  >
-                    Rollback to v{policyVersion - 1}
-                  </button>
-                )}
+                <span className="tabular-nums-mono text-muted-foreground">
+                  {policyHistory.length} persisted version{policyHistory.length === 1 ? "" : "s"}
+                </span>
               </div>
               <div className="flex gap-2">
                 <Input
                   type="text"
-                  placeholder='e.g. "momentum, take profit 4%, stop loss 2%, avoid elevated volatility"'
+                  placeholder='e.g. "momentum, take profit 4%, stop loss 2%"'
                   value={nlInstruction}
                   onChange={(e) => setNlInstruction(e.target.value)}
                   className="h-9 rounded-[10px] bg-background text-xs"
@@ -732,8 +1029,10 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                         size="sm"
                         disabled={actionBusy}
                         onClick={async () => {
-                          await runControl("Apply NL policy", () =>
-                            client.applyPolicy(nlProposal.instruction),
+                          await runControl(
+                            "Apply NL policy",
+                            () => client.applyPolicy(nlProposal.instruction),
+                            { forceFormSync: true },
                           );
                           setNlProposal(null);
                           setNlInstruction("");
@@ -752,6 +1051,54 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                       Blocked by hard bounds: {nlProposal.rejectedFields.join(", ")}
                     </span>
                   )}
+                </div>
+              )}
+
+              {/* Persisted Policy History & Safe Rollback */}
+              {policyHistory.length > 0 && (
+                <div className="mt-1 flex flex-col gap-1.5 rounded-[12px] border border-border bg-background p-3 text-[11px]">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground">
+                    <History className="size-3.5 text-muted-foreground" />
+                    <span>Policy History</span>
+                  </div>
+                  <div className="flex max-h-36 flex-col gap-1.5 overflow-y-auto pr-1">
+                    {policyHistory
+                      .slice()
+                      .reverse()
+                      .map((entry) => (
+                        <div
+                          key={`${entry.version}-${entry.timestamp}`}
+                          className="flex items-center justify-between gap-2 rounded-[8px] border border-border/60 px-2.5 py-1.5"
+                        >
+                          <div className="flex min-w-0 flex-col">
+                            <span className="tabular-nums-mono font-medium text-foreground">
+                              v{entry.version} · {entry.source} · {fmtTime(entry.timestamp)}
+                            </span>
+                            {entry.instruction && (
+                              <span className="truncate text-[10px] text-muted-foreground">
+                                &ldquo;{entry.instruction}&rdquo;
+                              </span>
+                            )}
+                          </div>
+                          {entry.version !== policyVersion && (
+                            <button
+                              type="button"
+                              disabled={disconnected || actionBusy}
+                              onClick={() =>
+                                void runControl(
+                                  `Rollback to v${entry.version}`,
+                                  () => client.rollbackPolicy(entry.version),
+                                  { forceFormSync: true },
+                                )
+                              }
+                              className="shrink-0 rounded-full border border-border px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer disabled:opacity-50"
+                            >
+                              Rollback
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -782,7 +1129,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
             <div>
               <h2 className="font-display text-base font-semibold">Decision Feed</h2>
               <p className="text-xs text-muted-foreground">
-                Structured engine traces with venue comparison, risk checks, and rejection reasons
+                Structured engine traces with venue comparison, risk checks, and confirmed tx links
               </p>
             </div>
             <span className="tabular-nums-mono text-[11px] text-muted-foreground">
@@ -814,18 +1161,33 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground">{d.rationale}</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                     <span className="tabular-nums-mono">
-                      Tranche: {fmtUsd6(d.tranche.acquisitionCostPayment)} (
+                      Tranche: {fmtPayment6(d.tranche.acquisitionCostPayment, paymentSymbol)} (
                       {d.tranche.eligible ? "OK" : d.tranche.rejectionReasons.join(", ")})
                     </span>
                     <span className="tabular-nums-mono">
-                      HSKSwap: {fmtUsd6(d.hskswap.acquisitionCostPayment)} (
+                      HSKSwap: {fmtPayment6(d.hskswap.acquisitionCostPayment, paymentSymbol)} (
                       {d.hskswap.eligible ? "OK" : d.hskswap.rejectionReasons.join(", ")})
                     </span>
                     <span>
-                      Risk: {d.riskAllowed ? "PASSED" : `BLOCKED (${d.failedRiskChecks.map((c) => c.name).join(", ")})`}
+                      Risk:{" "}
+                      {d.riskAllowed
+                        ? "PASSED"
+                        : `BLOCKED (${d.failedRiskChecks.map((c) => c.name).join(", ")})`}
                     </span>
+                    {d.txHashes.map((hash) => (
+                      <a
+                        key={hash}
+                        href={explorerTxUrl(hash)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
+                      >
+                        Tx {shortHash(hash)}
+                        <ArrowUpRight className="size-3" />
+                      </a>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -846,25 +1208,53 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                 {snapshot.positions.all.map((p) => (
                   <div
                     key={p.positionId}
-                    className="flex items-center justify-between rounded-[12px] border border-border bg-background px-3.5 py-2.5 text-xs"
+                    className="flex flex-col gap-1.5 rounded-[12px] border border-border bg-background px-3.5 py-2.5 text-xs"
                   >
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-foreground">
                         {p.positionId} · {p.venue} ({p.status})
                       </span>
                       <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                        Cost: {fmtUsd6(p.entryCostPayment)} · Realized: {fmtUsd6(p.realizedPnlPayment)}
+                        Unrealized: {fmtPayment6(p.unrealizedPnlPayment, paymentSymbol)}
                       </span>
                     </div>
-                    <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                      Unrealized: {fmtUsd6(p.unrealizedPnlPayment)}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      <span className="tabular-nums-mono">
+                        Cost: {fmtPayment6(p.entryCostPayment, paymentSymbol)} · Realized:{" "}
+                        {fmtPayment6(p.realizedPnlPayment, paymentSymbol)}
+                      </span>
+                      {p.entryTxHashes.map((hash) => (
+                        <a
+                          key={`in-${hash}`}
+                          href={explorerTxUrl(hash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
+                        >
+                          Entry {shortHash(hash)}
+                          <ArrowUpRight className="size-3" />
+                        </a>
+                      ))}
+                      {p.exitTxHashes.map((hash) => (
+                        <a
+                          key={`out-${hash}`}
+                          href={explorerTxUrl(hash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
+                        >
+                          Exit {shortHash(hash)}
+                          <ArrowUpRight className="size-3" />
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                No positions opened ({isDryRun ? "dry-run mode does not broadcast trades" : "none"}).
+                No positions opened (
+                {isDryRun ? "dry-run mode does not broadcast trades" : "none"}).
               </p>
             )}
           </section>
@@ -876,15 +1266,50 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                 {snapshot.tickets.all.map((t) => (
                   <div
                     key={t.ticketId}
-                    className="flex items-center justify-between rounded-[12px] border border-border bg-background px-3.5 py-2.5 text-xs"
+                    className="flex flex-col gap-1.5 rounded-[12px] border border-border bg-background px-3.5 py-2.5 text-xs"
                   >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium text-foreground">
-                        Ticket #{t.ticketId} · Offer #{t.offerId} ({t.status})
+                    <span className="font-medium text-foreground">
+                      Ticket #{t.ticketId} · Offer #{t.offerId} ({t.status})
+                    </span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      <span className="tabular-nums-mono">
+                        Premium: {fmtPayment6(t.premiumPaidPayment, paymentSymbol)} · Expires{" "}
+                        {fmtTime(t.expiresAt)}
                       </span>
-                      <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                        Premium: {fmtUsd6(t.premiumPaidPayment)} · Expires {fmtTime(t.expiresAt)}
-                      </span>
+                      {t.reserveTxHash && (
+                        <a
+                          href={explorerTxUrl(t.reserveTxHash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
+                        >
+                          Reserve {shortHash(t.reserveTxHash)}
+                          <ArrowUpRight className="size-3" />
+                        </a>
+                      )}
+                      {t.exerciseTxHashes.map((hash) => (
+                        <a
+                          key={`ex-${hash}`}
+                          href={explorerTxUrl(hash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
+                        >
+                          Exercise {shortHash(hash)}
+                          <ArrowUpRight className="size-3" />
+                        </a>
+                      ))}
+                      {t.reclaimTxHash && (
+                        <a
+                          href={explorerTxUrl(t.reclaimTxHash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
+                        >
+                          Reclaim {shortHash(t.reclaimTxHash)}
+                          <ArrowUpRight className="size-3" />
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
