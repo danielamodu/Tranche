@@ -2,9 +2,10 @@ import { ArrowLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { TrancheLogo } from "@/components/TrancheLogo";
 import { ACTIVE_NETWORK } from "@/config/networks";
+import type { AppRoute } from "@/App";
 
 interface TermsPageProps {
-  onNavigate: (path: "/" | "/docs" | "/privacy" | "/terms") => void;
+  onNavigate: (path: AppRoute) => void;
 }
 
 const TERMS_SECTIONS = [
@@ -25,23 +26,31 @@ const TERMS_SECTIONS = [
   },
   {
     num: "04",
-    title: "Testnet & Experimental Deployment Notice",
-    body: `The current live deployment operates on ${ACTIVE_NETWORK.name} (Chain ID ${ACTIVE_NETWORK.chainId}) using testnet tokens (tWETH, tUSDT, tWBTC, WHSK) intended for operational validation and testing. Smart contracts involve inherent technical risks, including potential vulnerabilities, RPC downtime, or network congestion. Never commit funds you cannot afford to lose.`,
+    title: "Network Status & Deployment Notice",
+    body:
+      ACTIVE_NETWORK.key === "testnet"
+        ? `This deployment targets ${ACTIVE_NETWORK.name} (Chain ID ${ACTIVE_NETWORK.chainId}) using testnet tokens (tWETH, tUSDT, tWBTC, WHSK) intended for operational validation and testing. Smart contracts involve inherent technical risks, including potential vulnerabilities, RPC downtime, or network congestion.`
+        : `This build targets ${ACTIVE_NETWORK.name} (Chain ID ${ACTIVE_NETWORK.chainId}) with canonical tokens (WETH, USDT, WBTC, WHSK). ${ACTIVE_NETWORK.isLive ? "Protocol contracts are active on-chain." : "Protocol contracts are currently pending deployment and on-chain execution is disabled."} Smart contracts involve inherent technical risks; never commit funds you cannot afford to lose.`,
   },
   {
     num: "05",
+    title: "Tranche Agent, Dry-Run Default & Operator Responsibility",
+    body: "Tranche Agent is a self-hosted autonomous trading engine operated via a local HTTP control API. It runs in dry-run (non-broadcasting) mode by default. Natural-language policy proposals are strictly bounded by code-enforced validation ceilings and cannot override RiskManager limits or the kill switch. You are solely responsible for securing your local API token, configuring execution modes, managing signer keys, and verifying live execution parameters before enabling any on-chain broadcast.",
+  },
+  {
+    num: "06",
     title: "Protocol Fees & Immutable On-Chain Governance",
     body: "Confirmed reservations and exercises accrue a protocol fee (currently 0.05% / 5 bps, hard-capped on-chain at 1.00% / 100 bps) routed to the segregated protocolFees bucket. Administrative parameters are governed exclusively by TimelockController and multi-signature Safes; no single EOA holds administrative privileges.",
   },
   {
-    num: "06",
+    num: "07",
     title: "Eligibility & Compliance",
     body: "You represent that you are legally permitted to access decentralized smart contract interfaces in your jurisdiction and are not subject to applicable sanctions or restricted-party lists. Individual liquidity offers may enforce an optional on-chain HSPComplianceHook requiring a valid EIP-712 compliance attestation.",
   },
   {
-    num: "07",
+    num: "08",
     title: "No Warranties & Limitation of Liability",
-    body: "The interface and underlying open-source smart contracts are provided \"as is\" and \"as available\" without warranties of any kind, express or implied. To the maximum extent permitted by law, contributors to Tranche Protocol shall not be liable for any direct, indirect, incidental, or consequential damages arising from your use of the interface or smart contracts.",
+    body: "The interface, Tranche Agent software, and underlying open-source smart contracts are provided \"as is\" and \"as available\" without warranties of any kind, express or implied. To the maximum extent permitted by law, contributors to Tranche Protocol shall not be liable for any direct, indirect, incidental, or consequential damages arising from your use of the interface, agent, or smart contracts.",
   },
 ] as const;
 

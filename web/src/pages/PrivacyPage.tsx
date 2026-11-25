@@ -2,9 +2,10 @@ import { ArrowLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { TrancheLogo } from "@/components/TrancheLogo";
 import { ACTIVE_NETWORK } from "@/config/networks";
+import type { AppRoute } from "@/App";
 
 interface PrivacyPageProps {
-  onNavigate: (path: "/" | "/docs" | "/privacy" | "/terms") => void;
+  onNavigate: (path: AppRoute) => void;
 }
 
 const SECTIONS = [
@@ -25,13 +26,13 @@ const SECTIONS = [
   },
   {
     num: "04",
-    title: "Local Browser Storage",
-    body: "We store minimal, non-identifying interface preferences locally in your browser's localStorage (such as your chosen onboarding role — Trader or Liquidity Provider — so returning visits skip the role picker). This data never leaves your device and can be cleared anytime through your browser settings.",
+    title: "Local Browser Storage & Agent Session Tokens",
+    body: "We store minimal, non-identifying interface preferences locally in your browser's localStorage (such as your chosen workspace role — Agent, Trader, or Liquidity Provider — and onboarding tip dismissals). If you use the Tranche Agent Console, your configured Agent API URL and optional Bearer control token are stored exclusively in browser sessionStorage for the current tab session and are cleared when the tab closes. Neither value is transmitted to third-party analytics or external servers.",
   },
   {
     num: "05",
-    title: "Third-Party RPC, Explorer & Wallet Providers",
-    body: `To display live block height, vault balances, and contract state, your browser sends standard JSON-RPC read requests directly to HashKey Chain RPC endpoints (${ACTIVE_NETWORK.rpcUrls.join(", ")}). When you connect a wallet (such as MetaMask, Rabby, or OKX Wallet) or open links to Blockscout (${ACTIVE_NETWORK.explorerUrl}), those providers operate under their own privacy policies and may log IP addresses or request metadata.`,
+    title: "Third-Party RPC, Explorer, Wallet & Local Agent API",
+    body: `To display live block height, vault balances, and contract state, your browser sends standard JSON-RPC read requests directly to HashKey Chain RPC endpoints (${ACTIVE_NETWORK.rpcUrls.join(", ")}). When using Tranche Agent, your browser communicates directly with your local Agent HTTP API (default http://127.0.0.1:8787) or an operator-configured API URL. When you connect a wallet or open Blockscout (${ACTIVE_NETWORK.explorerUrl}), those providers operate under their own privacy policies.`,
   },
   {
     num: "06",
