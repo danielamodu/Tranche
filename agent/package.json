@@ -13,7 +13,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/agent.integration.test.ts",
+    "test": "node --import tsx --test test/agent.integration.test.ts test/autonomous.test.ts test/server.test.ts",
+    "test:fork": "node --import tsx --test test/fork.integration.test.ts",
+    "api": "tsx src/start-api.ts",
     "demo": "tsx src/run-demo.ts"
   },
   "dependencies": {
