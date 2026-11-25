@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ArrowUpRight, Check, Lock, Repeat2 } from "lucide-react";
-import { LIVE_EXERCISE_PROOF_TX, explorerTxUrl } from "@/config/networks";
+import { ACTIVE_NETWORK, explorerTxUrl } from "@/config/networks";
+import { getTokenMeta } from "@/config/tokens";
 import { cn } from "@/lib/utils";
 
 export type SpecimenMode = "FIXED" | "FLOATING";
@@ -14,6 +15,9 @@ interface TicketSpecimenProps {
   className?: string;
 }
 
+const SPECIMEN_INV_SYMBOL = getTokenMeta(ACTIVE_NETWORK.contracts.WETH).symbol;
+const SPECIMEN_PAY_SYMBOL = getTokenMeta(ACTIVE_NETWORK.contracts.USDT).symbol;
+
 const STAGE_META: Record<
   SpecimenStage,
   {
@@ -26,7 +30,7 @@ const STAGE_META: Record<
 > = {
   0: {
     badge: "RESERVED",
-    overhangTitle: "0.01 tWETH segregated",
+    overhangTitle: `0.01 ${SPECIMEN_INV_SYMBOL} segregated`,
     overhangSub: "0.00% AMM slippage · Exclusive lock",
     windowLabel: "10:00 remaining",
     icon: "lock",
@@ -40,9 +44,9 @@ const STAGE_META: Record<
   },
   2: {
     badge: "EXERCISED",
-    overhangTitle: "30.00 tUSDT settled",
-    overhangSub: "0.01 tWETH delivered · Ticket burned",
-    windowLabel: "Settled on Chain 133",
+    overhangTitle: `30.00 ${SPECIMEN_PAY_SYMBOL} settled`,
+    overhangSub: `0.01 ${SPECIMEN_INV_SYMBOL} delivered · Ticket burned`,
+    windowLabel: `Settled on Chain ${ACTIVE_NETWORK.chainId}`,
     icon: "check",
   },
 };
@@ -220,7 +224,7 @@ export function TicketSpecimen({
                   Reserved Inventory
                 </span>
                 <span className="tabular-nums-mono text-3xl font-semibold tracking-tight">
-                  0.01 <span className="text-lg font-medium opacity-75">tWETH</span>
+                  0.01 <span className="text-lg font-medium opacity-75">{SPECIMEN_INV_SYMBOL}</span>
                 </span>
               </div>
               <div className="flex flex-col items-end gap-1">
@@ -266,12 +270,12 @@ export function TicketSpecimen({
               <div className="flex flex-col gap-0.5">
                 <dt style={{ color: stockMuted }}>Settlement Cost</dt>
                 <dd key={`cost-${mode}`} className="animate-rise tabular-nums-mono font-medium">
-                  {isFixed ? "30.00 tUSDT" : "29.40 – 30.90 tUSDT"}
+                  {isFixed ? `30.00 ${SPECIMEN_PAY_SYMBOL}` : `29.40 – 30.90 ${SPECIMEN_PAY_SYMBOL}`}
                 </dd>
               </div>
               <div className="flex flex-col gap-0.5 text-right">
                 <dt style={{ color: stockMuted }}>Upfront Premium</dt>
-                <dd className="tabular-nums-mono font-medium">0.15 tUSDT (50 bps)</dd>
+                <dd className="tabular-nums-mono font-medium">0.15 {SPECIMEN_PAY_SYMBOL} (50 bps)</dd>
               </div>
               <div className="flex flex-col gap-0.5">
                 <dt style={{ color: stockMuted }}>Status Window</dt>
@@ -291,18 +295,24 @@ export function TicketSpecimen({
               style={{ borderTop: `1px solid ${stockHairline}` }}
             >
               <span className="tabular-nums-mono" style={{ color: stockMuted }}>
-                Chain 133 · Segregated Vault
+                Chain {ACTIVE_NETWORK.chainId} · Segregated Vault
               </span>
-              <a
-                href={explorerTxUrl(LIVE_EXERCISE_PROOF_TX)}
-                target="_blank"
-                rel="noreferrer"
-                className="tabular-nums-mono inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline"
-                style={{ color: stockFg }}
-              >
-                Verify Proof
-                <ArrowUpRight className="size-3" />
-              </a>
+              {ACTIVE_NETWORK.liveExerciseProofTx ? (
+                <a
+                  href={explorerTxUrl(ACTIVE_NETWORK.liveExerciseProofTx)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="tabular-nums-mono inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline"
+                  style={{ color: stockFg }}
+                >
+                  Verify Proof
+                  <ArrowUpRight className="size-3" />
+                </a>
+              ) : (
+                <span className="tabular-nums-mono" style={{ color: stockMuted }}>
+                  Pending Mainnet Deployment
+                </span>
+              )}
             </div>
           </div>
 
