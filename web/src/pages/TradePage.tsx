@@ -32,8 +32,10 @@ import {
   COMMITMENT_MANAGER_ABI,
   createTrancheWalletClient,
   fetchAllOffers,
+  fetchRecentActivity,
   tranchePublicClient,
   type OnChainOffer,
+  type ProtocolActivityItem,
 } from "@/lib/protocol";
 import { cn } from "@/lib/utils";
 import type { AppRoute } from "@/App";
@@ -51,6 +53,8 @@ const DURATION_PRESETS = [
 export function TradePage({ onNavigate }: TradePageProps) {
   const { address, activeProvider, isConnected, isWrongNetwork } = useWallet();
   const [offers, setOffers] = useState<OnChainOffer[]>([]);
+  const [activity, setActivity] = useState<ProtocolActivityItem[]>([]);
+  const [totalTickets, setTotalTickets] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pairFilter, setPairFilter] = useState<string>("ALL");
@@ -76,8 +80,10 @@ export function TradePage({ onNavigate }: TradePageProps) {
   const loadOffers = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const list = await fetchAllOffers();
+      const [list, act] = await Promise.all([fetchAllOffers(), fetchRecentActivity()]);
       setOffers(list);
+      setActivity(act.items);
+      setTotalTickets(act.totalTickets);
     } catch {
       // keep previous list on transient RPC hiccup
     } finally {
@@ -117,6 +123,20 @@ export function TradePage({ onNavigate }: TradePageProps) {
       return label === pairFilter;
     });
   }, [activeOffers, pairFilter]);
+
+  const totalNotionalUsd = useMemo(() => {
+    let total = 0;
+    for (const o of activeOffers) {
+      const inv = getTokenMeta(o.inventoryToken);
+      const pay = getTokenMeta(o.paymentToken);
+      if (o.priceMode === 0 && o.fixedPriceX36 > 0n) {
+        const units = Number(o.availableBalance) / 10 ** inv.decimals;
+        const px = (Number(o.fixedPriceX36) / 1e36) * 10 ** (inv.decimals - pay.decimals);
+        if (Number.isFinite(units * px)) total += units * px;
+      }
+    }
+    return total;
+  }, [activeOffers]);
 
   // Open Reserve Sheet with clean defaults
   function openReserveSheet(offer: OnChainOffer) {
@@ -303,6 +323,36 @@ export function TradePage({ onNavigate }: TradePageProps) {
           </div>
         )}
 
+        {/* 3-Cell Live Market Depth Strip */}
+        <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[18px] border border-border bg-border sm:grid-cols-3">
+          <div className="flex flex-col gap-1 bg-card px-5 py-4">
+            <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              Available Liquidity
+            </span>
+            <span className="tabular-nums-mono text-xl font-semibold text-foreground">
+              {loading
+                ? "—"
+                : `$${totalNotionalUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1 bg-card px-5 py-4">
+            <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              Open Offers
+            </span>
+            <span className="tabular-nums-mono text-xl font-semibold text-foreground">
+              {loading ? "—" : activeOffers.length}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1 bg-card px-5 py-4">
+            <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              Tickets Minted On-Chain
+            </span>
+            <span className="tabular-nums-mono text-xl font-semibold text-foreground">
+              {loading ? "—" : totalTickets}
+            </span>
+          </div>
+        </div>
+
         {/* Pair Filter Pills + Live Count */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -441,6 +491,43 @@ export function TradePage({ onNavigate }: TradePageProps) {
             </div>
           )}
         </div>
+
+        {/* Live On-Chain Recent Activity Feed */}
+        {activity.length > 0 && (
+          <section className="flex flex-col gap-3 pt-2">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-sm font-semibold text-foreground">
+                Recent On-Chain Activity
+              </h2>
+              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
+                Live Chain {ACTIVE_NETWORK.chainId} events
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-[18px] border border-border bg-card">
+              <div className="divide-y divide-border">
+                {activity.map((item) => (
+                  <a
+                    key={item.id}
+                    href={explorerTxUrl(item.txHash)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex flex-col justify-between gap-1 px-5 py-3.5 text-xs transition-colors hover:bg-accent/40 sm:flex-row sm:items-center"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="size-1.5 rounded-full bg-status-live" />
+                      <span className="font-medium text-foreground">{item.label}</span>
+                      <span className="tabular-nums-mono text-muted-foreground">{item.detail}</span>
+                    </div>
+                    <span className="tabular-nums-mono inline-flex items-center gap-1 text-[11px] text-muted-foreground group-hover:text-foreground">
+                      Block #{item.blockNumber.toLocaleString()}
+                      <ArrowUpRight className="size-3" />
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
       </div>
 
       {/* Apple Slide-Over Reserve Sheet (parent ledger remains visible behind scrim) */}
@@ -600,9 +687,30 @@ export function TradePage({ onNavigate }: TradePageProps) {
                         </span>
                       </div>
                       <Separator />
+                      {quote && selected.priceMode === 0 && (
+                        <div className="flex flex-col gap-1.5 rounded-[12px] bg-accent/40 p-3 text-[11px] leading-relaxed">
+                          <span className="font-medium text-foreground">
+                            Your outcome over {formatDuration(durationSec)}:
+                          </span>
+                          <span className="text-muted-foreground">
+                            • Price rises above{" "}
+                            <strong className="tabular-nums-mono text-foreground">
+                              ${formatPriceX36(selected.fixedPriceX36, selectedInv.decimals, selectedPay.decimals)}
+                            </strong>{" "}
+                            → buy at your locked strike, zero slippage.
+                          </span>
+                          <span className="text-muted-foreground">
+                            • Price drops → walk away. Max cost is your{" "}
+                            <strong className="tabular-nums-mono text-foreground">
+                              {formatTokenAmount(quote.grossPremium, selectedPay.decimals, 4)}{" "}
+                              {selectedPay.symbol}
+                            </strong>{" "}
+                            hold fee.
+                          </span>
+                        </div>
+                      )}
                       <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Upfront reservation premium is non-refundable if the ticket expires
-                        unexercised.
+                        Upfront hold fee is non-refundable if the ticket expires unexercised.
                       </p>
                     </div>
 
