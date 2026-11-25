@@ -1,0 +1,23 @@
+{
+  "name": "tranche-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Clean 24s motion intro video for Tranche",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render src/index.ts TrancheIntro out/tranche-intro.mp4 --codec=h264 --crf=16 --pixel-format=yuv420p",
+    "render:fast": "remotion render src/index.ts TrancheIntro out/tranche-intro.mp4 --codec=h264 --crf=20 --pixel-format=yuv420p",
+    "still": "remotion still src/index.ts TrancheIntro"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.280",
+    "@remotion/google-fonts": "^4.0.280",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.280"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
