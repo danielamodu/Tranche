@@ -43,9 +43,11 @@ import { useWallet } from "@/context/WalletContext";
 import {
   COMMITMENT_MANAGER_ABI,
   LIQUIDITY_VAULT_ABI,
+  chunkedMulticall,
   createTrancheWalletClient,
   fetchAllOffers,
   tranchePublicClient,
+  type MulticallEntry,
   type OnChainOffer,
 } from "@/lib/protocol";
 import { cn } from "@/lib/utils";
@@ -110,10 +112,11 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
   const [claimingToken, setClaimingToken] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<OnChainOffer | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [vaultActionError, setVaultActionError] = useState<string | null>(null);
 
   const loadVaultData = useCallback(
     async (isManual = false) => {
-      if (!address) {
+      if (!address || !ACTIVE_NETWORK.isLive) {
         setVaultRows([]);
         setMyOffers([]);
         setLoading(false);
@@ -122,34 +125,46 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
       if (isManual) setRefreshing(true);
       try {
         const { liquidityVault } = ACTIVE_NETWORK.contracts;
-        const [rows, allOffers] = await Promise.all([
-          Promise.all(
-            TOKEN_LIST.map(async (token) => {
-              const [walletBal, freeBal, pendingProceeds] = await Promise.all([
-                tranchePublicClient.readContract({
-                  address: token.address,
-                  abi: erc20Abi,
-                  functionName: "balanceOf",
-                  args: [address],
-                }),
-                tranchePublicClient.readContract({
-                  address: liquidityVault,
-                  abi: LIQUIDITY_VAULT_ABI,
-                  functionName: "lpFreeBalance",
-                  args: [address, token.address],
-                }),
-                tranchePublicClient.readContract({
-                  address: liquidityVault,
-                  abi: LIQUIDITY_VAULT_ABI,
-                  functionName: "lpPendingProceeds",
-                  args: [address, token.address],
-                }),
-              ]);
-              return { token, walletBal, freeBal, pendingProceeds };
-            }),
-          ),
+        const calls: MulticallEntry[] = [];
+        for (const token of TOKEN_LIST) {
+          calls.push(
+            {
+              address: token.address,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [address],
+            },
+            {
+              address: liquidityVault,
+              abi: LIQUIDITY_VAULT_ABI,
+              functionName: "lpFreeBalance",
+              args: [address, token.address],
+            },
+            {
+              address: liquidityVault,
+              abi: LIQUIDITY_VAULT_ABI,
+              functionName: "lpPendingProceeds",
+              args: [address, token.address],
+            },
+          );
+        }
+
+        const [outcomes, allOffers] = await Promise.all([
+          chunkedMulticall(tranchePublicClient, calls, ACTIVE_NETWORK.multicall3),
           fetchAllOffers(),
         ]);
+
+        const rows: TokenVaultState[] = TOKEN_LIST.map((token, idx) => {
+          const wOut = outcomes[idx * 3];
+          const fOut = outcomes[idx * 3 + 1];
+          const pOut = outcomes[idx * 3 + 2];
+          return {
+            token,
+            walletBal: wOut?.status === "success" && typeof wOut.result === "bigint" ? wOut.result : 0n,
+            freeBal: fOut?.status === "success" && typeof fOut.result === "bigint" ? fOut.result : 0n,
+            pendingProceeds: pOut?.status === "success" && typeof pOut.result === "bigint" ? pOut.result : 0n,
+          };
+        });
         setVaultRows(rows);
         setMyOffers(allOffers.filter((o) => o.lp.toLowerCase() === address.toLowerCase()));
       } catch {
@@ -256,8 +271,9 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
   }
 
   async function handleClaimProceeds(token: TokenMeta) {
-    if (!address || !activeProvider) return;
+    if (!address || !activeProvider || !ACTIVE_NETWORK.isLive) return;
     setClaimingToken(token.address);
+    setVaultActionError(null);
     try {
       const walletClient = createTrancheWalletClient(activeProvider, address);
       const hash = await walletClient.writeContract({
@@ -268,8 +284,9 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
       });
       await tranchePublicClient.waitForTransactionReceipt({ hash });
       loadVaultData(true);
-    } catch {
-      // user rejected
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Claim proceeds failed or rejected.";
+      setVaultActionError(`Claim ${token.symbol} failed: ${msg.length > 150 ? `${msg.slice(0, 150)}…` : msg}`);
     } finally {
       setClaimingToken(null);
     }
@@ -349,8 +366,9 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
   }
 
   async function handleCancelOffer() {
-    if (!cancelTarget || !address || !activeProvider) return;
+    if (!cancelTarget || !address || !activeProvider || !ACTIVE_NETWORK.isLive) return;
     setCancelling(true);
+    setVaultActionError(null);
     try {
       const walletClient = createTrancheWalletClient(activeProvider, address);
       const hash = await walletClient.writeContract({
@@ -362,8 +380,10 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
       await tranchePublicClient.waitForTransactionReceipt({ hash });
       setCancelTarget(null);
       loadVaultData(true);
-    } catch {
-      // rejected
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Cancel offer failed or rejected.";
+      setVaultActionError(`Cancel Offer #${cancelTarget.offerId.toString()} failed: ${msg.length > 150 ? `${msg.slice(0, 150)}…` : msg}`);
+      setCancelTarget(null);
     } finally {
       setCancelling(false);
     }
@@ -384,7 +404,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
       onRefresh={() => loadVaultData(true)}
       refreshing={refreshing}
       headerActions={
-        isConnected && (
+        isConnected && ACTIVE_NETWORK.isLive && (
           <Button
             type="button"
             size="sm"
@@ -411,6 +431,22 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
         </div>
       ) : (
         <div className="flex flex-col gap-8">
+          {vaultActionError && (
+            <div className="flex items-start justify-between gap-3 rounded-[14px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                <span>{vaultActionError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVaultActionError(null)}
+                className="shrink-0 underline underline-offset-4 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* Contextual 3-step LP Onboarding Strip (auto-ticks live) */}
           {showOnboarding && (
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-[16px] border border-border bg-card px-5 py-3.5 text-xs">
@@ -590,7 +626,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                             {inv.symbol} ·{" "}
                             {o.priceMode === 0
                               ? `${formatPriceX36(o.fixedPriceX36, inv.decimals, pay.decimals)} ${pay.symbol}`
-                              : `Oracle +${o.spreadBps} bps`}{" "}
+                              : `Oracle ${o.spreadBps >= 0 ? "+" : ""}${o.spreadBps} bps`}{" "}
                             · {(o.basePremiumBps / 100).toFixed(2)}% prem · max{" "}
                             {formatDuration(o.maxDuration)}
                           </span>
