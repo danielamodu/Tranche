@@ -26,10 +26,30 @@ export function resolveAnvilBinary(): string {
   return "anvil";
 }
 
-export async function startTempAnvil(): Promise<{ rpcUrl: string; port: number; proc: ChildProcess }> {
+export interface StartAnvilOptions {
+  forkUrl?: string;
+  forkBlockNumber?: bigint;
+  chainId?: number;
+  timeoutMs?: number;
+}
+
+export async function startTempAnvil(
+  options?: StartAnvilOptions,
+): Promise<{ rpcUrl: string; port: number; proc: ChildProcess }> {
   const port = await getFreePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
-  const proc = spawn(resolveAnvilBinary(), ["--host", "127.0.0.1", "--port", String(port)], {
+  const args = ["--host", "127.0.0.1", "--port", String(port)];
+  if (options?.forkUrl) {
+    args.push("--fork-url", options.forkUrl);
+  }
+  if (options?.forkBlockNumber !== undefined) {
+    args.push("--fork-block-number", options.forkBlockNumber.toString());
+  }
+  if (options?.chainId !== undefined) {
+    args.push("--chain-id", String(options.chainId));
+  }
+
+  const proc = spawn(resolveAnvilBinary(), args, {
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -37,7 +57,7 @@ export async function startTempAnvil(): Promise<{ rpcUrl: string; port: number; 
   proc.stdout?.resume();
   proc.stderr?.resume();
 
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + (options?.timeoutMs ?? (options?.forkUrl ? 25_000 : 10_000));
   while (Date.now() < deadline) {
     if (proc.exitCode !== null) {
       throw new Error(`Anvil exited prematurely with code ${proc.exitCode}`);
@@ -54,7 +74,7 @@ export async function startTempAnvil(): Promise<{ rpcUrl: string; port: number; 
     } catch {
       // Wait for Anvil RPC readiness.
     }
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 150));
   }
 
   await stopTempAnvil(proc);
