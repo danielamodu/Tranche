@@ -62,8 +62,10 @@ interface TokenVaultState {
   pendingProceeds: bigint;
 }
 
+const PAYMENT_TOKEN = getTokenMeta(ACTIVE_NETWORK.contracts.USDT);
+
 const INVENTORY_TOKENS = TOKEN_LIST.filter(
-  (t) => t.address.toLowerCase() !== ACTIVE_NETWORK.contracts.tUSDT.toLowerCase(),
+  (t) => t.address.toLowerCase() !== ACTIVE_NETWORK.contracts.USDT.toLowerCase(),
 );
 
 export function VaultPage({ onNavigate }: VaultPageProps) {
@@ -275,7 +277,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
 
   async function handleCreateOffer() {
     if (!address || !activeProvider) return;
-    const payMeta = getTokenMeta(ACTIVE_NETWORK.contracts.tUSDT);
+    const payMeta = getTokenMeta(ACTIVE_NETWORK.contracts.USDT);
 
     let initialAmount = 0n;
     let minFillAmount = 0n;
@@ -764,7 +766,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
               </span>
               <SheetTitle className="font-display text-2xl font-semibold">Create Offer</SheetTitle>
               <SheetDescription className="text-xs text-muted-foreground">
-                Allocates from your Vault Free balance onto the live Trade Desk (quoted in tUSDT).
+                Allocates from your Vault Free balance onto the live Trade Desk (quoted in {PAYMENT_TOKEN.symbol}).
               </SheetDescription>
             </SheetHeader>
 
@@ -878,7 +880,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                 {priceMode === "FIXED" ? (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-muted-foreground">
-                      Fixed Strike (tUSDT per 1 {invToken.symbol})
+                      Fixed Strike ({PAYMENT_TOKEN.symbol} per 1 {invToken.symbol})
                     </label>
                     <Input
                       type="text"
@@ -988,7 +990,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                     Publishing Offer…
                   </>
                 ) : (
-                  `Publish ${invToken.symbol} / tUSDT Offer`
+                  `Publish ${invToken.symbol} / ${PAYMENT_TOKEN.symbol} Offer`
                 )}
               </Button>
             </div>
