@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AgentApiClient, AgentApiError } from "@/lib/agentApi";
+import {
+  AgentApiClient,
+  AgentApiError,
+  isHostedHttpsToLocalApi,
+  isLocalAgentApiUrl,
+  normalizeAgentApiUrl,
+} from "@/lib/agentApi";
 
 test("AgentApiClient: parses typed snapshot and forwards Bearer token on POST", async () => {
   const seenAuth: string[] = [];
@@ -30,9 +36,29 @@ test("AgentApiClient: parses typed snapshot and forwards Bearer token on POST", 
         ok: true,
         uptimeSec: 12,
         runtimeRunning: true,
+        rpcHealthy: true,
+        lastSuccessfulCycleAt: 1_700_000_000,
+        recoveryState: "healthy",
         mode: "dry_run",
+        dataSource: "fixture",
+        chainId: 177,
+        quotesAreReal: false,
         stateCorrupted: false,
         pendingTxCount: 0,
+      },
+      "/ready": {
+        ready: true,
+        recoveryState: "healthy",
+        rpcHealthy: true,
+        killSwitch: false,
+        stateCorrupted: false,
+      },
+      "/agent/policy/history": {
+        currentVersion: 2,
+        history: [
+          { version: 1, timestamp: 1_700_000_000, source: "api" },
+          { version: 2, timestamp: 1_700_000_100, source: "llm", instruction: "momentum, take profit 4%" },
+        ],
       },
       "/agent/status": {
         running: true,
@@ -69,7 +95,17 @@ test("AgentApiClient: parses typed snapshot and forwards Bearer token on POST", 
       "/agent/decisions?limit=20": { total: 0, items: [] },
       "/agent/positions": { open: [], all: [] },
       "/agent/tickets": { active: [], all: [] },
-      "/agent/markets": { available: false, market: "WHSK/USDT" },
+      "/agent/markets": {
+        available: true,
+        market: "WHSK/USDT",
+        timestamp: 1_700_000_000,
+        realizedVolatilityBps: 120,
+        momentumReturnBps: 145,
+        dislocationVsTwapBps: -25,
+        marketRegime: "TRENDING",
+        anomalies: [],
+        venueComparison: null,
+      },
       "/agent/config": {
         mode: "dry_run",
         strategy: {
@@ -122,6 +158,13 @@ test("AgentApiClient: parses typed snapshot and forwards Bearer token on POST", 
   assert.equal(snap.status.mode, "dry_run");
   assert.equal(snap.status.lastSelectedVenue, "TRANCHE");
   assert.equal(snap.metrics.dryRunEvaluationsCount, 1);
+  assert.equal(snap.health.rpcHealthy, true);
+  assert.equal(snap.health.recoveryState, "healthy");
+  assert.equal(snap.ready.ready, true);
+  assert.equal(snap.ready.httpStatus, 200);
+  assert.equal(snap.markets.marketRegime, "TRENDING");
+  assert.equal(snap.policyHistory.currentVersion, 2);
+  assert.equal(snap.policyHistory.history.length, 2);
 
   const pauseRes = await client.pause();
   assert.equal(pauseRes.paused, true);
@@ -149,4 +192,53 @@ test("AgentApiClient: surfaces API_UNREACHABLE cleanly on network disconnection"
     () => client.fetchSnapshot(),
     (err: unknown) => err instanceof AgentApiError && err.status === 0 && err.code === "API_UNREACHABLE",
   );
+});
+
+test("AgentApiClient: parses 503 /ready degraded state, 429 rate-limit, and API URL helpers", async () => {
+  const ready503Client = new AgentApiClient({
+    baseUrl: "http://127.0.0.1:8787/",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          ready: false,
+          recoveryState: "retrying",
+          rpcHealthy: false,
+          killSwitch: true,
+          stateCorrupted: false,
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+  const ready = await ready503Client.getReady();
+  assert.equal(ready.ready, false);
+  assert.equal(ready.httpStatus, 503);
+  assert.equal(ready.rpcHealthy, false);
+  assert.equal(ready.killSwitch, true);
+  assert.equal(ready.recoveryState, "retrying");
+
+  const rateLimitedClient = new AgentApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          error: "RATE_LIMIT_EXCEEDED",
+          message: "Too many requests; retry after 60s",
+        }),
+        { status: 429, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+  await assert.rejects(
+    () => rateLimitedClient.getPolicyHistory(),
+    (err: unknown) =>
+      err instanceof AgentApiError && err.status === 429 && err.code === "RATE_LIMIT_EXCEEDED",
+  );
+
+  // URL configuration helpers
+  assert.equal(normalizeAgentApiUrl("http://127.0.0.1:8787///"), "http://127.0.0.1:8787");
+  assert.equal(isLocalAgentApiUrl("http://127.0.0.1:8787"), true);
+  assert.equal(isLocalAgentApiUrl("http://localhost:8787"), true);
+  assert.equal(isLocalAgentApiUrl("https://agent.tranche.example"), false);
+  assert.equal(isHostedHttpsToLocalApi("http://127.0.0.1:8787", "https:"), true);
+  assert.equal(isHostedHttpsToLocalApi("http://127.0.0.1:8787", "http:"), false);
+  assert.equal(isHostedHttpsToLocalApi("https://agent.tranche.example", "https:"), false);
 });

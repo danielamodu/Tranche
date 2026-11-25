@@ -11,7 +11,13 @@ import {
   type PublicClient,
 } from "viem";
 import { MULTICALL3_ADDRESS, NETWORKS } from "@/config/networks";
-import { getNetworkTokens, getTokenMeta } from "@/config/tokens";
+import {
+  formatPriceX36,
+  formatTokenAmount,
+  getNetworkTokens,
+  getTokenMeta,
+  parseHumanPriceToX36,
+} from "@/config/tokens";
 import {
   ACTIVITY_EVENTS,
   ACTIVITY_LOOKBACK_BLOCKS,
@@ -22,6 +28,7 @@ import {
   decodeQuoteReservationResult,
   fetchAllOffers,
   fetchRecentActivity,
+  fetchUserTickets,
   tranchePublicClient,
 } from "@/lib/protocol";
 
@@ -172,4 +179,53 @@ test("Chain 133 Live Regression: fetchAllOffers (Multicall3 + getOffer), quoteRe
 
   const activity = await fetchRecentActivity(tranchePublicClient, NETWORKS.testnet);
   assert.ok(activity.totalTickets >= 1, `expected >= 1 ticket on Chain 133, got ${activity.totalTickets}`);
+});
+
+test("Mainnet-disabled safety: zero-address contracts are never called when isLive=false", async () => {
+  let rpcCalls = 0;
+  const throwingClient = {
+    readContract: async () => {
+      rpcCalls++;
+      throw new Error("Should never call readContract when isLive=false");
+    },
+    multicall: async () => {
+      rpcCalls++;
+      throw new Error("Should never call multicall when isLive=false");
+    },
+    getBlockNumber: async () => {
+      rpcCalls++;
+      throw new Error("Should never call getBlockNumber when isLive=false");
+    },
+    getLogs: async () => {
+      rpcCalls++;
+      throw new Error("Should never call getLogs when isLive=false");
+    },
+  } as unknown as Pick<PublicClient, "readContract" | "multicall" | "getBlockNumber" | "getLogs">;
+
+  const offers = await fetchAllOffers(throwingClient, NETWORKS.mainnet);
+  const tickets = await fetchUserTickets(
+    "0x1111111111111111111111111111111111111111",
+    throwingClient,
+    NETWORKS.mainnet,
+  );
+  const activity = await fetchRecentActivity(throwingClient, NETWORKS.mainnet);
+
+  assert.deepEqual(offers, []);
+  assert.deepEqual(tickets, []);
+  assert.deepEqual(activity, { totalTickets: 0, items: [] });
+  assert.equal(rpcCalls, 0, "Expected zero RPC calls when mainnet isLive=false");
+});
+
+test("Token formatting: exact 6/8/18 decimal formatting and priceX36 round-trip", () => {
+  assert.equal(formatTokenAmount(0n, 6), "0");
+  assert.equal(formatTokenAmount(1_500_000n, 6), "1.5");
+  assert.equal(formatTokenAmount(50_000_000n, 8), "0.5");
+
+  // 3000 USDT (6 dec) per 1 WETH (18 dec)
+  const ethPriceX36 = parseHumanPriceToX36("3000", 18, 6);
+  assert.equal(formatPriceX36(ethPriceX36, 18, 6), "3,000.00");
+
+  // 0.085 USDT (6 dec) per 1 WHSK (18 dec)
+  const whskPriceX36 = parseHumanPriceToX36("0.085", 18, 6);
+  assert.equal(formatPriceX36(whskPriceX36, 18, 6), "0.085");
 });
