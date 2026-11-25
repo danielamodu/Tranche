@@ -3,6 +3,8 @@ import {
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
+  Check,
+  Droplets,
   Loader2,
   LogOut,
   Menu,
@@ -72,6 +74,33 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
   const [ticketCount, setTicketCount] = useState<number>(0);
+  const [faucetState, setFaucetState] = useState<"idle" | "minting" | "done" | "error">("idle");
+  const [faucetMsg, setFaucetMsg] = useState<string | null>(null);
+
+  async function handleTestnetFaucet() {
+    if (!address || ACTIVE_NETWORK.key !== "testnet") return;
+    setFaucetState("minting");
+    setFaucetMsg(null);
+    try {
+      const resp = await fetch("/api/faucet", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address }),
+      });
+      const data = (await resp.json()) as { ok?: boolean; error?: string };
+      if (!resp.ok || !data.ok) {
+        setFaucetState("error");
+        setFaucetMsg(data.error ?? "Faucet unavailable");
+        return;
+      }
+      setFaucetState("done");
+      setFaucetMsg("+1,000 tUSDT & +0.5 tWETH minted");
+      onRefresh?.();
+    } catch {
+      setFaucetState("error");
+      setFaucetMsg("Faucet available on live deployment");
+    }
+  }
 
   useEffect(() => {
     if (!address) {
@@ -180,6 +209,39 @@ export function AppShell({
             <span>Blockscout Vault</span>
             <ArrowUpRight className="size-3.5" />
           </a>
+
+          {/* Testnet-only Faucet button (automatically hidden on Mainnet 177) */}
+          {ACTIVE_NETWORK.key === "testnet" && isConnected && (
+            <div className="mt-2 flex flex-col gap-1.5">
+              <button
+                type="button"
+                disabled={faucetState === "minting"}
+                onClick={handleTestnetFaucet}
+                className="flex h-9 w-full items-center justify-between rounded-[10px] border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:border-foreground/25 disabled:opacity-60 cursor-pointer"
+              >
+                <span className="inline-flex items-center gap-2">
+                  {faucetState === "minting" ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : faucetState === "done" ? (
+                    <Check className="size-3.5 text-status-live" />
+                  ) : (
+                    <Droplets className="size-3.5 text-muted-foreground" />
+                  )}
+                  {faucetState === "minting" ? "Minting…" : "Get Test Tokens"}
+                </span>
+              </button>
+              {faucetMsg && (
+                <span
+                  className={cn(
+                    "px-2 text-[10px] leading-snug",
+                    faucetState === "error" ? "text-destructive" : "text-status-live",
+                  )}
+                >
+                  {faucetMsg}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
