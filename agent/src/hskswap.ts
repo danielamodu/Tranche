@@ -87,6 +87,8 @@ export interface DexSwapExecution {
   tokenOut: Address;
   amountIn: bigint;
   amountOut: bigint;
+  quotedAmountOut?: bigint;
+  realizedSlippageBps?: number;
   txHash: Hex;
   blockNumber: bigint;
   gasUsed: bigint;
@@ -123,6 +125,8 @@ export interface DexVenueAdapter {
     amountOutMinimum: bigint;
     recipient: Address;
     deadlineSec?: number;
+    expectedChainId?: number;
+    quotedAmountOut?: bigint;
   }): Promise<DexSwapExecution>;
 }
 
@@ -408,9 +412,33 @@ export class HskSwapVenue implements DexVenueAdapter {
     amountOutMinimum: bigint;
     recipient: Address;
     deadlineSec?: number;
+    expectedChainId?: number;
+    quotedAmountOut?: bigint;
   }): Promise<DexSwapExecution> {
     if (!this.walletClient || !this.account) {
       throw new Error("HskSwapVenue requires walletClient and account to execute swaps");
+    }
+
+    // Pre-execution chain ID & signer token balance validation
+    if (params.expectedChainId !== undefined) {
+      const actualChainId = await this.publicClient.getChainId();
+      if (actualChainId !== params.expectedChainId) {
+        throw new Error(
+          `Chain ID mismatch before swap: expected ${params.expectedChainId}, got ${actualChainId}`,
+        );
+      }
+    }
+
+    const tokenInBalance = await this.publicClient.readContract({
+      address: params.tokenIn,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [this.account.address],
+    });
+    if (tokenInBalance < params.amountIn) {
+      throw new Error(
+        `Insufficient balance of ${params.tokenIn}: have ${tokenInBalance}, need ${params.amountIn}`,
+      );
     }
 
     // Check & approve exact allowance strictly to configured swapRouter02
@@ -503,12 +531,22 @@ export class HskSwapVenue implements DexVenueAdapter {
       throw new Error(`Received amountOut ${amountOut} < minimum ${params.amountOutMinimum}`);
     }
 
+    let realizedSlippageBps: number | undefined;
+    if (params.quotedAmountOut && params.quotedAmountOut > 0n) {
+      realizedSlippageBps =
+        amountOut >= params.quotedAmountOut
+          ? 0
+          : Number(((params.quotedAmountOut - amountOut) * BPS_DENOMINATOR) / params.quotedAmountOut);
+    }
+
     return {
       venue: this.name,
       tokenIn: params.tokenIn,
       tokenOut: params.tokenOut,
       amountIn: params.amountIn,
       amountOut,
+      quotedAmountOut: params.quotedAmountOut,
+      realizedSlippageBps,
       txHash,
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed,
