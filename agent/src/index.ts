@@ -39,14 +39,19 @@ export type {
   DexVenueAdapter,
   HskSwapVenueConfig,
 } from "./hskswap.js";
-export { MarketIntelligence } from "./market.js";
+export { MarketIntelligence, classifyMarketRegime } from "./market.js";
 export type {
   MarketIntelligenceConfig,
   MarketObservation,
+  MarketRegime,
   MarketSnapshot,
   OracleReader,
   OracleReading,
 } from "./market.js";
+export { StructuredLogger, redactSensitive } from "./logger.js";
+export type { LogLevel, StructuredLogEntry } from "./logger.js";
+export { TransactionReconciler } from "./reconciler.js";
+export type { ReconciledTxStatus, TxReconciliationResult } from "./reconciler.js";
 export { StrategyEngine } from "./strategy.js";
 export type {
   ExitDecision,

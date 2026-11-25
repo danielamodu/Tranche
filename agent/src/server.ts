@@ -1,8 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import {
+  LocalRuleBasedLlmProvider,
   applyValidatedPolicyPatch,
+  validatePolicyPatch,
   type AgentPolicyPatch,
+  type LlmProvider,
   type PolicyValidationBounds,
 } from "./llm.js";
 import type { AgentDataSourceMode } from "./protocol-config.js";
@@ -19,6 +22,8 @@ export interface AgentApiServerConfig {
   marketLabel?: string;
   dataSource?: AgentDataSourceMode;
   chainId?: number;
+  llmProvider?: LlmProvider;
+  maxRequestsPerMinute?: number;
 }
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -121,6 +126,9 @@ export class AgentApiServer {
   private server: Server | null = null;
   private controlBusy = false;
   private readonly startedAt = Math.floor(Date.now() / 1000);
+  private readonly llmProvider: LlmProvider;
+  private readonly maxRequestsPerMinute: number;
+  private readonly requestTimestampsByIp = new Map<string, number[]>();
 
   constructor(config: AgentApiServerConfig) {
     if (!config.apiToken || config.apiToken.length < 8) {
@@ -130,6 +138,22 @@ export class AgentApiServer {
     this.host = config.host ?? "127.0.0.1";
     this.port = config.port ?? 8787;
     this.allowedOrigins = new Set(config.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
+    this.llmProvider = config.llmProvider ?? new LocalRuleBasedLlmProvider();
+    this.maxRequestsPerMinute = config.maxRequestsPerMinute ?? 120;
+  }
+
+  private checkRateLimit(req: IncomingMessage): boolean {
+    const ip = req.socket.remoteAddress ?? "127.0.0.1";
+    const now = Date.now();
+    const windowStart = now - 60_000;
+    const prev = (this.requestTimestampsByIp.get(ip) ?? []).filter((t) => t > windowStart);
+    if (prev.length >= this.maxRequestsPerMinute) {
+      this.requestTimestampsByIp.set(ip, prev);
+      return false;
+    }
+    prev.push(now);
+    this.requestTimestampsByIp.set(ip, prev);
+    return true;
   }
 
   getAddress(): { host: string; port: number; url: string } {
@@ -197,6 +221,13 @@ export class AgentApiServer {
       return;
     }
 
+    if (!this.checkRateLimit(req)) {
+      return sendJson(res, 429, {
+        error: "RATE_LIMIT_EXCEEDED",
+        message: "Too many requests; retry after 60s",
+      });
+    }
+
     const url = new URL(req.url ?? "/", `http://${this.host}:${this.port}`);
     const pathname = url.pathname;
 
@@ -204,11 +235,15 @@ export class AgentApiServer {
       // Public read-only endpoints (localhost only, zero secrets)
       if (method === "GET" && pathname === "/health") {
         const store = this.cfg.agent.getPositionStore();
+        const health = this.cfg.runtime.getHealthInfo();
         const dataSource = this.cfg.dataSource ?? "fixture";
         return sendJson(res, 200, {
           ok: !store.isStateCorrupted(),
           uptimeSec: Math.floor(Date.now() / 1000) - this.startedAt,
-          runtimeRunning: this.cfg.runtime.isRunning(),
+          runtimeRunning: health.running,
+          rpcHealthy: health.rpcHealthy,
+          lastSuccessfulCycleAt: health.lastSuccessfulCycleAt,
+          recoveryState: health.recoveryState,
           mode: this.cfg.agent.getExecutionMode(),
           dataSource,
           chainId: this.cfg.chainId ?? 0,
@@ -218,15 +253,33 @@ export class AgentApiServer {
         });
       }
 
+      if (method === "GET" && pathname === "/ready") {
+        const store = this.cfg.agent.getPositionStore();
+        const health = this.cfg.runtime.getHealthInfo();
+        const limits = this.cfg.agent.getRiskLimits();
+        const ready = !store.isStateCorrupted() && !limits.killSwitch && health.rpcHealthy;
+        return sendJson(res, ready ? 200 : 503, {
+          ready,
+          recoveryState: health.recoveryState,
+          rpcHealthy: health.rpcHealthy,
+          killSwitch: limits.killSwitch,
+          stateCorrupted: store.isStateCorrupted(),
+        });
+      }
+
       if (method === "GET" && pathname === "/agent/status") {
         const limits = this.cfg.agent.getRiskLimits();
         const strategy = this.cfg.agent.getStrategyConfig();
         const traces = this.cfg.agent.getTraces();
         const last = traces.length > 0 ? traces[traces.length - 1] : null;
         const store = this.cfg.agent.getPositionStore();
+        const health = this.cfg.runtime.getHealthInfo();
         const dataSource = this.cfg.dataSource ?? "fixture";
         return sendJson(res, 200, {
-          running: this.cfg.runtime.isRunning(),
+          running: health.running,
+          rpcHealthy: health.rpcHealthy,
+          lastSuccessfulCycleAt: health.lastSuccessfulCycleAt,
+          recoveryState: health.recoveryState,
           mode: this.cfg.agent.getExecutionMode(),
           dataSource,
           chainId: this.cfg.chainId ?? 0,
@@ -246,6 +299,14 @@ export class AgentApiServer {
               .slice()
               .reverse()
               .find((t) => t.txHashes.length > 0)?.txHashes[0] ?? null,
+        });
+      }
+
+      if (method === "GET" && pathname === "/agent/policy/history") {
+        const persisted = this.cfg.agent.getPositionStore().getPersistedRuntimeConfig();
+        return sendJson(res, 200, {
+          currentVersion: persisted?.policyVersion ?? 0,
+          history: persisted?.policyHistory ?? [],
         });
       }
 
@@ -521,8 +582,109 @@ export class AgentApiServer {
             });
           }
 
+          const saved = this.cfg.agent
+            .getPositionStore()
+            .saveRuntimeConfig(
+              this.cfg.agent.getStrategyConfig(),
+              this.cfg.agent.getRiskLimits(),
+              { source: "api" },
+            );
+
           return sendJson(res, 200, {
             ok: true,
+            policyVersion: saved.version,
+            strategy: this.cfg.agent.getStrategyConfig(),
+            riskLimits: this.cfg.agent.getRiskLimits(),
+          });
+        }
+
+        if (pathname === "/agent/policy/propose") {
+          const body = await readJsonBody(req);
+          if (typeof body.instruction !== "string" || !body.instruction.trim()) {
+            return sendJson(res, 400, {
+              error: "INVALID_FIELD",
+              message: "instruction (non-empty string) is required",
+            });
+          }
+          const proposedPatch = await this.llmProvider.parseInstruction(
+            body.instruction,
+            this.cfg.agent.getStrategyConfig(),
+            this.cfg.agent.getRiskLimits(),
+          );
+          const validation = validatePolicyPatch(proposedPatch, this.cfg.policyBounds);
+          return sendJson(res, 200, {
+            provider: this.llmProvider.name,
+            instruction: body.instruction,
+            proposedPatch,
+            validation,
+            applied: false,
+          });
+        }
+
+        if (pathname === "/agent/policy/apply") {
+          const body = await readJsonBody(req);
+          if (typeof body.instruction !== "string" || !body.instruction.trim()) {
+            return sendJson(res, 400, {
+              error: "INVALID_FIELD",
+              message: "instruction (non-empty string) is required",
+            });
+          }
+          const proposedPatch = await this.llmProvider.parseInstruction(
+            body.instruction,
+            this.cfg.agent.getStrategyConfig(),
+            this.cfg.agent.getRiskLimits(),
+          );
+          const validation = applyValidatedPolicyPatch(
+            this.cfg.agent.getStrategyConfig(),
+            this.cfg.agent.getRiskLimits(),
+            proposedPatch,
+            this.cfg.policyBounds,
+          );
+          if (!validation.valid) {
+            return sendJson(res, 400, {
+              error: "POLICY_VALIDATION_FAILED",
+              rejectedFields: validation.rejectedFields,
+              message: `Rejected fields: ${validation.rejectedFields.join(", ")}`,
+            });
+          }
+          const saved = this.cfg.agent
+            .getPositionStore()
+            .saveRuntimeConfig(
+              this.cfg.agent.getStrategyConfig(),
+              this.cfg.agent.getRiskLimits(),
+              { source: "llm", instruction: body.instruction },
+            );
+          return sendJson(res, 200, {
+            ok: true,
+            policyVersion: saved.version,
+            instruction: body.instruction,
+            appliedPatch: validation.sanitizedPatch,
+            strategy: this.cfg.agent.getStrategyConfig(),
+            riskLimits: this.cfg.agent.getRiskLimits(),
+          });
+        }
+
+        if (pathname === "/agent/policy/rollback") {
+          const body = await readJsonBody(req);
+          if (typeof body.version !== "number" || !Number.isInteger(body.version) || body.version < 1) {
+            return sendJson(res, 400, {
+              error: "INVALID_FIELD",
+              message: "version (positive integer) is required",
+            });
+          }
+          const restored = this.cfg.agent.getPositionStore().rollbackPolicy(body.version);
+          if (!restored) {
+            return sendJson(res, 404, {
+              error: "POLICY_VERSION_NOT_FOUND",
+              message: `No policy version ${body.version} found in history`,
+            });
+          }
+          Object.assign(this.cfg.agent.getStrategyConfig(), restored.strategy);
+          Object.assign(this.cfg.agent.getRiskLimits(), restored.riskLimits);
+          return sendJson(res, 200, {
+            ok: true,
+            policyVersion: restored.version,
+            restoredFromVersion: body.version,
             strategy: this.cfg.agent.getStrategyConfig(),
             riskLimits: this.cfg.agent.getRiskLimits(),
           });
