@@ -6,10 +6,15 @@ import {
   fallback,
   http,
   parseAbi,
+  type Abi,
   type Address,
+  type PublicClient,
 } from "viem";
 import { ACTIVE_NETWORK } from "@/config/networks";
 import type { Eip1193Provider } from "@/context/WalletContext";
+
+export const MULTICALL_CHUNK_SIZE = 30;
+export const ACTIVITY_LOOKBACK_BLOCKS = 5_000n;
 
 export const ACTIVE_VIEM_CHAIN = defineChain({
   id: ACTIVE_NETWORK.chainId,
@@ -17,6 +22,9 @@ export const ACTIVE_VIEM_CHAIN = defineChain({
   nativeCurrency: { name: "HashKey EcoPoints", symbol: "HSK", decimals: 18 },
   rpcUrls: { default: { http: [...ACTIVE_NETWORK.rpcUrls] } },
   blockExplorers: { default: { name: "Blockscout", url: ACTIVE_NETWORK.explorerUrl } },
+  contracts: {
+    multicall3: { address: ACTIVE_NETWORK.multicall3 },
+  },
 });
 
 export const tranchePublicClient = createPublicClient({
@@ -32,14 +40,15 @@ export function createTrancheWalletClient(provider: Eip1193Provider, account: Ad
   });
 }
 
+// Verified 1:1 against contracts/src/CommitmentManager.sol & contracts/src/interfaces/IProtocol.sol
 export const COMMITMENT_MANAGER_ABI = parseAbi([
   "function nextOfferId() view returns (uint64)",
   "function nextTicketId() view returns (uint256)",
   "function protocolFeeBps() view returns (uint16)",
-  "function offers(uint64 offerId) view returns (address lp, uint40 createdAt, uint40 expiry, uint8 priceMode, uint8 status, address inventoryToken, uint32 minDuration, uint32 maxDuration, uint16 basePremiumBps, uint16 dailyPremiumBps, address paymentToken, int16 spreadBps, uint16 protocolFeeBps, address oracle, address complianceHook, uint256 minFillAmount, uint256 fixedPriceX36, uint256 minPriceX36, uint256 maxPriceX36)",
-  "function tickets(uint256 ticketId) view returns (uint64 offerId, uint40 reservedAt, uint40 expiresAt, uint8 priceMode, uint8 status, int16 spreadBps, uint16 protocolFeeBps, address lp, address inventoryToken, address paymentToken, address oracle, address complianceHook, uint256 initialAmount, uint256 remainingAmount, uint256 minFillAmount, uint256 fixedOrMinPriceX36, uint256 maxPriceX36)",
-  "function quoteReservation(uint64 offerId, uint256 amount, uint32 duration) view returns (uint256 grossPremium, uint256 protocolFee, uint256 lpNetPremium)",
-  "function quoteExercise(uint256 ticketId, uint256 fillAmount) view returns (uint256 effectivePriceX36, uint256 grossPayment, uint256 protocolFee, uint256 lpNetPayment)",
+  "function getOffer(uint64 offerId) view returns ((address lp, uint40 createdAt, uint40 expiry, uint8 priceMode, uint8 status, address inventoryToken, uint32 minDuration, uint32 maxDuration, uint16 basePremiumBps, uint16 dailyPremiumBps, address paymentToken, int16 spreadBps, uint16 protocolFeeBps, address oracle, address complianceHook, uint256 minFillAmount, uint256 fixedPriceX36, uint256 minPriceX36, uint256 maxPriceX36))",
+  "function getTicket(uint256 ticketId) view returns ((uint64 offerId, uint40 reservedAt, uint40 expiresAt, uint8 priceMode, uint8 status, int16 spreadBps, uint16 protocolFeeBps, address lp, address inventoryToken, address paymentToken, address oracle, address complianceHook, uint256 initialAmount, uint256 remainingAmount, uint256 minFillAmount, uint256 fixedOrMinPriceX36, uint256 maxPriceX36))",
+  "function quoteReservation(uint64 offerId, uint256 inventoryAmount, uint32 duration) view returns (uint256 grossPremium, uint256 protocolFee)",
+  "function quoteExercise(uint256 ticketId, uint256 fillAmount) view returns (uint256 actualFill, uint256 grossPayment, uint256 effPriceX36)",
   "function reserve(uint64 offerId, uint256 amount, uint32 duration, uint256 maxPremium, address recipient) returns (uint256 ticketId)",
   "function exercise(uint256 ticketId, uint256 fillAmount, uint256 maxPayment, address receiver) returns (uint256 filled, uint256 paid)",
   "function splitTicket(uint256 ticketId, uint256 splitAmount, address recipient) returns (uint256 childTicketId)",
@@ -48,6 +57,7 @@ export const COMMITMENT_MANAGER_ABI = parseAbi([
   "function cancelOffer(uint64 offerId)",
 ]);
 
+// Verified 1:1 against contracts/src/LiquidityVault.sol
 export const LIQUIDITY_VAULT_ABI = parseAbi([
   "function offerBalance(uint64 offerId) view returns (uint256)",
   "function lpFreeBalance(address lp, address token) view returns (uint256)",
@@ -62,6 +72,85 @@ export const EXECUTION_TICKET_ABI = parseAbi([
   "function ownerOf(uint256 tokenId) view returns (address)",
   "function transferFrom(address from, address to, uint256 tokenId)",
 ]);
+
+export const ACTIVITY_EVENTS = parseAbi([
+  "event OfferCreated(uint64 indexed offerId, address indexed lp, uint8 priceMode)",
+  "event TicketReserved(uint256 indexed ticketId, uint64 indexed offerId, address indexed recipient, uint256 inventoryAmount, uint40 expiresAt, uint256 grossPremium)",
+  "event TicketExercised(uint256 indexed ticketId, address indexed exerciser, address indexed receiver, uint256 fillAmount, uint256 grossPayment, uint256 effPriceX36)",
+]);
+
+export interface ReservationQuote {
+  grossPremium: bigint;
+  protocolFee: bigint;
+  lpNetPremium: bigint;
+}
+
+export interface ExerciseQuote {
+  actualFill: bigint;
+  grossPayment: bigint;
+  effectivePriceX36: bigint;
+}
+
+export function decodeQuoteReservationResult(
+  raw: readonly [bigint, bigint],
+): ReservationQuote {
+  const [grossPremium, protocolFee] = raw;
+  return {
+    grossPremium,
+    protocolFee,
+    lpNetPremium: grossPremium > protocolFee ? grossPremium - protocolFee : 0n,
+  };
+}
+
+export function decodeQuoteExerciseResult(
+  raw: readonly [bigint, bigint, bigint],
+): ExerciseQuote {
+  const [actualFill, grossPayment, effectivePriceX36] = raw;
+  return {
+    actualFill,
+    grossPayment,
+    effectivePriceX36,
+  };
+}
+
+export interface MulticallEntry {
+  address: Address;
+  abi: Abi;
+  functionName: string;
+  args?: readonly unknown[];
+}
+
+export interface MulticallOutcome<T = unknown> {
+  status: "success" | "failure";
+  result?: T;
+  error?: Error;
+}
+
+/**
+ * Batches contract reads through Multicall3 in sequential chunks of <= chunkSize
+ * to avoid HashKey Chain RPC rate limits (HTTP 429) while handling partial failures safely.
+ */
+export async function chunkedMulticall(
+  client: Pick<PublicClient, "multicall">,
+  contracts: readonly MulticallEntry[],
+  multicallAddress: Address = ACTIVE_NETWORK.multicall3,
+  chunkSize: number = MULTICALL_CHUNK_SIZE,
+): Promise<MulticallOutcome[]> {
+  if (contracts.length === 0) return [];
+  const results: MulticallOutcome[] = [];
+  for (let i = 0; i < contracts.length; i += chunkSize) {
+    const slice = contracts.slice(i, i + chunkSize);
+    const batch = await client.multicall({
+      multicallAddress,
+      allowFailure: true,
+      contracts: slice as unknown as Parameters<PublicClient["multicall"]>[0]["contracts"],
+    });
+    for (const item of batch) {
+      results.push(item as MulticallOutcome);
+    }
+  }
+  return results;
+}
 
 export interface OnChainOffer {
   offerId: bigint;
@@ -87,9 +176,55 @@ export interface OnChainOffer {
   availableBalance: bigint;
 }
 
-export async function fetchAllOffers(): Promise<OnChainOffer[]> {
-  const { commitmentManager, liquidityVault } = ACTIVE_NETWORK.contracts;
-  const nextId = await tranchePublicClient.readContract({
+interface RawOfferStruct {
+  lp: Address;
+  createdAt: number;
+  expiry: number;
+  priceMode: number;
+  status: number;
+  inventoryToken: Address;
+  minDuration: number;
+  maxDuration: number;
+  basePremiumBps: number;
+  dailyPremiumBps: number;
+  paymentToken: Address;
+  spreadBps: number;
+  protocolFeeBps: number;
+  oracle: Address;
+  complianceHook: Address;
+  minFillAmount: bigint;
+  fixedPriceX36: bigint;
+  minPriceX36: bigint;
+  maxPriceX36: bigint;
+}
+
+interface RawTicketStruct {
+  offerId: bigint;
+  reservedAt: number;
+  expiresAt: number;
+  priceMode: number;
+  status: number;
+  spreadBps: number;
+  protocolFeeBps: number;
+  lp: Address;
+  inventoryToken: Address;
+  paymentToken: Address;
+  oracle: Address;
+  complianceHook: Address;
+  initialAmount: bigint;
+  remainingAmount: bigint;
+  minFillAmount: bigint;
+  fixedOrMinPriceX36: bigint;
+  maxPriceX36: bigint;
+}
+
+export async function fetchAllOffers(
+  client: Pick<PublicClient, "readContract" | "multicall"> = tranchePublicClient,
+  config = ACTIVE_NETWORK,
+): Promise<OnChainOffer[]> {
+  if (!config.isLive) return [];
+  const { commitmentManager, liquidityVault } = config.contracts;
+  const nextId = await client.readContract({
     address: commitmentManager,
     abi: COMMITMENT_MANAGER_ABI,
     functionName: "nextOfferId",
@@ -99,50 +234,59 @@ export async function fetchAllOffers(): Promise<OnChainOffer[]> {
   if (count <= 0) return [];
 
   const ids = Array.from({ length: count }, (_, i) => BigInt(i + 1));
-  const results = await Promise.all(
-    ids.map(async (id) => {
-      const [raw, bal] = await Promise.all([
-        tranchePublicClient.readContract({
-          address: commitmentManager,
-          abi: COMMITMENT_MANAGER_ABI,
-          functionName: "offers",
-          args: [id],
-        }),
-        tranchePublicClient.readContract({
-          address: liquidityVault,
-          abi: LIQUIDITY_VAULT_ABI,
-          functionName: "offerBalance",
-          args: [id],
-        }),
-      ]);
+  const calls: MulticallEntry[] = [];
+  for (const id of ids) {
+    calls.push({
+      address: commitmentManager,
+      abi: COMMITMENT_MANAGER_ABI,
+      functionName: "getOffer",
+      args: [id],
+    });
+    calls.push({
+      address: liquidityVault,
+      abi: LIQUIDITY_VAULT_ABI,
+      functionName: "offerBalance",
+      args: [id],
+    });
+  }
 
-      return {
-        offerId: id,
-        lp: raw[0],
-        createdAt: Number(raw[1]),
-        expiry: Number(raw[2]),
-        priceMode: Number(raw[3]) as 0 | 1,
-        status: Number(raw[4]) as 0 | 1 | 2,
-        inventoryToken: raw[5],
-        minDuration: Number(raw[6]),
-        maxDuration: Number(raw[7]),
-        basePremiumBps: Number(raw[8]),
-        dailyPremiumBps: Number(raw[9]),
-        paymentToken: raw[10],
-        spreadBps: Number(raw[11]),
-        protocolFeeBps: Number(raw[12]),
-        oracle: raw[13],
-        complianceHook: raw[14],
-        minFillAmount: raw[15],
-        fixedPriceX36: raw[16],
-        minPriceX36: raw[17],
-        maxPriceX36: raw[18],
-        availableBalance: bal,
-      } satisfies OnChainOffer;
-    }),
-  );
+  const outcomes = await chunkedMulticall(client, calls, config.multicall3);
+  const offers: OnChainOffer[] = [];
 
-  return results.reverse();
+  for (let i = 0; i < ids.length; i++) {
+    const offerOut = outcomes[i * 2];
+    const balOut = outcomes[i * 2 + 1];
+    if (offerOut?.status !== "success" || !offerOut.result) continue;
+
+    const raw = offerOut.result as RawOfferStruct;
+    const bal = balOut?.status === "success" && typeof balOut.result === "bigint" ? balOut.result : 0n;
+
+    offers.push({
+      offerId: ids[i],
+      lp: raw.lp,
+      createdAt: Number(raw.createdAt),
+      expiry: Number(raw.expiry),
+      priceMode: Number(raw.priceMode) as 0 | 1,
+      status: Number(raw.status) as 0 | 1 | 2,
+      inventoryToken: raw.inventoryToken,
+      minDuration: Number(raw.minDuration),
+      maxDuration: Number(raw.maxDuration),
+      basePremiumBps: Number(raw.basePremiumBps),
+      dailyPremiumBps: Number(raw.dailyPremiumBps),
+      paymentToken: raw.paymentToken,
+      spreadBps: Number(raw.spreadBps),
+      protocolFeeBps: Number(raw.protocolFeeBps),
+      oracle: raw.oracle,
+      complianceHook: raw.complianceHook,
+      minFillAmount: raw.minFillAmount,
+      fixedPriceX36: raw.fixedPriceX36,
+      minPriceX36: raw.minPriceX36,
+      maxPriceX36: raw.maxPriceX36,
+      availableBalance: bal,
+    });
+  }
+
+  return offers.reverse();
 }
 
 export interface OnChainTicket {
@@ -165,9 +309,14 @@ export interface OnChainTicket {
   maxPriceX36: bigint;
 }
 
-export async function fetchUserTickets(userAddress: Address): Promise<OnChainTicket[]> {
-  const { commitmentManager, executionTicket } = ACTIVE_NETWORK.contracts;
-  const nextId = await tranchePublicClient.readContract({
+export async function fetchUserTickets(
+  userAddress: Address,
+  client: Pick<PublicClient, "readContract" | "multicall"> = tranchePublicClient,
+  config = ACTIVE_NETWORK,
+): Promise<OnChainTicket[]> {
+  if (!config.isLive) return [];
+  const { commitmentManager, executionTicket } = config.contracts;
+  const nextId = await client.readContract({
     address: commitmentManager,
     abi: COMMITMENT_MANAGER_ABI,
     functionName: "nextTicketId",
@@ -177,55 +326,70 @@ export async function fetchUserTickets(userAddress: Address): Promise<OnChainTic
   if (count <= 0) return [];
 
   const ids = Array.from({ length: count }, (_, i) => BigInt(i + 1));
-  const rawList = await Promise.all(
-    ids.map(async (id) => {
-      const t = await tranchePublicClient.readContract({
-        address: commitmentManager,
-        abi: COMMITMENT_MANAGER_ABI,
-        functionName: "tickets",
-        args: [id],
+  const ticketCalls: MulticallEntry[] = ids.map((id) => ({
+    address: commitmentManager,
+    abi: COMMITMENT_MANAGER_ABI,
+    functionName: "getTicket",
+    args: [id],
+  }));
+
+  const ticketOutcomes = await chunkedMulticall(client, ticketCalls, config.multicall3);
+
+  const activeIndices: number[] = [];
+  const ownerCalls: MulticallEntry[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const out = ticketOutcomes[i];
+    if (out?.status !== "success" || !out.result) continue;
+    const raw = out.result as RawTicketStruct;
+    if (Number(raw.status) === 1) {
+      activeIndices.push(i);
+      ownerCalls.push({
+        address: executionTicket,
+        abi: EXECUTION_TICKET_ABI,
+        functionName: "ownerOf",
+        args: [ids[i]],
       });
+    }
+  }
 
-      let owner: Address | null = null;
-      if (Number(t[4]) === 1) {
-        try {
-          owner = await tranchePublicClient.readContract({
-            address: executionTicket,
-            abi: EXECUTION_TICKET_ABI,
-            functionName: "ownerOf",
-            args: [id],
-          });
-        } catch {
-          owner = null;
-        }
-      }
-
-      return {
-        ticketId: id,
-        owner,
-        offerId: t[0],
-        reservedAt: Number(t[1]),
-        expiresAt: Number(t[2]),
-        priceMode: Number(t[3]) as 0 | 1,
-        status: Number(t[4]) as 0 | 1 | 2 | 3,
-        spreadBps: Number(t[5]),
-        protocolFeeBps: Number(t[6]),
-        lp: t[7],
-        inventoryToken: t[8],
-        paymentToken: t[9],
-        initialAmount: t[12],
-        remainingAmount: t[13],
-        minFillAmount: t[14],
-        fixedOrMinPriceX36: t[15],
-        maxPriceX36: t[16],
-      } satisfies OnChainTicket;
-    }),
-  );
+  const ownerOutcomes =
+    ownerCalls.length > 0 ? await chunkedMulticall(client, ownerCalls, config.multicall3) : [];
+  const ownerByIdx = new Map<number, Address>();
+  for (let j = 0; j < activeIndices.length; j++) {
+    const out = ownerOutcomes[j];
+    if (out?.status === "success" && typeof out.result === "string") {
+      ownerByIdx.set(activeIndices[j], out.result as Address);
+    }
+  }
 
   const lower = userAddress.toLowerCase();
-  return rawList
-    .filter((t) => t.owner?.toLowerCase() === lower)
-    .reverse();
+  const matched: OnChainTicket[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const owner = ownerByIdx.get(i) ?? null;
+    if (!owner || owner.toLowerCase() !== lower) continue;
+    const raw = ticketOutcomes[i].result as RawTicketStruct;
+    matched.push({
+      ticketId: ids[i],
+      owner,
+      offerId: raw.offerId,
+      reservedAt: Number(raw.reservedAt),
+      expiresAt: Number(raw.expiresAt),
+      priceMode: Number(raw.priceMode) as 0 | 1,
+      status: Number(raw.status) as 0 | 1 | 2 | 3,
+      spreadBps: Number(raw.spreadBps),
+      protocolFeeBps: Number(raw.protocolFeeBps),
+      lp: raw.lp,
+      inventoryToken: raw.inventoryToken,
+      paymentToken: raw.paymentToken,
+      initialAmount: raw.initialAmount,
+      remainingAmount: raw.remainingAmount,
+      minFillAmount: raw.minFillAmount,
+      fixedOrMinPriceX36: raw.fixedOrMinPriceX36,
+      maxPriceX36: raw.maxPriceX36,
+    });
+  }
+
+  return matched.reverse();
 }
 
 export interface ProtocolActivityItem {
@@ -237,20 +401,18 @@ export interface ProtocolActivityItem {
   detail: string;
 }
 
-const ACTIVITY_EVENTS = parseAbi([
-  "event OfferCreated(uint64 indexed offerId, address indexed lp, uint8 priceMode)",
-  "event TicketReserved(uint256 indexed ticketId, uint64 indexed offerId, address indexed recipient, uint256 amount, uint40 expiresAt, uint256 grossPremium)",
-  "event TicketExercised(uint256 indexed ticketId, uint64 indexed offerId, address indexed exerciser, uint256 fillAmount, uint256 grossPayment, uint256 remainingAmount)",
-]);
-
-export async function fetchRecentActivity(): Promise<{
+export async function fetchRecentActivity(
+  client: Pick<PublicClient, "getBlockNumber" | "readContract" | "getLogs"> = tranchePublicClient,
+  config = ACTIVE_NETWORK,
+): Promise<{
   totalTickets: number;
   items: ProtocolActivityItem[];
 }> {
-  const { commitmentManager } = ACTIVE_NETWORK.contracts;
+  if (!config.isLive) return { totalTickets: 0, items: [] };
+  const { commitmentManager } = config.contracts;
   const [latestBlock, nextTicketId] = await Promise.all([
-    tranchePublicClient.getBlockNumber(),
-    tranchePublicClient.readContract({
+    client.getBlockNumber(),
+    client.readContract({
       address: commitmentManager,
       abi: COMMITMENT_MANAGER_ABI,
       functionName: "nextTicketId",
@@ -258,29 +420,29 @@ export async function fetchRecentActivity(): Promise<{
   ]);
 
   const totalTickets = Math.max(0, Number(nextTicketId) - 1);
-  const fromBlock = latestBlock > 60_000n ? latestBlock - 60_000n : 0n;
+  // Safe lookback (< 10,000 blocks) required by HashKey Chain RPC eth_getLogs limits
+  const fromBlock =
+    latestBlock > ACTIVITY_LOOKBACK_BLOCKS ? latestBlock - ACTIVITY_LOOKBACK_BLOCKS : 0n;
 
   try {
-    const [createdLogs, reservedLogs, exercisedLogs] = await Promise.all([
-      tranchePublicClient.getLogs({
-        address: commitmentManager,
-        event: ACTIVITY_EVENTS[0],
-        fromBlock,
-        toBlock: latestBlock,
-      }),
-      tranchePublicClient.getLogs({
-        address: commitmentManager,
-        event: ACTIVITY_EVENTS[1],
-        fromBlock,
-        toBlock: latestBlock,
-      }),
-      tranchePublicClient.getLogs({
-        address: commitmentManager,
-        event: ACTIVITY_EVENTS[2],
-        fromBlock,
-        toBlock: latestBlock,
-      }),
-    ]);
+    const createdLogs = await client.getLogs({
+      address: commitmentManager,
+      event: ACTIVITY_EVENTS[0],
+      fromBlock,
+      toBlock: latestBlock,
+    });
+    const reservedLogs = await client.getLogs({
+      address: commitmentManager,
+      event: ACTIVITY_EVENTS[1],
+      fromBlock,
+      toBlock: latestBlock,
+    });
+    const exercisedLogs = await client.getLogs({
+      address: commitmentManager,
+      event: ACTIVITY_EVENTS[2],
+      fromBlock,
+      toBlock: latestBlock,
+    });
 
     const items: ProtocolActivityItem[] = [
       ...createdLogs.map((l) => ({
@@ -305,7 +467,7 @@ export async function fetchRecentActivity(): Promise<{
         txHash: l.transactionHash,
         blockNumber: l.blockNumber,
         label: `Ticket #${l.args.ticketId?.toString() ?? "?"} settled`,
-        detail: `Offer #${l.args.offerId?.toString() ?? "?"} · Exercised on-chain`,
+        detail: `Exercised by ${l.args.exerciser?.slice(0, 6)}…${l.args.exerciser?.slice(-4)}`,
       })),
     ];
 
