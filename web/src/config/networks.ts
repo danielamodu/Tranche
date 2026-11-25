@@ -111,5 +111,3 @@ export function explorerAddressUrl(address: string, net: NetworkConfig = ACTIVE_
 export function explorerTxUrl(hash: string, net: NetworkConfig = ACTIVE_NETWORK): string {
   return `${net.explorerUrl}/tx/${hash}`;
 }
-
-export const LIVE_EXERCISE_PROOF_TX = ACTIVE_NETWORK.liveExerciseProofTx;

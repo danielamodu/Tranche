@@ -31,7 +31,7 @@ export interface DiscoveredWallet {
   provider: Eip1193Provider;
 }
 
-export type UserRole = "trader" | "lp";
+export type UserRole = "agent" | "trader" | "lp";
 
 interface WalletContextValue {
   wallets: DiscoveredWallet[];
@@ -122,7 +122,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedRole, setSelectedRoleState] = useState<UserRole | null>(() => {
     const saved = localStorage.getItem("tranche-role");
-    return saved === "trader" || saved === "lp" ? saved : null;
+    return saved === "agent" || saved === "trader" || saved === "lp" ? saved : null;
   });
 
   // Silent auto-reconnect for returning users (eth_accounts — never triggers a popup)
