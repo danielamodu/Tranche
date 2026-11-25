@@ -12,33 +12,33 @@ import { useProtocolTelemetry } from "@/hooks/useProtocolTelemetry";
 import { cn } from "@/lib/utils";
 import type { AppRoute } from "@/App";
 
-const TRADER_POINTS = [
+const AGENT_POINTS = [
   {
-    label: "Price certainty before size",
-    detail: "Lock a fixed strike or oracle-bounded spread before committing full settlement capital.",
+    label: "Dual-venue cost routing",
+    detail: "Compares gas-adjusted Tranche all-in cost against live HSKSwap V3 QuoterV2 quotes and slippage — choosing TRANCHE, HSKSWAP, or WAIT.",
   },
   {
-    label: "Zero AMM slippage",
-    detail: "Your reserved tokens sit physically segregated in the vault until exercise or expiry.",
+    label: "Code-enforced RiskManager",
+    detail: "Exposure caps, daily loss circuit breakers, oracle freshness guards, and an authoritative kill switch enforced in code — never by prompts.",
   },
   {
-    label: "Composable bearer rights",
-    detail: "Split a ticket into smaller lots, fill partially, or transfer it like any ERC-721.",
+    label: "Auditable decision traces",
+    detail: "Every cycle records live quotes, venue math, risk-check outcomes, policy versions, and confirmed on-chain receipts.",
   },
 ] as const;
 
 const LP_POINTS = [
   {
     label: "Non-refundable upfront premiums",
-    detail: "Earn reservation premiums immediately — even when a trader lets the ticket expire.",
+    detail: "LPs earn reservation hold fees immediately — even when the agent lets a ticket expire unused.",
   },
   {
     label: "Strict pricing guardrails",
-    detail: "Define minimum fill sizes, lock duration bounds, fixed prices, or oracle min/max caps.",
+    detail: "Define minimum fill sizes, lock duration bounds, fixed strikes, or TWAP-bounded floating spreads with min/max caps.",
   },
   {
     label: "Uncommitted funds stay free",
-    detail: "Cancel open offer balance and withdraw free inventory at any time with zero lockups.",
+    detail: "Cancel open offer balance and withdraw free inventory at any time with zero lockups under INV-1 solvency.",
   },
 ] as const;
 
@@ -105,20 +105,20 @@ const CORE_CONTRACTS = [
 
 const FAQS = [
   {
-    q: "What happens if I don't exercise my Execution Ticket before expiry?",
-    a: "The ticket expires cleanly and any keeper or LP can reclaim the reserved tokens back to the LP's offer or free balance. The upfront reservation premium is non-refundable — that's what compensates the LP for holding inventory exclusively for you.",
+    q: "How is Tranche Agent different from a standard HSKSwap trading bot?",
+    a: "Standard HSKSwap agents can only market-swap directly into thin AMM pools, taking immediate price impact and irreversible spot exposure. Tranche Agent routes across two venues — live HSKSwap V3 pools and on-chain reserved inventory (ERC-721 Execution Tickets) — choosing whichever has better gas-adjusted economics, or waiting.",
   },
   {
-    q: "How is Tranche different from swapping on an AMM?",
-    a: "On an AMM, you pay curve price impact and risk MEV at the moment you broadcast. On Tranche, you reserve physical ERC-20 inventory upfront at a known fixed or oracle-bounded price, then exercise partially or in full whenever you're ready.",
+    q: "Can an LLM bypass risk limits or execute arbitrary transactions?",
+    a: "No. Trading signals, venue routing, and risk checks are 100% deterministic. The optional LLM layer only translates natural-language instructions into bounded policy proposals validated against hard ceilings, with versioned persistence and instant rollback. It can never clear the kill switch or sign transactions.",
   },
   {
-    q: "Can an LP withdraw my reserved tokens before my ticket expires?",
-    a: "No. Once reserved, inventory moves out of the LP's Offer Available bucket into Ticket Reserved. LiquidityVault enforces INV-1 on every state transition so reserved tokens remain exclusively locked to the ERC-721 ticket holder until exercise or expiry.",
+    q: "What happens if the agent lets a reserved ticket expire?",
+    a: "The reserved inventory returns cleanly to the LP's offer or free balance, and the reservation loss is capped at the non-refundable upfront hold fee. Once exercised, the resulting spot position is actively managed with take-profit and stop-loss unwinds via HSKSwap Router02.",
   },
   {
-    q: "How will the switch from HashKey Testnet to Mainnet work?",
-    a: "The entire app reads contract addresses, RPC URLs, and explorer endpoints from a single network manifest. Moving from Chain 133 Testnet to Chain 177 Mainnet is a one-file manifest swap with zero UI changes.",
+    q: "How does Tranche transition from Testnet (133) to HashKey Chain Mainnet (177)?",
+    a: "DeployMainnet.s.sol, canonical Chain 177 tokens (WHSK, USDT, WETH, WBTC), live HSKSwap V3 pools, Safe v1.4.1 multisigs, and the 48-hour Timelock handover are already verified on a Chain 177 fork. Switching the app to Mainnet is a single manifest update after deployment.",
   },
 ] as const;
 
@@ -228,13 +228,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 href="#mechanism"
                 className="rounded-full px-3.5 py-2 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground"
               >
-                Mechanism
+                Agent Loop
               </a>
               <a
                 href="#sides"
                 className="rounded-full px-3.5 py-2 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground"
               >
-                Overview
+                Dual Venues
               </a>
               <a
                 href="#vault"
@@ -320,29 +320,40 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         <div className="relative z-10 mx-auto grid w-full max-w-[1080px] grid-cols-1 items-end gap-10 lg:grid-cols-12">
           <h1 className="font-display text-[2.85rem] font-bold leading-[0.98] tracking-[-0.045em] text-foreground sm:text-[4.4rem] lg:col-span-7">
             <span className="block overflow-hidden pb-1">
-              <span className="block animate-mask-up">Lock the price.</span>
+              <span className="block animate-mask-up">Trade autonomously.</span>
             </span>
             <span className="block overflow-hidden pb-1">
               <span className="block animate-mask-up-delay text-muted-foreground">
-                Buy when you&apos;re ready.
+                Route across two venues.
               </span>
             </span>
           </h1>
 
           <div className="animate-rise-delay-2 flex flex-col items-start gap-6 lg:col-span-5 lg:items-end lg:text-right">
-            <p className="max-w-[380px] text-base leading-relaxed text-muted-foreground">
-              Pay a small hold fee to lock someone&apos;s tokens at a set price. Buy them before
-              the timer runs out — or walk away.
+            <p className="max-w-[400px] text-base leading-relaxed text-muted-foreground">
+              The autonomous trading agent on HashKey Chain that compares HSKSwap V3 pools against
+              on-chain reserved inventory — routing every trade to the better venue, or walking away.
             </p>
-            <Button
-              type="button"
-              size="lg"
-              onClick={handleLaunchApp}
-              className="h-12 rounded-full px-8 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-            >
-              Launch App
-              <ArrowUpRight data-icon="inline-end" />
-            </Button>
+            <div className="flex flex-wrap items-center gap-2.5 lg:justify-end">
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => onNavigate("/agent")}
+                className="h-12 rounded-full px-7 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+              >
+                Open Agent Console
+                <ArrowUpRight data-icon="inline-end" />
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                variant="outline"
+                onClick={handleLaunchApp}
+                className="h-12 rounded-full px-6 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+              >
+                Protocol Desk
+              </Button>
+            </div>
           </div>
         </div>
       </section>
@@ -405,29 +416,29 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         <div className="mx-auto max-w-[1080px] px-6">
           <Reveal className="flex flex-col gap-4">
             <span className="tabular-nums-mono text-xs uppercase tracking-[0.14em] text-[#050505]/55">
-              Two-Sided Execution
+              Dual-Venue Autonomous Execution
             </span>
             <h2 className="font-display max-w-2xl text-4xl font-semibold leading-[1.0] tracking-[-0.04em] sm:text-6xl">
-              Built for size
+              Two execution venues.
               <br />
-              <span className="text-[#050505]/45">on both sides.</span>
+              <span className="text-[#050505]/45">One risk-enforced agent.</span>
             </h2>
           </Reveal>
 
           <div className="mt-16 grid grid-cols-1 gap-12 border-t border-[#050505]/15 pt-14 lg:grid-cols-2 lg:gap-16">
-            {/* For Traders */}
+            {/* Tranche Agent */}
             <Reveal delayMs={40} className="flex flex-col gap-8">
               <div className="flex flex-col gap-2">
                 <span className="tabular-nums-mono text-xs uppercase tracking-[0.12em] text-[#050505]/55">
-                  For Traders
+                  Tranche Agent
                 </span>
                 <h3 className="font-display text-2xl font-bold tracking-[-0.03em] sm:text-3xl">
-                  Lock inventory before you move.
+                  Deterministic routing, zero blind swaps.
                 </h3>
               </div>
 
               <div className="flex flex-col">
-                {TRADER_POINTS.map((point, idx) => (
+                {AGENT_POINTS.map((point, idx) => (
                   <div
                     key={point.label}
                     className={cn(
