@@ -1,8 +1,10 @@
 import type { Address, Hex } from "viem";
 import type { TrancheExecutionAgent } from "./agent.js";
 import { BPS_DENOMINATOR, type DexVenueAdapter } from "./hskswap.js";
+import type { StructuredLogger } from "./logger.js";
 import type { MarketIntelligence, MarketSnapshot } from "./market.js";
 import type { PositionStore, TrackedPosition } from "./positions.js";
+import type { TransactionReconciler, TxReconciliationResult } from "./reconciler.js";
 import { RiskManager, type RiskCheckReport, type RiskLimits } from "./risk.js";
 import {
   StrategyEngine,
@@ -82,6 +84,10 @@ export interface TrancheAutonomousAgentConfig {
   maxQuoteAgeSec?: number;
   /** Optional: immediately exercise a reserved Tranche ticket in the same cycle if profitable */
   autoExerciseOnArb?: boolean;
+  /** Optional structured logger with correlation IDs & secret redaction */
+  logger?: StructuredLogger;
+  /** Optional automated on-chain pending-tx reconciler */
+  reconciler?: TransactionReconciler;
 }
 
 function isUncertainRpcError(err: unknown): boolean {
@@ -110,6 +116,16 @@ export class TrancheAutonomousAgent {
 
   constructor(config: TrancheAutonomousAgentConfig) {
     this.cfg = config;
+    // Restore persisted safety & policy state on restart so killSwitch/paused/limits are never silently reset
+    const persisted = config.positions.getPersistedRuntimeConfig();
+    if (persisted) {
+      Object.assign(this.cfg.strategyConfig, persisted.strategy);
+      Object.assign(this.cfg.riskLimits, persisted.riskLimits);
+    } else if (!config.positions.isStateCorrupted()) {
+      config.positions.saveRuntimeConfig(this.cfg.strategyConfig, this.cfg.riskLimits, {
+        source: "initial",
+      });
+    }
   }
 
   getTraces(): readonly AutonomousDecisionTrace[] {
@@ -145,22 +161,55 @@ export class TrancheAutonomousAgent {
       throw new Error("Cannot unpause while kill switch is active");
     }
     this.cfg.riskLimits.paused = paused;
+    this.cfg.positions.saveRuntimeConfig(this.cfg.strategyConfig, this.cfg.riskLimits, {
+      source: "api",
+      instruction: paused ? "pause" : "resume",
+    });
+    this.cfg.logger?.info("agent.pause_changed", { paused });
   }
 
   reconcilePendingTx(pendingTxId: string): boolean {
     const exists = this.cfg.positions.getPendingTxs().some((p) => p.id === pendingTxId);
     if (!exists) return false;
     this.cfg.positions.resolvePendingTx(pendingTxId);
+    this.cfg.logger?.info("agent.pending_tx_reconciled", { pendingTxId });
     return true;
+  }
+
+  async autoReconcilePendingTxs(): Promise<TxReconciliationResult[]> {
+    if (!this.cfg.reconciler) return [];
+    const pending = [...this.cfg.positions.getPendingTxs()];
+    const results: TxReconciliationResult[] = [];
+    for (const ptx of pending) {
+      const res = await this.cfg.reconciler.reconcile(ptx);
+      results.push(res);
+      if (res.canClearPending) {
+        this.cfg.positions.resolvePendingTx(ptx.id);
+        this.cfg.logger?.info("agent.pending_tx_auto_reconciled", {
+          pendingTxId: ptx.id,
+          status: res.status,
+          reason: res.reason,
+        });
+      }
+    }
+    return results;
   }
 
   triggerKillSwitch(): void {
     this.cfg.riskLimits.killSwitch = true;
     this.cfg.riskLimits.paused = true;
+    this.cfg.positions.saveRuntimeConfig(this.cfg.strategyConfig, this.cfg.riskLimits, {
+      source: "api",
+      instruction: "kill_switch",
+    });
+    this.cfg.logger?.warn("agent.kill_switch_activated", { killSwitch: true });
   }
 
   async runCycle(nowSecOverride?: number): Promise<AutonomousDecisionTrace> {
     const cycleId = ++this.cycleCounter;
+    if (this.cfg.reconciler && this.cfg.positions.getPendingTxs().length > 0) {
+      await this.autoReconcilePendingTxs();
+    }
     const snapshot = await this.cfg.market.collectSnapshot(this.cfg.intent, nowSecOverride);
     const nowSec = snapshot.timestamp;
     const txHashes: Hex[] = [];
@@ -565,18 +614,39 @@ export class TrancheAutonomousAgent {
   }
 }
 
+export type RuntimeRecoveryState =
+  | "HEALTHY"
+  | "RECOVERING"
+  | "PAUSED_CIRCUIT_BREAKER"
+  | "PENDING_TX_BLOCKED"
+  | "CORRUPTED_STATE"
+  | "KILLED";
+
+export interface RuntimeHealthInfo {
+  running: boolean;
+  rpcHealthy: boolean;
+  consecutiveErrors: number;
+  lastSuccessfulCycleAt: number | null;
+  recoveryState: RuntimeRecoveryState;
+}
+
 export interface AgentRuntimeConfig {
   agent: TrancheAutonomousAgent;
   pollIntervalMs: number;
   maxConsecutiveErrors?: number;
+  /** Bounded retries per tick on transient RPC errors (default 2) */
+  transientRpcRetries?: number;
+  /** Initial retry backoff in ms (default 100ms, doubles per attempt) */
+  retryBackoffMs?: number;
+  logger?: StructuredLogger;
   onTrace?: (trace: AutonomousDecisionTrace) => void;
   onError?: (err: unknown, consecutiveErrors: number) => void;
 }
 
 /**
  * Persistent continuous scheduler for TrancheAutonomousAgent.
- * Guarantees non-overlapping cycles, transient RPC error recovery,
- * consecutive-error circuit breaker, and graceful shutdown.
+ * Guarantees exclusive state locking, non-overlapping cycles, bounded transient RPC retry
+ * with exponential backoff, consecutive-error circuit breaker, and graceful shutdown.
  */
 export class AgentRuntime {
   private readonly cfg: AgentRuntimeConfig;
@@ -584,6 +654,8 @@ export class AgentRuntime {
   private inFlight = false;
   private running = false;
   private consecutiveErrors = 0;
+  private lastSuccessfulCycleAt: number | null = null;
+  private rpcHealthy = true;
 
   constructor(config: AgentRuntimeConfig) {
     this.cfg = config;
@@ -593,9 +665,33 @@ export class AgentRuntime {
     return this.running;
   }
 
+  getHealthInfo(): RuntimeHealthInfo {
+    const store = this.cfg.agent.getPositionStore();
+    const limits = this.cfg.agent.getRiskLimits();
+    let recoveryState: RuntimeRecoveryState = "HEALTHY";
+    if (store.isStateCorrupted()) recoveryState = "CORRUPTED_STATE";
+    else if (limits.killSwitch) recoveryState = "KILLED";
+    else if (store.getPendingTxs().length > 0) recoveryState = "PENDING_TX_BLOCKED";
+    else if (this.consecutiveErrors >= (this.cfg.maxConsecutiveErrors ?? 5)) {
+      recoveryState = "PAUSED_CIRCUIT_BREAKER";
+    } else if (!this.rpcHealthy || this.consecutiveErrors > 0) {
+      recoveryState = "RECOVERING";
+    }
+
+    return {
+      running: this.running,
+      rpcHealthy: this.rpcHealthy,
+      consecutiveErrors: this.consecutiveErrors,
+      lastSuccessfulCycleAt: this.lastSuccessfulCycleAt,
+      recoveryState,
+    };
+  }
+
   start(): void {
     if (this.running) return;
+    this.cfg.agent.getPositionStore().acquireLock();
     this.running = true;
+    this.cfg.logger?.info("runtime.started", { pollIntervalMs: this.cfg.pollIntervalMs });
     void this.tickOnce();
     this.timer = setInterval(() => {
       void this.tickOnce();
@@ -611,19 +707,55 @@ export class AgentRuntime {
     while (this.inFlight) {
       await new Promise((r) => setTimeout(r, 15));
     }
+    this.cfg.agent.getPositionStore().releaseLock();
+    this.cfg.logger?.info("runtime.stopped");
   }
 
   async tickOnce(nowSecOverride?: number): Promise<AutonomousDecisionTrace | null> {
     if (this.inFlight) return null;
     this.inFlight = true;
+    const maxRetries = Math.max(0, this.cfg.transientRpcRetries ?? 2);
+    const baseBackoff = Math.max(10, this.cfg.retryBackoffMs ?? 100);
     try {
-      const trace = await this.cfg.agent.runCycle(nowSecOverride);
-      this.consecutiveErrors = 0;
-      this.cfg.onTrace?.(trace);
-      return trace;
-    } catch (err) {
+      let lastErr: unknown;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const trace = await this.cfg.agent.runCycle(nowSecOverride);
+          this.consecutiveErrors = 0;
+          this.rpcHealthy = true;
+          this.lastSuccessfulCycleAt = trace.timestamp;
+          this.cfg.logger?.info(
+            "runtime.cycle_completed",
+            {
+              cycleId: trace.cycleId,
+              action: trace.selectedAction,
+              venue: trace.venueSelection.selectedVenue,
+              txCount: trace.txHashes.length,
+            },
+            trace.decisionKey,
+          );
+          this.cfg.onTrace?.(trace);
+          return trace;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < maxRetries && isUncertainRpcError(err)) {
+            await new Promise((r) => setTimeout(r, baseBackoff * 2 ** attempt));
+            continue;
+          }
+          break;
+        }
+      }
+
       this.consecutiveErrors += 1;
-      this.cfg.onError?.(err, this.consecutiveErrors);
+      if (isUncertainRpcError(lastErr)) {
+        this.rpcHealthy = false;
+      }
+      this.cfg.logger?.warn("runtime.cycle_failed", {
+        consecutiveErrors: this.consecutiveErrors,
+        transient: isUncertainRpcError(lastErr),
+        error: lastErr instanceof Error ? lastErr.message : String(lastErr),
+      });
+      this.cfg.onError?.(lastErr, this.consecutiveErrors);
       const maxErrs = this.cfg.maxConsecutiveErrors ?? 5;
       if (this.consecutiveErrors >= maxErrs) {
         this.cfg.agent.setPaused(true);
