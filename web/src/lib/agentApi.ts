@@ -1,17 +1,42 @@
 export type AgentExecutionMode = "dry_run" | "live";
 export type AgentDataSourceMode = "fixture" | "dry_run" | "fork";
 export type StrategyType = "momentum" | "price_threshold" | "volatility_aware";
+export type MarketRegime = "CALM" | "TRENDING" | "VOLATILE" | "DISLOCATED";
 
 export interface AgentHealth {
   ok: boolean;
   uptimeSec: number;
   runtimeRunning: boolean;
+  rpcHealthy: boolean;
+  lastSuccessfulCycleAt: number | null;
+  recoveryState: string;
   mode: AgentExecutionMode;
   dataSource: AgentDataSourceMode;
   chainId: number;
   quotesAreReal: boolean;
   stateCorrupted: boolean;
   pendingTxCount: number;
+}
+
+export interface AgentReady {
+  ready: boolean;
+  recoveryState: string;
+  rpcHealthy: boolean;
+  killSwitch: boolean;
+  stateCorrupted: boolean;
+  httpStatus: number;
+}
+
+export interface PolicyHistoryEntry {
+  version: number;
+  timestamp: number;
+  source: string;
+  instruction?: string;
+}
+
+export interface PolicyHistoryResponse {
+  currentVersion: number;
+  history: PolicyHistoryEntry[];
 }
 
 export interface PendingTxItem {
@@ -179,6 +204,7 @@ export interface AgentMarketsResponse {
   realizedVolatilityBps?: number;
   momentumReturnBps?: number;
   dislocationVsTwapBps?: number;
+  marketRegime?: MarketRegime;
   anomalies?: string[];
   venueComparison?: {
     selectedVenue: "TRANCHE" | "HSKSWAP" | "NONE";
@@ -236,6 +262,7 @@ export interface AgentConfigResponse {
 
 export interface AgentDashboardSnapshot {
   health: AgentHealth;
+  ready: AgentReady;
   status: AgentStatus;
   metrics: AgentMetrics;
   decisions: AgentDecisionItem[];
@@ -243,6 +270,7 @@ export interface AgentDashboardSnapshot {
   tickets: { active: AgentTicketItem[]; all: AgentTicketItem[] };
   markets: AgentMarketsResponse;
   config: AgentConfigResponse;
+  policyHistory: PolicyHistoryResponse;
   fetchedAt: number;
 }
 
@@ -251,6 +279,7 @@ export interface StrategyUpdateRequest {
   takeProfitBps?: number;
   stopLossBps?: number;
   maxSlippageBps?: number;
+  maxPositionSizeInventory?: string;
 }
 
 export class AgentApiError extends Error {
@@ -267,11 +296,36 @@ export class AgentApiError extends Error {
   }
 }
 
-const DEFAULT_AGENT_API_URL =
+export const DEFAULT_AGENT_API_URL =
   (typeof import.meta !== "undefined" &&
     (import.meta as unknown as { env?: Record<string, string | undefined> }).env
       ?.VITE_AGENT_API_URL) ||
   "http://127.0.0.1:8787";
+
+export function normalizeAgentApiUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, "");
+  if (!trimmed) return DEFAULT_AGENT_API_URL.replace(/\/+$/, "");
+  return trimmed;
+}
+
+export function isLocalAgentApiUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isHostedHttpsToLocalApi(apiUrl: string, pageProtocol?: string): boolean {
+  const proto =
+    pageProtocol ?? (typeof window !== "undefined" ? window.location.protocol : "http:");
+  return proto === "https:" && apiUrl.startsWith("http://") && isLocalAgentApiUrl(apiUrl);
+}
 
 export class AgentApiClient {
   private readonly baseUrl: string;
@@ -328,10 +382,40 @@ export class AgentApiClient {
     return data as T;
   }
 
+  async getReady(): Promise<AgentReady> {
+    let resp: Response;
+    try {
+      resp = await this.fetchImpl(`${this.baseUrl}/ready`, { method: "GET" });
+    } catch (err) {
+      throw new AgentApiError(
+        0,
+        "API_UNREACHABLE",
+        err instanceof Error ? err.message : "Local Agent API unreachable",
+      );
+    }
+    const data = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
+    if (resp.status !== 200 && resp.status !== 503) {
+      throw new AgentApiError(
+        resp.status,
+        typeof data.error === "string" ? data.error : `HTTP_${resp.status}`,
+        typeof data.message === "string" ? data.message : `Readiness check failed (${resp.status})`,
+      );
+    }
+    return {
+      ready: Boolean(data.ready),
+      recoveryState: typeof data.recoveryState === "string" ? data.recoveryState : "unknown",
+      rpcHealthy: Boolean(data.rpcHealthy),
+      killSwitch: Boolean(data.killSwitch),
+      stateCorrupted: Boolean(data.stateCorrupted),
+      httpStatus: resp.status,
+    };
+  }
+
   async fetchSnapshot(): Promise<AgentDashboardSnapshot> {
-    const [health, status, metrics, decisionsRes, positions, tickets, markets, config] =
+    const [health, ready, status, metrics, decisionsRes, positions, tickets, markets, config, policyHistory] =
       await Promise.all([
         this.request<AgentHealth>("GET", "/health"),
+        this.getReady(),
         this.request<AgentStatus>("GET", "/agent/status"),
         this.request<AgentMetrics>("GET", "/agent/metrics"),
         this.request<{ total: number; items: AgentDecisionItem[] }>("GET", "/agent/decisions?limit=20"),
@@ -339,10 +423,12 @@ export class AgentApiClient {
         this.request<{ active: AgentTicketItem[]; all: AgentTicketItem[] }>("GET", "/agent/tickets"),
         this.request<AgentMarketsResponse>("GET", "/agent/markets"),
         this.request<AgentConfigResponse>("GET", "/agent/config"),
+        this.getPolicyHistory(),
       ]);
 
     return {
       health,
+      ready,
       status,
       metrics,
       decisions: decisionsRes.items,
@@ -350,6 +436,7 @@ export class AgentApiClient {
       tickets,
       markets,
       config,
+      policyHistory,
       fetchedAt: Date.now(),
     };
   }
@@ -423,15 +510,7 @@ export class AgentApiClient {
     }>("POST", "/agent/policy/rollback", { version });
   }
 
-  getPolicyHistory() {
-    return this.request<{
-      currentVersion: number;
-      history: Array<{
-        version: number;
-        timestamp: number;
-        source: string;
-        instruction?: string;
-      }>;
-    }>("GET", "/agent/policy/history");
+  getPolicyHistory(): Promise<PolicyHistoryResponse> {
+    return this.request<PolicyHistoryResponse>("GET", "/agent/policy/history");
   }
 }
