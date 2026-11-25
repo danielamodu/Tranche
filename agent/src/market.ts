@@ -30,6 +30,8 @@ export interface MarketObservation {
   dexExitImpactBps: number | null;
 }
 
+export type MarketRegime = "CALM" | "TRENDING" | "VOLATILE" | "DISLOCATED";
+
 export interface MarketSnapshot {
   timestamp: number;
   inventoryToken: Address;
@@ -45,6 +47,7 @@ export interface MarketSnapshot {
   realizedVolatilityBps: number;
   momentumReturnBps: number;
   dislocationVsTwapBps: number;
+  marketRegime: MarketRegime;
   anomalies: string[];
 }
 
@@ -55,10 +58,23 @@ export interface MarketIntelligenceConfig {
   poolAddress: Address;
   poolFee: number;
   maxHistorySize?: number;
+  /** Optional snapshot cache TTL in ms to prevent redundant RPC bursts (default 0 = disabled) */
+  cacheTtlMs?: number;
   minPoolLiquidity: bigint;
   maxOracleAgeSec: number;
   maxOracleDeviationBps: number;
   maxAbnormalSpreadBps?: number;
+}
+
+export function classifyMarketRegime(params: {
+  realizedVolatilityBps: number;
+  momentumReturnBps: number;
+  dislocationVsTwapBps: number;
+}): MarketRegime {
+  if (Math.abs(params.dislocationVsTwapBps) >= 150) return "DISLOCATED";
+  if (params.realizedVolatilityBps >= 300) return "VOLATILE";
+  if (Math.abs(params.momentumReturnBps) >= 100) return "TRENDING";
+  return "CALM";
 }
 
 /**
@@ -69,6 +85,7 @@ export class MarketIntelligence {
   private readonly cfg: MarketIntelligenceConfig;
   private readonly history: MarketObservation[] = [];
   private readonly maxHistory: number;
+  private cachedSnapshot: { snapshot: MarketSnapshot; cachedAtMs: number } | null = null;
 
   constructor(config: MarketIntelligenceConfig) {
     this.cfg = config;
@@ -86,6 +103,16 @@ export class MarketIntelligence {
   }
 
   async collectSnapshot(intent: AgentIntent, nowSecOverride?: number): Promise<MarketSnapshot> {
+    const ttl = this.cfg.cacheTtlMs ?? 0;
+    if (
+      ttl > 0 &&
+      nowSecOverride === undefined &&
+      this.cachedSnapshot &&
+      Date.now() - this.cachedSnapshot.cachedAtMs < ttl
+    ) {
+      return this.cachedSnapshot.snapshot;
+    }
+
     const anomalies: string[] = [];
 
     const pool = await this.cfg.dexVenue.getPoolState(
@@ -191,8 +218,13 @@ export class MarketIntelligence {
     const realizedVolatilityBps = this.computeRealizedVolatilityBps();
     const momentumReturnBps = this.computeMomentumReturnBps();
     const dislocationVsTwapBps = this.computeDislocationVsTwapBps(pool.spotPriceX36, pool.twapPriceX36);
+    const marketRegime = classifyMarketRegime({
+      realizedVolatilityBps,
+      momentumReturnBps,
+      dislocationVsTwapBps,
+    });
 
-    return {
+    const snapshot: MarketSnapshot = {
       timestamp,
       inventoryToken: intent.inventoryToken,
       paymentToken: intent.paymentToken,
@@ -207,8 +239,11 @@ export class MarketIntelligence {
       realizedVolatilityBps,
       momentumReturnBps,
       dislocationVsTwapBps,
+      marketRegime,
       anomalies,
     };
+    this.cachedSnapshot = { snapshot, cachedAtMs: Date.now() };
+    return snapshot;
   }
 
   private pushObservation(obs: MarketObservation): void {
