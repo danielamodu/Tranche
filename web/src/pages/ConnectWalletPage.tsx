@@ -36,7 +36,13 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
   // Once connected on the right HashKey Chain, glide straight to saved desk (or /start for first-time users)
   useEffect(() => {
     if (isConnected && !isWrongNetwork) {
-      const target = selectedRole ? (selectedRole === "lp" ? "/vault" : "/trade") : "/start";
+      const target = selectedRole
+        ? selectedRole === "agent"
+          ? "/agent"
+          : selectedRole === "lp"
+            ? "/vault"
+            : "/trade"
+        : "/start";
       const timer = setTimeout(() => onNavigate(target), 400);
       return () => clearTimeout(timer);
     }
@@ -182,6 +188,15 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
 
               <Separator />
 
+              <button
+                type="button"
+                onClick={() => onNavigate("/agent")}
+                className="flex h-10 w-full items-center justify-between rounded-full border border-border bg-background px-4 text-xs font-medium text-foreground transition-colors hover:border-foreground/30 cursor-pointer"
+              >
+                <span>Open Agent Console (no wallet required)</span>
+                <ArrowRight className="size-3.5 text-muted-foreground" />
+              </button>
+
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
                 Non-custodial interface. By connecting, you agree to the{" "}
                 <button
@@ -226,8 +241,9 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
                   Switch to {ACTIVE_NETWORK.shortName}
                 </h1>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Your wallet is currently on Chain {chainId}. Tranche is live on{" "}
-                  {ACTIVE_NETWORK.name} (Chain {ACTIVE_NETWORK.chainId}).
+                  Your wallet is currently on Chain {chainId}. Tranche is{" "}
+                  {ACTIVE_NETWORK.isLive ? "live" : "configured"} on {ACTIVE_NETWORK.name} (Chain{" "}
+                  {ACTIVE_NETWORK.chainId}).
                 </p>
               </div>
 

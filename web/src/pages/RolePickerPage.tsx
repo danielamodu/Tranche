@@ -182,11 +182,11 @@ export function RolePickerPage({ onNavigate }: RolePickerPageProps) {
 
   function handleSelect(role: UserRole) {
     setSelectedRole(role);
-    onNavigate(role === "trader" ? "/trade" : "/vault");
+    onNavigate(role === "agent" ? "/agent" : role === "trader" ? "/trade" : "/vault");
   }
 
   return (
-    <div className="relative flex min-h-[100svh] flex-col bg-background text-foreground selection:bg-primary selection:text-primary-foreground md:h-[100svh] md:overflow-hidden">
+    <div className="relative flex min-h-[100svh] flex-col bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
       {/* Subtle studio rim glow */}
       <div
         aria-hidden="true"
@@ -264,22 +264,32 @@ export function RolePickerPage({ onNavigate }: RolePickerPageProps) {
         </nav>
       </header>
 
-      {/* Main Role Selection Canvas (locked single-viewport on desktop) */}
-      <main className="relative z-10 mx-auto flex w-full max-w-[780px] flex-1 flex-col items-center justify-center px-6 pt-20 pb-8">
+      {/* Main Role Selection Canvas */}
+      <main className="relative z-10 mx-auto flex w-full max-w-[1040px] flex-1 flex-col items-center justify-center px-6 pt-24 pb-12">
         <div className="animate-rise mb-7 flex flex-col items-center gap-2 text-center">
           <h1 className="font-display text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
             How do you want to use Tranche?
           </h1>
           <p className="max-w-md text-xs leading-relaxed text-muted-foreground sm:text-sm">
-            Pick your starting desk. Switch between Trade, Tickets, and Vault anytime.
+            Pick your starting workspace. Switch between Agent, Trade, Tickets, and Vault anytime.
           </p>
         </div>
 
-        {/* Two Physical Serrated Ticket Stubs: Warm Cream Paper vs. Carbon Obsidian Vellum */}
-        <div className="animate-rise-delay-1 grid w-full grid-cols-1 gap-6 md:grid-cols-2">
+        {/* Three Physical Serrated Ticket Stubs: Agent, Trader, Liquidity Provider */}
+        <div className="animate-rise-delay-1 grid w-full grid-cols-1 gap-6 md:grid-cols-3">
           <RoleTicketStub
             variant="cream"
-            eyebrow="01 · Trader Desk"
+            eyebrow="01 · Autonomous Agent"
+            headline="Tranche Agent"
+            subline="Monitor dual-venue routing across Tranche and HSKSwap with code-enforced risk limits and bounded policy proposals."
+            facts={["TRANCHE vs HSKSWAP", "RiskManager", "Dry-run default"]}
+            cta="Open Agent Console"
+            onSelect={() => handleSelect("agent")}
+          />
+
+          <RoleTicketStub
+            variant="carbon"
+            eyebrow="02 · Trader Desk"
             headline="Trade & Reserve"
             subline="Lock exact token inventory at a fixed or bounded price and exercise before expiry."
             facts={["0% AMM slippage", "ERC-721 ticket", "Partial fills"]}
@@ -289,7 +299,7 @@ export function RolePickerPage({ onNavigate }: RolePickerPageProps) {
 
           <RoleTicketStub
             variant="carbon"
-            eyebrow="02 · Liquidity Provider"
+            eyebrow="03 · Liquidity Provider"
             headline="Provide Liquidity"
             subline="Deposit ERC-20 inventory into segregated vault buckets, quote offers, and earn upfront premiums."
             facts={["Segregated vault", "Upfront bps", "Withdraw anytime"]}
@@ -300,6 +310,7 @@ export function RolePickerPage({ onNavigate }: RolePickerPageProps) {
 
         <p className="animate-rise-delay-2 mt-7 text-center text-[11px] text-muted-foreground">
           {ACTIVE_NETWORK.name} · Chain {ACTIVE_NETWORK.chainId}
+          {!ACTIVE_NETWORK.isLive ? " · Deployment Pending" : ""}
         </p>
       </main>
     </div>
