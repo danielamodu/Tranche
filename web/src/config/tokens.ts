@@ -1,5 +1,5 @@
 import { formatUnits, parseUnits, type Address } from "viem";
-import { ACTIVE_NETWORK } from "@/config/networks";
+import { ACTIVE_NETWORK, type NetworkConfig } from "@/config/networks";
 
 export interface TokenMeta {
   address: Address;
@@ -8,37 +8,45 @@ export interface TokenMeta {
   decimals: number;
 }
 
-export const TOKENS: Record<string, TokenMeta> = {
-  [ACTIVE_NETWORK.contracts.tWETH.toLowerCase()]: {
-    address: ACTIVE_NETWORK.contracts.tWETH,
-    symbol: "tWETH",
-    name: "Testnet Wrapped Ether",
-    decimals: 18,
-  },
-  [ACTIVE_NETWORK.contracts.WHSK.toLowerCase()]: {
-    address: ACTIVE_NETWORK.contracts.WHSK,
-    symbol: "WHSK",
-    name: "Wrapped HSK",
-    decimals: 18,
-  },
-  [ACTIVE_NETWORK.contracts.tWBTC.toLowerCase()]: {
-    address: ACTIVE_NETWORK.contracts.tWBTC,
-    symbol: "tWBTC",
-    name: "Testnet Wrapped Bitcoin",
-    decimals: 8,
-  },
-  [ACTIVE_NETWORK.contracts.tUSDT.toLowerCase()]: {
-    address: ACTIVE_NETWORK.contracts.tUSDT,
-    symbol: "tUSDT",
-    name: "Testnet Tether USD",
-    decimals: 6,
-  },
-};
+export function getNetworkTokens(network: NetworkConfig): Record<string, TokenMeta> {
+  const isTestnet = network.key === "testnet";
+  return {
+    [network.contracts.WETH.toLowerCase()]: {
+      address: network.contracts.WETH,
+      symbol: isTestnet ? "tWETH" : "WETH",
+      name: isTestnet ? "Testnet Wrapped Ether" : "Wrapped Ether",
+      decimals: 18,
+    },
+    [network.contracts.WHSK.toLowerCase()]: {
+      address: network.contracts.WHSK,
+      symbol: "WHSK",
+      name: "Wrapped HSK",
+      decimals: 18,
+    },
+    [network.contracts.WBTC.toLowerCase()]: {
+      address: network.contracts.WBTC,
+      symbol: isTestnet ? "tWBTC" : "WBTC",
+      name: isTestnet ? "Testnet Wrapped Bitcoin" : "Wrapped Bitcoin",
+      decimals: 8,
+    },
+    [network.contracts.USDT.toLowerCase()]: {
+      address: network.contracts.USDT,
+      symbol: isTestnet ? "tUSDT" : "USDT",
+      name: isTestnet ? "Testnet Tether USD" : "Tether USD",
+      decimals: 6,
+    },
+  };
+}
+
+export const TOKENS: Record<string, TokenMeta> = getNetworkTokens(ACTIVE_NETWORK);
 
 export const TOKEN_LIST: TokenMeta[] = Object.values(TOKENS);
 
-export function getTokenMeta(address: string): TokenMeta {
-  const found = TOKENS[address.toLowerCase()];
+export function getTokenMeta(
+  address: string,
+  tokensMap: Record<string, TokenMeta> = TOKENS,
+): TokenMeta {
+  const found = tokensMap[address.toLowerCase()];
   if (found) return found;
   return {
     address: address as Address,
