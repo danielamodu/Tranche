@@ -87,6 +87,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reclaimingId, setReclaimingId] = useState<string | null>(null);
+  const [reclaimError, setReclaimError] = useState<string | null>(null);
 
   // Live 1-second countdown ticker
   useEffect(() => {
@@ -154,7 +155,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
 
   // Live on-chain quoteExercise
   useEffect(() => {
-    if (!exerciseTicket) return;
+    if (!exerciseTicket || !ACTIVE_NETWORK.isLive) return;
     const inv = getTokenMeta(exerciseTicket.inventoryToken);
     let parsed = 0n;
     try {
@@ -242,8 +243,9 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
   }
 
   async function handleReclaim(t: OnChainTicket) {
-    if (!address || !activeProvider) return;
+    if (!address || !activeProvider || !ACTIVE_NETWORK.isLive) return;
     setReclaimingId(t.ticketId.toString());
+    setReclaimError(null);
     try {
       const walletClient = createTrancheWalletClient(activeProvider, address);
       const hash = await walletClient.writeContract({
@@ -254,8 +256,9 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
       });
       await tranchePublicClient.waitForTransactionReceipt({ hash });
       loadTickets(true);
-    } catch {
-      // user rejected or already reclaimed
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Reclaim transaction failed or rejected.";
+      setReclaimError(msg.length > 160 ? `${msg.slice(0, 160)}…` : msg);
     } finally {
       setReclaimingId(null);
     }
@@ -349,6 +352,22 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
           </Button>
         </div>
       ) : (
+        <div className="flex flex-col gap-4">
+          {reclaimError && (
+            <div className="flex items-start justify-between gap-3 rounded-[14px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                <span>Reclaim failed: {reclaimError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReclaimError(null)}
+                className="shrink-0 underline underline-offset-4 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
           {tickets.map((t) => {
             const inv = getTokenMeta(t.inventoryToken);
@@ -519,6 +538,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
               </div>
             );
           })}
+        </div>
         </div>
       )}
 

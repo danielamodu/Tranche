@@ -180,7 +180,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
 
   // Live on-chain quoteReservation whenever amount or duration changes
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || !ACTIVE_NETWORK.isLive) return;
     const inv = getTokenMeta(selected.inventoryToken);
     let parsedAmt = 0n;
     try {
@@ -324,13 +324,18 @@ export function TradePage({ onNavigate }: TradePageProps) {
         <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[18px] border border-border bg-border sm:grid-cols-3">
           <div className="flex flex-col gap-1 bg-card px-5 py-4">
             <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              Available Liquidity
+              Fixed Offer Notional
             </span>
             <span className="tabular-nums-mono text-xl font-semibold text-foreground">
               {loading
                 ? "—"
                 : `$${totalNotionalUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
             </span>
+            {!loading && activeOffers.some((o) => o.priceMode === 1) && (
+              <span className="text-[10px] text-muted-foreground">
+                + {activeOffers.filter((o) => o.priceMode === 1).length} floating oracle offer(s)
+              </span>
+            )}
           </div>
           <div className="flex flex-col gap-1 bg-card px-5 py-4">
             <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
@@ -405,11 +410,12 @@ export function TradePage({ onNavigate }: TradePageProps) {
             <div className="flex flex-col items-center gap-4 px-6 py-20 text-center">
               <div className="flex flex-col gap-1.5">
                 <h2 className="font-display text-xl font-semibold text-foreground">
-                  No open offers right now
+                  {ACTIVE_NETWORK.isLive ? "No open offers right now" : "Mainnet deployment pending"}
                 </h2>
                 <p className="max-w-sm text-sm text-muted-foreground">
-                  All previous testnet offers on Chain {ACTIVE_NETWORK.chainId} have been filled or
-                  cancelled. Create a fresh LP offer in Vault to test the full reservation flow.
+                  {ACTIVE_NETWORK.isLive
+                    ? `All previous offers on ${ACTIVE_NETWORK.shortName} (Chain ${ACTIVE_NETWORK.chainId}) have been filled or cancelled. Create a fresh LP offer in Vault to test the full reservation flow.`
+                    : `Protocol contracts are not yet deployed on ${ACTIVE_NETWORK.name} (Chain ${ACTIVE_NETWORK.chainId}).`}
                 </p>
               </div>
               <Button
@@ -692,7 +698,8 @@ export function TradePage({ onNavigate }: TradePageProps) {
                           <span className="text-muted-foreground">
                             • Price rises above{" "}
                             <strong className="tabular-nums-mono text-foreground">
-                              ${formatPriceX36(selected.fixedPriceX36, selectedInv.decimals, selectedPay.decimals)}
+                              {formatPriceX36(selected.fixedPriceX36, selectedInv.decimals, selectedPay.decimals)}{" "}
+                              {selectedPay.symbol}
                             </strong>{" "}
                             → buy at your locked strike, zero slippage.
                           </span>
