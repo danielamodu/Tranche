@@ -2,18 +2,20 @@ import { ArrowLeft, ArrowUpRight, CheckCircle2, ShieldCheck } from "lucide-react
 import { Separator } from "@/components/ui/separator";
 import { TrancheLogo } from "@/components/TrancheLogo";
 import { ACTIVE_NETWORK, explorerAddressUrl } from "@/config/networks";
+import type { AppRoute } from "@/App";
 
 interface DocsPageProps {
-  onNavigate: (path: "/" | "/docs" | "/privacy" | "/terms") => void;
+  onNavigate: (path: AppRoute) => void;
 }
 
 const TOC = [
-  { id: "overview", label: "01 · Protocol Overview" },
-  { id: "lifecycle", label: "02 · Execution Lifecycle" },
-  { id: "pricing", label: "03 · Pricing & Fee Math" },
-  { id: "invariants", label: "04 · Vault Invariants" },
-  { id: "governance", label: "05 · Governance & Roles" },
-  { id: "deployments", label: "06 · Contract Addresses" },
+  { id: "agent", label: "01 · Tranche Agent" },
+  { id: "overview", label: "02 · Protocol Overview" },
+  { id: "lifecycle", label: "03 · Execution Lifecycle" },
+  { id: "pricing", label: "04 · Pricing & Fee Math" },
+  { id: "invariants", label: "05 · Vault Invariants" },
+  { id: "governance", label: "06 · Governance & Roles" },
+  { id: "deployments", label: "07 · Contract Addresses" },
 ] as const;
 
 const DEPLOYED_ROWS = [
@@ -23,6 +25,7 @@ const DEPLOYED_ROWS = [
   { name: "ExecutionRouter", role: "Batch multi-ticket exercise & WHSK unwrap", addr: ACTIVE_NETWORK.contracts.executionRouter },
   { name: "SignedPullOracle", role: "2-of-3 quorum EIP-712 price oracle", addr: ACTIVE_NETWORK.contracts.signedPullOracle },
   { name: "OraclePriceAdapter", role: "Staleness, jump & hard price bounds", addr: ACTIVE_NETWORK.contracts.oraclePriceAdapter },
+  { name: "UniswapV3TwapOracle", role: "HSKSwap V3 30-minute TWAP oracle adapter", addr: ACTIVE_NETWORK.contracts.uniswapV3TwapOracle },
   { name: "HSPComplianceHook", role: "Optional view-only EIP-712 compliance hook", addr: ACTIVE_NETWORK.contracts.hspComplianceHook },
   { name: "TimelockController", role: "Sole owner of all 6 admin contracts", addr: ACTIVE_NETWORK.contracts.timelock },
   { name: "Governance Safe (3/5)", role: "Timelock proposer & executor", addr: ACTIVE_NETWORK.contracts.govSafe },
@@ -50,6 +53,13 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onNavigate("/agent")}
+              className="rounded-full px-3.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground cursor-pointer"
+            >
+              Agent Console
+            </button>
             <button
               type="button"
               onClick={() => onNavigate("/privacy")}
@@ -94,22 +104,67 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             {/* Title */}
             <header className="flex flex-col gap-5 border-b border-border pb-12">
               <span className="tabular-nums-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                Tranche Protocol · Technical Reference
+                Tranche · Technical Reference
               </span>
               <h1 className="font-display text-4xl font-semibold leading-[1.02] tracking-[-0.04em] sm:text-5xl">
-                Segregated Execution Commitments
+                Programmable Execution Infrastructure &amp; Tranche Agent
               </h1>
               <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
-                Tranche is an on-chain inventory reservation protocol deployed on{" "}
-                {ACTIVE_NETWORK.name} (Chain ID {ACTIVE_NETWORK.chainId}). Liquidity providers
-                commit ERC-20 inventory into isolated vault accounting buckets, and traders lock
-                exclusive fill rights via transferable ERC-721 Execution Tickets.
+                Tranche is programmable execution infrastructure for autonomous trading on{" "}
+                {ACTIVE_NETWORK.name} (Chain ID {ACTIVE_NETWORK.chainId}). Its first application,{" "}
+                <strong className="font-medium text-foreground">Tranche Agent</strong>, routes
+                deterministically across inventory-backed Tranche Protocol offers and HSKSwap V3
+                pools under code-enforced risk controls.
               </p>
             </header>
 
-            {/* 01 Overview */}
+            {/* 01 Tranche Agent */}
+            <section id="agent" className="scroll-mt-28 flex flex-col gap-5">
+              <span className="tabular-nums-mono text-xs text-muted-foreground">
+                01 · TRANCHE AGENT ARCHITECTURE
+              </span>
+              <h2 className="font-display text-2xl font-semibold sm:text-3xl">
+                Dual-venue autonomous routing with deterministic risk enforcement
+              </h2>
+              <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
+                Tranche Agent runs a continuous decision loop that reads live HSKSwap V3 quotes,
+                30-minute TWAP prices, oracle freshness, and available LiquidityVault offers. On
+                every cycle, it compares gas-adjusted execution economics and selects{" "}
+                <code className="tabular-nums-mono text-xs text-foreground">TRANCHE</code>,{" "}
+                <code className="tabular-nums-mono text-xs text-foreground">HSKSWAP</code>, or{" "}
+                <code className="tabular-nums-mono text-xs text-foreground">NONE</code>.
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-[18px] border border-border bg-card p-6">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Deterministic RiskManager &amp; Kill Switch
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Position size caps, total exposure ceilings, daily realized loss limits,
+                    oracle staleness/deviation checks, and an authoritative kill switch are
+                    enforced in TypeScript before any transaction is prepared. Corrupted persisted
+                    state or unresolved pending transactions fail closed.
+                  </p>
+                </div>
+                <div className="rounded-[18px] border border-border bg-card p-6">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Bounded LLM Policy Translation &amp; Operating Modes
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Optional natural-language instructions only produce validated policy patches
+                    checked against hard ceilings, persisted with versioned history and rollback.
+                    The LLM can never sign transactions, bypass RiskManager, or clear the kill
+                    switch. The runtime supports <code className="font-mono text-xs">fixture</code>,{" "}
+                    <code className="font-mono text-xs">dry_run</code> (default), and local Chain
+                    177 <code className="font-mono text-xs">fork</code> modes.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* 02 Overview */}
             <section id="overview" className="scroll-mt-28 flex flex-col gap-5">
-              <span className="tabular-nums-mono text-xs text-muted-foreground">01 · OVERVIEW</span>
+              <span className="tabular-nums-mono text-xs text-muted-foreground">02 · OVERVIEW</span>
               <h2 className="font-display text-2xl font-semibold sm:text-3xl">
                 Why reservation tickets instead of an AMM curve
               </h2>
@@ -138,10 +193,10 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
               </div>
             </section>
 
-            {/* 02 Lifecycle */}
+            {/* 03 Lifecycle */}
             <section id="lifecycle" className="scroll-mt-28 flex flex-col gap-5">
               <span className="tabular-nums-mono text-xs text-muted-foreground">
-                02 · EXECUTION LIFECYCLE
+                03 · EXECUTION LIFECYCLE
               </span>
               <h2 className="font-display text-2xl font-semibold sm:text-3xl">
                 End-to-end state transitions
@@ -190,10 +245,10 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
               </div>
             </section>
 
-            {/* 03 Pricing & Fees */}
+            {/* 04 Pricing & Fees */}
             <section id="pricing" className="scroll-mt-28 flex flex-col gap-5">
               <span className="tabular-nums-mono text-xs text-muted-foreground">
-                03 · PRICING &amp; FEE MATH
+                04 · PRICING &amp; FEE MATH
               </span>
               <h2 className="font-display text-2xl font-semibold sm:text-3xl">
                 Fixed strike, floating oracle, and 5 bps fee accounting
@@ -230,10 +285,10 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
               </div>
             </section>
 
-            {/* 04 Invariants */}
+            {/* 05 Invariants */}
             <section id="invariants" className="scroll-mt-28 flex flex-col gap-5">
               <span className="tabular-nums-mono text-xs text-muted-foreground">
-                04 · VAULT INVARIANTS
+                05 · VAULT INVARIANTS
               </span>
               <h2 className="font-display text-2xl font-semibold sm:text-3xl">
                 Enforced on-chain guarantees
@@ -262,10 +317,10 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
               </div>
             </section>
 
-            {/* 05 Governance */}
+            {/* 06 Governance */}
             <section id="governance" className="scroll-mt-28 flex flex-col gap-5">
               <span className="tabular-nums-mono text-xs text-muted-foreground">
-                05 · GOVERNANCE &amp; ROLES
+                06 · GOVERNANCE &amp; ROLES
               </span>
               <h2 className="font-display text-2xl font-semibold sm:text-3xl">
                 Zero EOA admin keys
@@ -280,33 +335,47 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
               </p>
             </section>
 
-            {/* 06 Deployments */}
+            {/* 07 Deployments */}
             <section id="deployments" className="scroll-mt-28 flex flex-col gap-5">
               <span className="tabular-nums-mono text-xs text-muted-foreground">
-                06 · CONTRACT ADDRESSES ({ACTIVE_NETWORK.name.toUpperCase()})
+                07 · CONTRACT ADDRESSES ({ACTIVE_NETWORK.name.toUpperCase()})
               </span>
               <h2 className="font-display text-2xl font-semibold sm:text-3xl">
-                Live Chain {ACTIVE_NETWORK.chainId} manifest
+                {ACTIVE_NETWORK.isLive
+                  ? `Live Chain ${ACTIVE_NETWORK.chainId} manifest`
+                  : `Chain ${ACTIVE_NETWORK.chainId} manifest (deployment pending)`}
               </h2>
               <div className="overflow-hidden rounded-[20px] border border-border bg-card">
                 {DEPLOYED_ROWS.map((row, idx) => (
                   <div key={row.name}>
                     {idx > 0 && <Separator />}
-                    <a
-                      href={explorerAddressUrl(row.addr)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group flex flex-col justify-between gap-1.5 px-6 py-4 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center"
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-medium text-foreground">{row.name}</span>
-                        <span className="text-xs text-muted-foreground">{row.role}</span>
+                    {ACTIVE_NETWORK.isLive ? (
+                      <a
+                        href={explorerAddressUrl(row.addr)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group flex flex-col justify-between gap-1.5 px-6 py-4 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center"
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium text-foreground">{row.name}</span>
+                          <span className="text-xs text-muted-foreground">{row.role}</span>
+                        </div>
+                        <span className="tabular-nums-mono inline-flex items-center gap-1.5 text-xs text-muted-foreground group-hover:text-foreground">
+                          {row.addr.slice(0, 10)}…{row.addr.slice(-6)}
+                          <ArrowUpRight className="size-3.5" />
+                        </span>
+                      </a>
+                    ) : (
+                      <div className="flex flex-col justify-between gap-1.5 px-6 py-4 sm:flex-row sm:items-center">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium text-foreground">{row.name}</span>
+                          <span className="text-xs text-muted-foreground">{row.role}</span>
+                        </div>
+                        <span className="tabular-nums-mono text-xs text-muted-foreground">
+                          Pending deployment
+                        </span>
                       </div>
-                      <span className="tabular-nums-mono inline-flex items-center gap-1.5 text-xs text-muted-foreground group-hover:text-foreground">
-                        {row.addr.slice(0, 10)}…{row.addr.slice(-6)}
-                        <ArrowUpRight className="size-3.5" />
-                      </span>
-                    </a>
+                    )}
                   </div>
                 ))}
               </div>
