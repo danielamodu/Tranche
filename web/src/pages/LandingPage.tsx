@@ -171,7 +171,6 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   }
   const [scrollState, setScrollState] = useState({
     compact: false,
-    showCta: false,
     nearFooter: false,
   });
 
@@ -185,15 +184,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
       const next = {
         compact: y > 36,
-        showCta: y > 420,
         nearFooter: distFromBottom < 220 && y > 600,
       };
       setScrollState((prev) =>
-        prev.compact === next.compact &&
-        prev.showCta === next.showCta &&
-        prev.nearFooter === next.nearFooter
-          ? prev
-          : next,
+        prev.compact === next.compact && prev.nearFooter === next.nearFooter ? prev : next,
       );
     };
 
@@ -282,43 +276,32 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               </a>
             </div>
 
-            {/* Right: Docs & Privacy (always balanced) + Launch App pill on scroll */}
+            {/* Right: Docs, Privacy & always-visible Launch App button */}
             <div className="flex items-center justify-end gap-1.5">
               <div
                 className={cn(
-                  "flex items-center gap-1 will-change-transform transition-transform duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                  "flex items-center gap-1.5 will-change-transform transition-transform duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   scrollState.compact ? "translate-x-0" : "lg:translate-x-12",
                 )}
               >
                 <button
                   type="button"
                   onClick={() => onNavigate("/docs")}
-                  className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground cursor-pointer"
+                  className="hidden rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground sm:inline-flex cursor-pointer"
                 >
                   Docs
                 </button>
                 <button
                   type="button"
                   onClick={() => onNavigate("/privacy")}
-                  className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground cursor-pointer"
+                  className="hidden rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground sm:inline-flex cursor-pointer"
                 >
                   Privacy
                 </button>
-              </div>
-
-              <div
-                className={cn(
-                  "overflow-hidden will-change-[transform,opacity] transition-[max-width,transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-                  scrollState.showCta
-                    ? "ml-1 max-w-[160px] translate-y-0 opacity-100"
-                    : "ml-0 max-w-0 -translate-y-1 opacity-0 pointer-events-none",
-                )}
-              >
                 <Button
                   type="button"
                   onClick={handleLaunchApp}
-                  tabIndex={scrollState.showCta ? 0 : -1}
-                  className="h-9 whitespace-nowrap rounded-full px-4 text-xs font-medium active:scale-[0.985] transition-transform cursor-pointer"
+                  className="ml-1 h-9 whitespace-nowrap rounded-full px-4 text-xs font-medium active:scale-[0.985] transition-transform cursor-pointer"
                 >
                   Launch App
                   <ArrowUpRight data-icon="inline-end" />
