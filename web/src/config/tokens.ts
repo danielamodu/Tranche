@@ -1,5 +1,27 @@
-import { formatUnits, parseUnits, type Address } from "viem";
+import type { Address } from "viem";
 import { ACTIVE_NETWORK, type NetworkConfig } from "@/config/networks";
+
+function formatUnitsExact(value: bigint, decimals: number): string {
+  const negative = value < 0n;
+  const abs = negative ? -value : value;
+  const str = abs.toString().padStart(decimals + 1, "0");
+  const whole = decimals === 0 ? str : str.slice(0, -decimals);
+  const frac = decimals === 0 ? "" : str.slice(-decimals).replace(/0+$/, "");
+  return `${negative ? "-" : ""}${whole}${frac ? `.${frac}` : ""}`;
+}
+
+function parseUnitsExact(value: string, decimals: number): bigint {
+  const trimmed = value.trim();
+  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    throw new Error(`Invalid numeric value: ${value}`);
+  }
+  const negative = trimmed.startsWith("-");
+  const unsigned = negative ? trimmed.slice(1) : trimmed;
+  const [wholePart, fracPart = ""] = unsigned.split(".");
+  const paddedFrac = fracPart.slice(0, decimals).padEnd(decimals, "0");
+  const combined = BigInt(`${wholePart}${paddedFrac}`);
+  return negative ? -combined : combined;
+}
 
 export interface TokenMeta {
   address: Address;
@@ -57,8 +79,9 @@ export function getTokenMeta(
 }
 
 export function formatTokenAmount(raw: bigint, decimals: number, maxFrac = 4): string {
-  const num = Number(formatUnits(raw, decimals));
-  if (!Number.isFinite(num)) return formatUnits(raw, decimals);
+  const exact = formatUnitsExact(raw, decimals);
+  const num = Number(exact);
+  if (!Number.isFinite(num)) return exact;
   if (num === 0) return "0";
   if (num < 0.0001) return "<0.0001";
   return num.toLocaleString("en-US", {
@@ -102,7 +125,7 @@ export function parseHumanPriceToX36(
   invDecimals: number,
   payDecimals: number,
 ): bigint {
-  const p18 = parseUnits(humanPrice, 18);
+  const p18 = parseUnitsExact(humanPrice, 18);
   const exp = 18 + payDecimals - invDecimals;
   if (exp >= 0) {
     return p18 * 10n ** BigInt(exp);

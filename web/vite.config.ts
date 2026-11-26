@@ -15,6 +15,26 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("react-dom") || id.includes("/react/")) return "vendor-react";
+          if (
+            id.includes("lucide-react") ||
+            id.includes("radix-ui") ||
+            id.includes("@radix-ui") ||
+            id.includes("class-variance-authority") ||
+            id.includes("tailwind-merge") ||
+            id.includes("clsx")
+          ) {
+            return "vendor-ui";
+          }
+        },
+      },
+    },
+  },
   server: {
     fs: {
       allow: [path.resolve(__dirname, "..")],

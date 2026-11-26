@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createPublicClient, fallback, formatEther, http, toHex, type Address } from "viem";
+import type { Address } from "viem";
 import { ACTIVE_NETWORK } from "@/config/networks";
 
 export interface Eip1193Provider {
@@ -55,9 +55,41 @@ interface WalletContextValue {
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
-const publicClient = createPublicClient({
-  transport: fallback(ACTIVE_NETWORK.rpcUrls.map((url) => http(url, { timeout: 8_000 }))),
-});
+async function fetchNativeBalanceWei(addr: Address): Promise<bigint> {
+  for (const url of ACTIVE_NETWORK.rpcUrls) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8_000);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "eth_getBalance",
+            params: [addr, "latest"],
+          }),
+          signal: ctrl.signal,
+        });
+        if (!res.ok) continue;
+        const data = (await res.json()) as { result?: string };
+        if (typeof data.result === "string") return BigInt(data.result);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      // try next RPC fallback
+    }
+  }
+  throw new Error("RPC balance read failed");
+}
+
+function formatWeiToEtherNumber(wei: bigint): number {
+  const whole = wei / 10n ** 18n;
+  const frac = wei % 10n ** 18n;
+  return Number(whole) + Number(frac) / 1e18;
+}
 
 function getWindowWithWallets() {
   return window as unknown as {
@@ -80,7 +112,7 @@ function isMissingChainError(err: unknown): boolean {
 }
 
 async function ensureActiveChain(provider: Eip1193Provider): Promise<boolean> {
-  const targetHex = toHex(ACTIVE_NETWORK.chainId);
+  const targetHex = `0x${ACTIVE_NETWORK.chainId.toString(16)}`;
   try {
     await provider.request({
       method: "wallet_switchEthereumChain",
@@ -253,8 +285,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const refreshBalance = useCallback(async (addr: Address) => {
     try {
-      const wei = await publicClient.getBalance({ address: addr });
-      const formatted = Number(formatEther(wei));
+      const wei = await fetchNativeBalanceWei(addr);
+      const formatted = formatWeiToEtherNumber(wei);
       setHskBalance(formatted >= 1 ? formatted.toFixed(3) : formatted.toFixed(4));
     } catch {
       setHskBalance(null);

@@ -1,15 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { WalletProvider } from "@/context/WalletContext";
-import { AgentPage } from "@/pages/AgentPage";
-import { ConnectWalletPage } from "@/pages/ConnectWalletPage";
-import { DocsPage } from "@/pages/DocsPage";
-import { LandingPage } from "@/pages/LandingPage";
-import { PrivacyPage } from "@/pages/PrivacyPage";
-import { RolePickerPage } from "@/pages/RolePickerPage";
-import { TermsPage } from "@/pages/TermsPage";
-import { TicketsPage } from "@/pages/TicketsPage";
-import { TradePage } from "@/pages/TradePage";
-import { VaultPage } from "@/pages/VaultPage";
+
+const LandingPage = lazy(() =>
+  import("@/pages/LandingPage").then((m) => ({ default: m.LandingPage })),
+);
+const ConnectWalletPage = lazy(() =>
+  import("@/pages/ConnectWalletPage").then((m) => ({ default: m.ConnectWalletPage })),
+);
+const RolePickerPage = lazy(() =>
+  import("@/pages/RolePickerPage").then((m) => ({ default: m.RolePickerPage })),
+);
+const TradePage = lazy(() => import("@/pages/TradePage").then((m) => ({ default: m.TradePage })));
+const TicketsPage = lazy(() =>
+  import("@/pages/TicketsPage").then((m) => ({ default: m.TicketsPage })),
+);
+const VaultPage = lazy(() => import("@/pages/VaultPage").then((m) => ({ default: m.VaultPage })));
+const AgentPage = lazy(() => import("@/pages/AgentPage").then((m) => ({ default: m.AgentPage })));
+const DocsPage = lazy(() => import("@/pages/DocsPage").then((m) => ({ default: m.DocsPage })));
+const PrivacyPage = lazy(() =>
+  import("@/pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })),
+);
+const TermsPage = lazy(() => import("@/pages/TermsPage").then((m) => ({ default: m.TermsPage })));
 
 export type AppRoute =
   | "/"
@@ -48,6 +59,10 @@ function resolveRoute(pathname: string, hostKind: "marketing" | "app" | "local")
   return hostKind === "app" ? "/connect" : "/";
 }
 
+function RouteFallback() {
+  return <div className="min-h-screen bg-background text-foreground" aria-busy="true" />;
+}
+
 function AppRouter() {
   const hostKind = getHostKind();
   const [route, setRoute] = useState<AppRoute>(() =>
@@ -84,16 +99,19 @@ function AppRouter() {
     [hostKind],
   );
 
-  if (route === "/connect") return <ConnectWalletPage onNavigate={navigate} />;
-  if (route === "/start") return <RolePickerPage onNavigate={navigate} />;
-  if (route === "/trade") return <TradePage onNavigate={navigate} />;
-  if (route === "/tickets") return <TicketsPage onNavigate={navigate} />;
-  if (route === "/vault") return <VaultPage onNavigate={navigate} />;
-  if (route === "/agent") return <AgentPage onNavigate={navigate} />;
-  if (route === "/docs") return <DocsPage onNavigate={navigate} />;
-  if (route === "/privacy") return <PrivacyPage onNavigate={navigate} />;
-  if (route === "/terms") return <TermsPage onNavigate={navigate} />;
-  return <LandingPage onNavigate={navigate} />;
+  let page;
+  if (route === "/connect") page = <ConnectWalletPage onNavigate={navigate} />;
+  else if (route === "/start") page = <RolePickerPage onNavigate={navigate} />;
+  else if (route === "/trade") page = <TradePage onNavigate={navigate} />;
+  else if (route === "/tickets") page = <TicketsPage onNavigate={navigate} />;
+  else if (route === "/vault") page = <VaultPage onNavigate={navigate} />;
+  else if (route === "/agent") page = <AgentPage onNavigate={navigate} />;
+  else if (route === "/docs") page = <DocsPage onNavigate={navigate} />;
+  else if (route === "/privacy") page = <PrivacyPage onNavigate={navigate} />;
+  else if (route === "/terms") page = <TermsPage onNavigate={navigate} />;
+  else page = <LandingPage onNavigate={navigate} />;
+
+  return <Suspense fallback={<RouteFallback />}>{page}</Suspense>;
 }
 
 export function App() {
