@@ -9,6 +9,7 @@
    ========================================================================== */
 
 :root {
+  color-scheme: light;
   --background: #f7f7f8;
   --foreground: #0c0d10;
   --card: #ffffff;
@@ -63,6 +64,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #050505;
   --foreground: #f8f7ee;
   --card: #0c0c0b;

@@ -110,7 +110,7 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
               </div>
 
               {/* Discovered EIP-6963 Wallets */}
-              <div className="flex max-h-[36vh] flex-col gap-2 overflow-y-auto pr-0.5">
+              <div className="flex flex-col gap-2">
                 {wallets.length > 0 ? (
                   wallets.map((w) => (
                     <button
@@ -118,7 +118,7 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
                       type="button"
                       disabled={connecting}
                       onClick={() => connect(w.provider)}
-                      className="glass-pill glass-pill-interactive group flex min-h-[58px] w-full items-center justify-between rounded-[16px] px-4 py-3 text-left disabled:opacity-50 cursor-pointer"
+                      className="glass-pill glass-pill-interactive group flex min-h-[48px] w-full items-center justify-between rounded-[14px] px-3.5 py-2 text-left disabled:opacity-50 cursor-pointer"
                     >
                       <div className="flex items-center gap-3.5">
                         {w.icon ? (
