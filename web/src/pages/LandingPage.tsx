@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUpRight, Bot, CheckCircle2, Plus, ShieldCheck, Waves } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { HeroRoutingStage } from "@/components/HeroRoutingStage";
 import { Reveal } from "@/components/Reveal";
 import { StickyLifecycleStage } from "@/components/StickyLifecycleStage";
-import { TicketSpecimen } from "@/components/TicketSpecimen";
 import { TrancheLogo } from "@/components/TrancheLogo";
 import { ACTIVE_NETWORK, explorerAddressUrl } from "@/config/networks";
 import { useWallet } from "@/context/WalletContext";
@@ -300,150 +300,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         </div>
       </header>
 
-      {/* 1. Full-Bleed 100svh Animated Dual-Venue Hero Stage (pure visual focus, zero text crowding) */}
-      <section className="relative flex min-h-[100svh] flex-col items-center justify-between overflow-hidden px-6 pt-28 pb-10 sm:pt-32 sm:pb-12">
-        {/* Subtle monochrome studio rim glow behind centerpiece */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[80vh]"
-          style={{
-            background:
-              "radial-gradient(50% 45% at 50% 42%, rgba(248, 247, 238, 0.095) 0%, rgba(248, 247, 238, 0) 100%)",
-          }}
-        />
-
-        {/* Center sculptural visual diagram: Agent ──▶ [Cream Ticket] ── HSKSwap */}
-        <div className="relative z-10 mx-auto my-auto flex w-full max-w-[1080px] flex-col items-center justify-center gap-6 lg:flex-row lg:gap-0">
-          {/* Left Satellite: Tranche Agent Brain */}
-          <div className="animate-rise flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/90 bg-card/85 p-4 backdrop-blur-md transition-transform duration-500 hover:-translate-y-1 lg:w-[232px] lg:shrink-0">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <Bot className="size-3.5" />
-              </span>
-              <span className="tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
-                ROUTING
-              </span>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="font-display text-sm font-semibold text-foreground">
-                Tranche Agent
-              </span>
-              <span className="text-[11px] leading-snug text-muted-foreground">
-                Compares venues · Risk-checked
-              </span>
-            </div>
-            <div className="flex items-center justify-between border-t border-border/80 pt-2 text-[10px] text-muted-foreground">
-              <span className="tabular-nums-mono">Decision</span>
-              <span className="tabular-nums-mono font-semibold text-foreground">TRANCHE ✓</span>
-            </div>
-          </div>
-
-          {/* Animated Active Route Beam (Left → Center Ticket) */}
-          <div aria-hidden="true" className="hidden w-16 shrink-0 items-center lg:flex">
-            <svg viewBox="0 0 72 24" className="h-6 w-full overflow-visible">
-              <line
-                x1="0"
-                y1="12"
-                x2="64"
-                y2="12"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
-                className="animate-dash-flow text-foreground/80"
-              />
-              <circle cx="66" cy="12" r="3.5" className="fill-primary" />
-            </svg>
-          </div>
-
-          {/* Center Focal Artifact: Serrated Cream Execution Ticket (Selected Route) */}
-          <div className="animate-rise-delay-1 w-full max-w-[390px] shrink-0">
-            <TicketSpecimen stage={0} mode="FIXED" />
-          </div>
-
-          {/* Dimmed Comparison Line (Center ← Right AMM) */}
-          <div aria-hidden="true" className="hidden w-16 shrink-0 items-center lg:flex">
-            <svg viewBox="0 0 72 24" className="h-6 w-full overflow-visible">
-              <line
-                x1="6"
-                y1="12"
-                x2="72"
-                y2="12"
-                stroke="currentColor"
-                strokeWidth="1.25"
-                strokeDasharray="3 5"
-                className="text-muted-foreground/35"
-              />
-              <circle cx="4" cy="12" r="2.5" className="fill-muted-foreground/45" />
-            </svg>
-          </div>
-
-          {/* Right Satellite: HSKSwap V3 AMM (Compared & Skipped) */}
-          <div className="animate-rise-delay-2 flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/70 bg-card/55 p-4 opacity-80 backdrop-blur-md transition-opacity duration-300 hover:opacity-100 lg:w-[232px] lg:shrink-0">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex size-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
-                <Waves className="size-3.5" />
-              </span>
-              <span className="tabular-nums-mono rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-                SKIPPED
-              </span>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="font-display text-sm font-semibold text-foreground">
-                HSKSwap V3 Pool
-              </span>
-              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                30.42 USDT · +1.4% slippage
-              </span>
-            </div>
-            <div className="flex items-center justify-between border-t border-border/70 pt-2 text-[10px] text-muted-foreground">
-              <span>Higher all-in cost</span>
-              <span className="tabular-nums-mono text-destructive">+0.27</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Clean Scroll Transition Cue into Trade Statement Section */}
-        <a
-          href="#trade-statement"
-          className="animate-rise-delay-3 relative z-10 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-4 py-2 text-[11px] font-medium text-muted-foreground backdrop-blur-md transition-colors hover:border-foreground/30 hover:text-foreground"
-        >
-          <span className="tabular-nums-mono uppercase tracking-[0.12em]">Explore</span>
-          <ArrowDown className="size-3 animate-bounce" />
-        </a>
-      </section>
-
-      {/* 1B. Dedicated Editorial Trade Statement & Launch App Section */}
-      <section
-        id="trade-statement"
-        className="scroll-mt-24 border-t border-border/60 px-6 py-28 sm:py-36"
-      >
-        <Reveal>
-          <div className="mx-auto grid w-full max-w-[1080px] grid-cols-1 items-end gap-10 lg:grid-cols-12">
-            <h1 className="font-display text-[2.85rem] font-bold leading-[0.98] tracking-[-0.045em] text-foreground sm:text-[4.4rem] lg:col-span-7">
-              <span className="block">Trade autonomously.</span>
-              <span className="block text-muted-foreground">Route across two venues.</span>
-            </h1>
-
-            <div className="flex flex-col items-start gap-6 lg:col-span-5 lg:items-end lg:text-right">
-              <p className="max-w-[400px] text-base leading-relaxed text-muted-foreground">
-                The autonomous trading agent on HashKey Chain that compares HSKSwap V3 pools against
-                on-chain reserved inventory — routing every trade to the better venue, or walking
-                away.
-              </p>
-              <Button
-                type="button"
-                size="lg"
-                onClick={handleLaunchApp}
-                className="h-12 rounded-full px-7 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-              >
-                Launch App
-                <ArrowUpRight data-icon="inline-end" />
-              </Button>
-            </div>
-          </div>
-        </Reveal>
-      </section>
+      {/* 1. Live Choreographed Dual-Venue Hero + Scroll-Scrubbed Morph into Trade Statement */}
+      <HeroRoutingStage onLaunchApp={handleLaunchApp} />
 
       {/* 2. Live On-Chain Telemetry Strip */}
       <section id="protocol" className="mx-auto max-w-[1080px] px-6 py-28 sm:py-36">
