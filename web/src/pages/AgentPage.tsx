@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { explorerTxUrl } from "@/config/networks";
+import { useWallet } from "@/context/WalletContext";
 import {
   AgentApiClient,
   AgentApiError,
@@ -143,7 +144,131 @@ function humanDecisionSummary(d: AgentDashboardSnapshot["decisions"][number]): s
   return d.rationale;
 }
 
+interface PersonalAgentState {
+  paused: boolean;
+  strategyType: StrategyType;
+  takeProfitBps: number;
+  stopLossBps: number;
+  maxSlippageBps: number;
+  version: number;
+}
+
+const DEFAULT_PERSONAL_AGENT: PersonalAgentState = {
+  paused: false,
+  strategyType: "price_threshold",
+  takeProfitBps: 500,
+  stopLossBps: 300,
+  maxSlippageBps: 100,
+  version: 1,
+};
+
+function parsePersonalRule(instruction: string): {
+  patch: Record<string, unknown>;
+  summary: string;
+  valid: boolean;
+  rejectedFields: string[];
+} {
+  const lower = instruction.toLowerCase();
+  const patch: Record<string, unknown> = {};
+  const parts: string[] = [];
+  const rejectedFields: string[] = [];
+
+  if (lower.includes("momentum") || lower.includes("trend")) {
+    patch.strategyType = "momentum";
+    parts.push("Trend Following");
+  } else if (lower.includes("volatil") || lower.includes("shield") || lower.includes("crash")) {
+    patch.strategyType = "volatility_aware";
+    parts.push("Volatility-Protected");
+  } else if (lower.includes("target") || lower.includes("threshold") || lower.includes("conservative")) {
+    patch.strategyType = "price_threshold";
+    parts.push("Buy Below Target Price");
+  }
+
+  const tpMatch = lower.match(/(?:take\s*profit|profit)\s*(?:at|to|=)?\s*(\d+(?:\.\d+)?)\s*%/);
+  if (tpMatch) {
+    const bps = Math.round(Number(tpMatch[1]) * 100);
+    if (bps < 50 || bps > 2000) rejectedFields.push("takeProfit (must be 0.5%–20%)");
+    else {
+      patch.takeProfitBps = bps;
+      parts.push(`Take profit ${tpMatch[1]}%`);
+    }
+  }
+
+  const slMatch = lower.match(/(?:stop\s*loss|stop)\s*(?:at|to|=)?\s*(\d+(?:\.\d+)?)\s*%/);
+  if (slMatch) {
+    const bps = Math.round(Number(slMatch[1]) * 100);
+    if (bps < 50 || bps > 1500) rejectedFields.push("stopLoss (must be 0.5%–15%)");
+    else {
+      patch.stopLossBps = bps;
+      parts.push(`Stop loss ${slMatch[1]}%`);
+    }
+  }
+
+  const slipMatch = lower.match(/(?:slippage|shift)\s*(?:at|to|=|max)?\s*(\d+(?:\.\d+)?)\s*%/);
+  if (slipMatch) {
+    const bps = Math.round(Number(slipMatch[1]) * 100);
+    if (bps < 10 || bps > 300) rejectedFields.push("maxSlippage (must be 0.1%–3%)");
+    else {
+      patch.maxSlippageBps = bps;
+      parts.push(`Max shift ${slipMatch[1]}%`);
+    }
+  }
+
+  if (Object.keys(patch).length === 0 && rejectedFields.length === 0) {
+    rejectedFields.push("No recognized rule — try mentioning a strategy, take profit %, stop loss %, or slippage %");
+  }
+
+  return {
+    patch,
+    summary: parts.join(" · ") || "No changes",
+    valid: rejectedFields.length === 0 && Object.keys(patch).length > 0,
+    rejectedFields,
+  };
+}
+
 export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
+  const { address } = useWallet();
+  const personalKey = `tranche-personal-agent-${(address ?? "guest").toLowerCase()}`;
+  const [personalAgent, setPersonalAgent] = useState<PersonalAgentState>(() => {
+    try {
+      const saved = localStorage.getItem(`tranche-personal-agent-${(address ?? "guest").toLowerCase()}`);
+      return saved ? { ...DEFAULT_PERSONAL_AGENT, ...(JSON.parse(saved) as Partial<PersonalAgentState>) } : DEFAULT_PERSONAL_AGENT;
+    } catch {
+      return DEFAULT_PERSONAL_AGENT;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(personalKey);
+      if (saved) {
+        const parsed = { ...DEFAULT_PERSONAL_AGENT, ...(JSON.parse(saved) as Partial<PersonalAgentState>) };
+        setPersonalAgent(parsed);
+        setStrategyType(parsed.strategyType);
+        setTpInput(String(parsed.takeProfitBps));
+        setSlInput(String(parsed.stopLossBps));
+        setSlipInput(String(parsed.maxSlippageBps));
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [personalKey]);
+
+  const savePersonalAgent = useCallback(
+    (updater: (prev: PersonalAgentState) => PersonalAgentState) => {
+      setPersonalAgent((prev) => {
+        const next = updater(prev);
+        try {
+          localStorage.setItem(personalKey, JSON.stringify(next));
+        } catch {
+          // ignore storage errors
+        }
+        return next;
+      });
+    },
+    [personalKey],
+  );
+
   const [apiUrlInput, setApiUrlInput] = useState<string>(() => {
     const saved = sessionStorage.getItem(API_URL_STORAGE_KEY);
     return saved ? normalizeAgentApiUrl(saved) : normalizeAgentApiUrl(DEFAULT_AGENT_API_URL);
@@ -292,6 +417,26 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
     }
   }
 
+  const isOperator = tokenInput.trim().length > 0;
+
+  async function handlePauseToggle() {
+    if (!isOperator) {
+      const nextPaused = !personalAgent.paused;
+      savePersonalAgent((prev) => ({ ...prev, paused: nextPaused }));
+      setActionFeedback({
+        kind: "ok",
+        text: nextPaused
+          ? "Your personal agent is paused. Other users are unaffected."
+          : "Your personal agent is active again.",
+      });
+      return;
+    }
+    await runControl(
+      status?.paused ? "Resume agent" : "Pause agent",
+      () => (status?.paused ? client.resume() : client.pause()),
+    );
+  }
+
   async function handleStrategySave() {
     const takeProfitBps = Number(tpInput);
     const stopLossBps = Number(slInput);
@@ -299,6 +444,21 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
     const trimmedMaxPos = maxPosInput.trim();
     if (!Number.isFinite(takeProfitBps) || !Number.isFinite(stopLossBps) || !Number.isFinite(maxSlippageBps)) {
       setActionFeedback({ kind: "err", text: "Take-profit, stop-loss, and slippage must be numbers." });
+      return;
+    }
+    if (!isOperator) {
+      savePersonalAgent((prev) => ({
+        ...prev,
+        strategyType,
+        takeProfitBps,
+        stopLossBps,
+        maxSlippageBps,
+        version: prev.version + 1,
+      }));
+      setActionFeedback({
+        kind: "ok",
+        text: `Saved to your personal agent (${humanStrategy(strategyType)}).`,
+      });
       return;
     }
     if (!/^\d+$/.test(trimmedMaxPos)) {
@@ -321,6 +481,22 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
 
   async function handleProposePolicy() {
     if (!nlInstruction.trim()) return;
+    if (!isOperator) {
+      const parsed = parsePersonalRule(nlInstruction.trim());
+      setNlProposal({
+        instruction: nlInstruction.trim(),
+        proposedPatch: parsed.patch,
+        valid: parsed.valid,
+        rejectedFields: parsed.rejectedFields,
+      });
+      setActionFeedback({
+        kind: parsed.valid ? "ok" : "err",
+        text: parsed.valid
+          ? `Preview ready: ${parsed.summary}. Click Apply Rule to save to your agent.`
+          : parsed.rejectedFields.join(", "),
+      });
+      return;
+    }
     setActionBusy(true);
     setActionFeedback(null);
     try {
@@ -349,6 +525,35 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
 
   async function handleApplyPolicy() {
     if (!nlInstruction.trim()) return;
+    if (!isOperator) {
+      const parsed = parsePersonalRule(nlInstruction.trim());
+      if (!parsed.valid) {
+        setActionFeedback({ kind: "err", text: parsed.rejectedFields.join(", ") });
+        return;
+      }
+      savePersonalAgent((prev) => {
+        const next: PersonalAgentState = {
+          ...prev,
+          strategyType: (parsed.patch.strategyType as StrategyType) ?? prev.strategyType,
+          takeProfitBps: (parsed.patch.takeProfitBps as number) ?? prev.takeProfitBps,
+          stopLossBps: (parsed.patch.stopLossBps as number) ?? prev.stopLossBps,
+          maxSlippageBps: (parsed.patch.maxSlippageBps as number) ?? prev.maxSlippageBps,
+          version: prev.version + 1,
+        };
+        setStrategyType(next.strategyType);
+        setTpInput(String(next.takeProfitBps));
+        setSlInput(String(next.stopLossBps));
+        setSlipInput(String(next.maxSlippageBps));
+        return next;
+      });
+      setNlProposal(null);
+      setNlInstruction("");
+      setActionFeedback({
+        kind: "ok",
+        text: `Applied to your personal agent: ${parsed.summary}.`,
+      });
+      return;
+    }
     await runControl("Apply policy", () => client.applyPolicy(nlInstruction.trim()), {
       forceFormSync: true,
     });
@@ -378,6 +583,10 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
     metrics && config
       ? pctBar(metrics.dailyRealizedLossPayment, config.riskLimits.maxDailyRealizedLossPayment)
       : 0;
+
+  const effectivePaused = isOperator ? Boolean(status?.paused) : personalAgent.paused;
+  const effectiveStrategy = isOperator ? status?.activeStrategy : personalAgent.strategyType;
+  const effectivePolicyVersion = isOperator ? policyVersion : personalAgent.version;
 
   const routeForView =
     view === "activity" ? "/agent/activity" : view === "policy" ? "/agent/policy" : "/agent";
@@ -467,7 +676,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     "size-2 rounded-full",
                     disconnected
                       ? "bg-amber-500"
-                      : status?.paused || status?.killSwitch
+                      : effectivePaused || status?.killSwitch
                         ? "bg-amber-500"
                         : "bg-emerald-500",
                   )}
@@ -477,8 +686,8 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     ? "Connecting to your agent…"
                     : status?.killSwitch
                       ? "Agent stopped"
-                      : status?.paused
-                        ? "Agent paused"
+                      : effectivePaused
+                        ? "Your agent is paused"
                         : `Active · Watching ${status?.market ?? "WHSK/USDT"}`}
                 </span>
               </div>
@@ -486,8 +695,8 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 Tell your agent how to trade.
               </h1>
               <p className="max-w-xl text-sm text-muted-foreground">
-                Set a rule in plain English. Your agent compares Tranche price locks against
-                HSKSwap every 15 seconds and never crosses your spending limit.
+                Set a rule in plain English. Changes apply only to your personal wallet session and
+                never affect other users.
               </p>
             </div>
 
@@ -496,16 +705,11 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={disconnected || actionBusy || status?.killSwitch}
-                onClick={() =>
-                  void runControl(
-                    status?.paused ? "Resume agent" : "Pause agent",
-                    () => (status?.paused ? client.resume() : client.pause()),
-                  )
-                }
+                disabled={actionBusy || (isOperator && (disconnected || status?.killSwitch))}
+                onClick={() => void handlePauseToggle()}
                 className="h-10 rounded-full px-4 text-xs font-medium cursor-pointer"
               >
-                {status?.paused ? (
+                {effectivePaused ? (
                   <>
                     <Play className="mr-1.5 size-3.5" />
                     Resume Agent
@@ -650,8 +854,15 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     Your Current Plan
                   </span>
                   <h2 className="mt-0.5 text-base font-semibold text-foreground">
-                    {humanStrategy(status?.activeStrategy)}
+                    {humanStrategy(effectiveStrategy)}
                   </h2>
+                  {!isOperator && (
+                    <span className="text-[11px] text-muted-foreground">
+                      Profit {(personalAgent.takeProfitBps / 100).toFixed(1)}% · Stop{" "}
+                      {(personalAgent.stopLossBps / 100).toFixed(1)}% · Max shift{" "}
+                      {(personalAgent.maxSlippageBps / 100).toFixed(1)}%
+                    </span>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -960,14 +1171,14 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-base font-semibold">Spending Limits</h2>
-                    <p className="text-xs opacity-65">Automatic caps · Rule v{policyVersion}</p>
+                    <p className="text-xs opacity-65">Automatic caps · Rule v{effectivePolicyVersion}</p>
                   </div>
                   <span className="rounded-full bg-black/10 px-2.5 py-1 text-[11px] font-medium">
-                    {disconnected
+                    {disconnected && isOperator
                       ? "Offline"
                       : status?.killSwitch
                         ? "Stopped"
-                        : status?.paused
+                        : effectivePaused
                           ? "Paused"
                           : "Active"}
                   </span>
@@ -1013,8 +1224,15 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={disconnected || actionBusy || status?.killSwitch}
-                    onClick={() => void runControl("Start", () => client.start())}
+                    disabled={actionBusy || (isOperator && (disconnected || status?.killSwitch))}
+                    onClick={() => {
+                      if (!isOperator) {
+                        savePersonalAgent((prev) => ({ ...prev, paused: false }));
+                        setActionFeedback({ kind: "ok", text: "Your personal agent is active." });
+                      } else {
+                        void runControl("Start", () => client.start());
+                      }
+                    }}
                     className="h-9 flex-1 rounded-full bg-black text-xs text-[#f8f7ee] hover:bg-black/85 cursor-pointer"
                   >
                     <Play className="mr-1.5 size-3.5" /> Start
@@ -1023,23 +1241,18 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={disconnected || actionBusy}
-                    onClick={() =>
-                      void runControl(
-                        status?.paused ? "Resume" : "Pause",
-                        () => (status?.paused ? client.resume() : client.pause()),
-                      )
-                    }
+                    disabled={actionBusy || (isOperator && disconnected)}
+                    onClick={() => void handlePauseToggle()}
                     className="h-9 flex-1 rounded-full border-black/20 bg-white/80 text-xs text-black hover:bg-white cursor-pointer"
                   >
-                    <Pause className="mr-1.5 size-3.5" /> {status?.paused ? "Resume" : "Pause"}
+                    <Pause className="mr-1.5 size-3.5" /> {effectivePaused ? "Resume" : "Pause"}
                   </Button>
                 </div>
                 <Button
                   type="button"
                   size="sm"
                   variant="destructive"
-                  disabled={disconnected || actionBusy}
+                  disabled={actionBusy || (isOperator && disconnected)}
                   onClick={() => setKillDialogOpen(true)}
                   className="h-9 w-full rounded-full text-xs cursor-pointer"
                 >
@@ -1102,7 +1315,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-foreground">Strategy Parameters</span>
                   <span className="text-xs text-muted-foreground">
-                    {humanStrategy(status?.activeStrategy)}
+                    {humanStrategy(effectiveStrategy)}
                   </span>
                 </div>
 
@@ -1249,7 +1462,15 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               disabled={actionBusy}
               onClick={() => {
                 setKillDialogOpen(false);
-                void runControl("Activate kill switch", () => client.kill());
+                if (!isOperator) {
+                  savePersonalAgent((prev) => ({ ...prev, paused: true }));
+                  setActionFeedback({
+                    kind: "ok",
+                    text: "Your personal agent has been stopped. Other users are unaffected.",
+                  });
+                } else {
+                  void runControl("Activate kill switch", () => client.kill());
+                }
               }}
               className="rounded-full text-xs cursor-pointer"
             >
