@@ -1,0 +1,885 @@
+{
+  "capturedAt": "2026-11-26T19:47:24.051Z",
+  "note": "Mid-run read-only snapshot of active 24h EC2 soak (session still RUNNING; NOT a completed 24h claim).",
+  "session": {
+    "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+    "status": "RUNNING",
+    "startedAt": "2026-11-26T16:43:03.222Z",
+    "startedAtSec": 1795711383,
+    "endedAt": null,
+    "plannedDurationHours": 24,
+    "dataSource": "chain177_read_only",
+    "executionMode": "read_only",
+    "chainId": 177,
+    "marketLabel": "WHSK/USDT",
+    "pollIntervalMs": 15000,
+    "evidenceDir": "/var/lib/tranche-soak/soak-2026-11-26T16-43-03-222Z-20555",
+    "stateFile": "/var/lib/tranche-soak/soak-state.json",
+    "pid": 20555,
+    "restartsCount": 0,
+    "lastResumedAt": null,
+    "latestMetrics": {
+      "recordType": "periodic_metrics",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:45:22.752Z",
+      "uptimeSec": 10939,
+      "totalCycles": 730,
+      "successfulCycles": 730,
+      "failedCycles": 0,
+      "missedCycles": 0,
+      "rpcSuccessRate": 1,
+      "avgRpcLatencyMs": 859.98,
+      "maxRpcLatencyMs": 1420,
+      "lastRpcLatencyMs": 805,
+      "decisionsByVenue": {
+        "TRANCHE": 0,
+        "HSKSWAP": 730,
+        "NONE": 0
+      },
+      "riskRejectionCount": 0,
+      "duplicateDecisionCount": 547,
+      "observedRegimes": {
+        "CALM": 730,
+        "TRENDING": 0,
+        "VOLATILE": 0,
+        "DISLOCATED": 0
+      },
+      "latestSnapshotAgeSec": 1,
+      "errorCount": 0,
+      "retryCount": 0,
+      "recoveryCount": 0,
+      "txBroadcastCount": 0
+    }
+  },
+  "counts": {
+    "snapshots": 738,
+    "decisions": 738,
+    "events": 2,
+    "metrics": 73
+  },
+  "txBroadcastCount": 0,
+  "actionCounts": {
+    "READ_ONLY_SWAP_HSKSWAP": 185,
+    "SKIPPED_DUPLICATE": 553
+  },
+  "observedRegimes": {
+    "CALM": 738,
+    "TRENDING": 0,
+    "VOLATILE": 0,
+    "DISLOCATED": 0
+  },
+  "anomalousSnapshots": 0,
+  "events": [
+    {
+      "recordType": "operational_event",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:03.224Z",
+      "eventType": "STATE_RESTORE",
+      "details": {
+        "stateFile": "/var/lib/tranche-soak/soak-state.json",
+        "policyVersion": 1,
+        "openPositions": 0,
+        "activeTickets": 0
+      }
+    },
+    {
+      "recordType": "operational_event",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:03.228Z",
+      "eventType": "STARTUP",
+      "details": {
+        "dataSource": "chain177_read_only",
+        "executionMode": "read_only",
+        "chainId": 177,
+        "marketLabel": "WHSK/USDT",
+        "plannedDurationHours": 24,
+        "resumed": false,
+        "restartsCount": 0,
+        "remainingPlannedSec": 86400,
+        "pollIntervalMs": 15000,
+        "evidenceDir": "/var/lib/tranche-soak/soak-2026-11-26T16-43-03-222Z-20555"
+      }
+    }
+  ],
+  "latestMetrics": [
+    {
+      "recordType": "periodic_metrics",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:35:22.531Z",
+      "uptimeSec": 10339,
+      "totalCycles": 690,
+      "successfulCycles": 690,
+      "failedCycles": 0,
+      "missedCycles": 0,
+      "rpcSuccessRate": 1,
+      "avgRpcLatencyMs": 861.65,
+      "maxRpcLatencyMs": 1420,
+      "lastRpcLatencyMs": 803,
+      "decisionsByVenue": {
+        "TRANCHE": 0,
+        "HSKSWAP": 690,
+        "NONE": 0
+      },
+      "riskRejectionCount": 0,
+      "duplicateDecisionCount": 517,
+      "observedRegimes": {
+        "CALM": 690,
+        "TRENDING": 0,
+        "VOLATILE": 0,
+        "DISLOCATED": 0
+      },
+      "latestSnapshotAgeSec": 1,
+      "errorCount": 0,
+      "retryCount": 0,
+      "recoveryCount": 0,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "periodic_metrics",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:37:52.596Z",
+      "uptimeSec": 10489,
+      "totalCycles": 700,
+      "successfulCycles": 700,
+      "failedCycles": 0,
+      "missedCycles": 0,
+      "rpcSuccessRate": 1,
+      "avgRpcLatencyMs": 861.05,
+      "maxRpcLatencyMs": 1420,
+      "lastRpcLatencyMs": 814,
+      "decisionsByVenue": {
+        "TRANCHE": 0,
+        "HSKSWAP": 700,
+        "NONE": 0
+      },
+      "riskRejectionCount": 0,
+      "duplicateDecisionCount": 525,
+      "observedRegimes": {
+        "CALM": 700,
+        "TRENDING": 0,
+        "VOLATILE": 0,
+        "DISLOCATED": 0
+      },
+      "latestSnapshotAgeSec": 1,
+      "errorCount": 0,
+      "retryCount": 0,
+      "recoveryCount": 0,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "periodic_metrics",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:40:22.658Z",
+      "uptimeSec": 10639,
+      "totalCycles": 710,
+      "successfulCycles": 710,
+      "failedCycles": 0,
+      "missedCycles": 0,
+      "rpcSuccessRate": 1,
+      "avgRpcLatencyMs": 860.54,
+      "maxRpcLatencyMs": 1420,
+      "lastRpcLatencyMs": 824,
+      "decisionsByVenue": {
+        "TRANCHE": 0,
+        "HSKSWAP": 710,
+        "NONE": 0
+      },
+      "riskRejectionCount": 0,
+      "duplicateDecisionCount": 532,
+      "observedRegimes": {
+        "CALM": 710,
+        "TRENDING": 0,
+        "VOLATILE": 0,
+        "DISLOCATED": 0
+      },
+      "latestSnapshotAgeSec": 1,
+      "errorCount": 0,
+      "retryCount": 0,
+      "recoveryCount": 0,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "periodic_metrics",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:42:52.676Z",
+      "uptimeSec": 10789,
+      "totalCycles": 720,
+      "successfulCycles": 720,
+      "failedCycles": 0,
+      "missedCycles": 0,
+      "rpcSuccessRate": 1,
+      "avgRpcLatencyMs": 860.34,
+      "maxRpcLatencyMs": 1420,
+      "lastRpcLatencyMs": 787,
+      "decisionsByVenue": {
+        "TRANCHE": 0,
+        "HSKSWAP": 720,
+        "NONE": 0
+      },
+      "riskRejectionCount": 0,
+      "duplicateDecisionCount": 540,
+      "observedRegimes": {
+        "CALM": 720,
+        "TRENDING": 0,
+        "VOLATILE": 0,
+        "DISLOCATED": 0
+      },
+      "latestSnapshotAgeSec": 1,
+      "errorCount": 0,
+      "retryCount": 0,
+      "recoveryCount": 0,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "periodic_metrics",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:45:22.752Z",
+      "uptimeSec": 10939,
+      "totalCycles": 730,
+      "successfulCycles": 730,
+      "failedCycles": 0,
+      "missedCycles": 0,
+      "rpcSuccessRate": 1,
+      "avgRpcLatencyMs": 859.98,
+      "maxRpcLatencyMs": 1420,
+      "lastRpcLatencyMs": 805,
+      "decisionsByVenue": {
+        "TRANCHE": 0,
+        "HSKSWAP": 730,
+        "NONE": 0
+      },
+      "riskRejectionCount": 0,
+      "duplicateDecisionCount": 547,
+      "observedRegimes": {
+        "CALM": 730,
+        "TRENDING": 0,
+        "VOLATILE": 0,
+        "DISLOCATED": 0
+      },
+      "latestSnapshotAgeSec": 1,
+      "errorCount": 0,
+      "retryCount": 0,
+      "recoveryCount": 0,
+      "txBroadcastCount": 0
+    }
+  ],
+  "sampleSnapshotsFirst3": [
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:04.074Z",
+      "chainId": 177,
+      "blockNumber": "30682124",
+      "snapshotTimestamp": 1795711383,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79240274371236763540964",
+      "oraclePriceX36": "79240274371236763540964",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 1,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 1,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    },
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:19.666Z",
+      "chainId": 177,
+      "blockNumber": "30682131",
+      "snapshotTimestamp": 1795711397,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79240274371236763540964",
+      "oraclePriceX36": "79240274371236763540964",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 1,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 1,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    },
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:34.341Z",
+      "chainId": 177,
+      "blockNumber": "30682139",
+      "snapshotTimestamp": 1795711413,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79240274371236763540964",
+      "oraclePriceX36": "79240274371236763540964",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 1,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 1,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    }
+  ],
+  "sampleSnapshotsLatest5": [
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:46:22.769Z",
+      "chainId": 177,
+      "blockNumber": "30687623",
+      "snapshotTimestamp": 1795722381,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79248198398673887217321",
+      "oraclePriceX36": "79248198398673887217321",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 0,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 0,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    },
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:46:37.945Z",
+      "chainId": 177,
+      "blockNumber": "30687631",
+      "snapshotTimestamp": 1795722397,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79248198398673887217321",
+      "oraclePriceX36": "79248198398673887217321",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 0,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 0,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    },
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:46:52.861Z",
+      "chainId": 177,
+      "blockNumber": "30687638",
+      "snapshotTimestamp": 1795722411,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79248198398673887217321",
+      "oraclePriceX36": "79248198398673887217321",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 0,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 0,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    },
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:47:07.803Z",
+      "chainId": 177,
+      "blockNumber": "30687646",
+      "snapshotTimestamp": 1795722427,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79248198398673887217321",
+      "oraclePriceX36": "79248198398673887217321",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 0,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 0,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    },
+    {
+      "recordType": "market_snapshot",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:47:22.842Z",
+      "chainId": 177,
+      "blockNumber": "30687653",
+      "snapshotTimestamp": 1795722441,
+      "pair": {
+        "label": "WHSK/USDT",
+        "inventoryToken": "0xB210D2120d57b758EE163cFfb43e73728c471Cf1",
+        "paymentToken": "0xF1B50eD67A9e2CC94Ad3c477779E2d4cBfFf9029",
+        "poolAddress": "0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC",
+        "poolFee": 3000
+      },
+      "spotPriceX36": "79248280940939874264099",
+      "twapPriceX36": "79248198398673887217321",
+      "oraclePriceX36": "79248198398673887217321",
+      "oracleAgeSec": 0,
+      "oracleDeviationBps": 0,
+      "oracleValid": true,
+      "liquidity": "1475813786831558685",
+      "roundTripSpreadBps": 60,
+      "dexBuyImpactBps": 30,
+      "dexSellImpactBps": 30,
+      "realizedVolatilityBps": 0,
+      "momentumReturnBps": 0,
+      "dislocationVsTwapBps": 0,
+      "marketRegime": "CALM",
+      "dataSourceHealthy": true,
+      "anomalies": []
+    }
+  ],
+  "sampleDecisionsFirst5": [
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:04.074Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c1",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928523:HSKSWAP:0",
+      "cycleId": 1,
+      "timestamp": 1795711383,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795711383,
+        "blockNumber": "30682124",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "READ_ONLY_SWAP_HSKSWAP",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:READ_ONLY_SWAP_HSKSWAP",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM",
+        "EXECUTION_BLOCKED_READ_ONLY"
+      ],
+      "explanation": "[READ-ONLY MODE — EXECUTION BLOCKED, NO TX BROADCAST] Selected HSKSwap (cost 7954375, impact 30 bps) — Tranche ineligible: [NO_ELIGIBLE_OFFER]",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": true,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:19.666Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c2",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928523:HSKSWAP:0",
+      "cycleId": 2,
+      "timestamp": 1795711397,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795711397,
+        "blockNumber": "30682131",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:SKIPPED_DUPLICATE",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM"
+      ],
+      "explanation": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928523:HSKSWAP:0",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": false,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:34.341Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c3",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928523:HSKSWAP:0",
+      "cycleId": 3,
+      "timestamp": 1795711413,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795711413,
+        "blockNumber": "30682139",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:SKIPPED_DUPLICATE",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM"
+      ],
+      "explanation": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928523:HSKSWAP:0",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": false,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:43:49.182Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c4",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928523:HSKSWAP:0",
+      "cycleId": 4,
+      "timestamp": 1795711427,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795711427,
+        "blockNumber": "30682146",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:SKIPPED_DUPLICATE",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM"
+      ],
+      "explanation": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928523:HSKSWAP:0",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": false,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T16:44:04.169Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c5",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928524:HSKSWAP:0",
+      "cycleId": 5,
+      "timestamp": 1795711443,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795711443,
+        "blockNumber": "30682154",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "READ_ONLY_SWAP_HSKSWAP",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:READ_ONLY_SWAP_HSKSWAP",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM",
+        "EXECUTION_BLOCKED_READ_ONLY"
+      ],
+      "explanation": "[READ-ONLY MODE — EXECUTION BLOCKED, NO TX BROADCAST] Selected HSKSwap (cost 7954375, impact 30 bps) — Tranche ineligible: [NO_ELIGIBLE_OFFER]",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": true,
+      "txBroadcastCount": 0
+    }
+  ],
+  "sampleDecisionsLatest5": [
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:46:22.769Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c734",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928706:HSKSWAP:0",
+      "cycleId": 734,
+      "timestamp": 1795722381,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795722381,
+        "blockNumber": "30687623",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:SKIPPED_DUPLICATE",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM"
+      ],
+      "explanation": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928706:HSKSWAP:0",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": false,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:46:37.945Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c735",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928706:HSKSWAP:0",
+      "cycleId": 735,
+      "timestamp": 1795722397,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795722397,
+        "blockNumber": "30687631",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:SKIPPED_DUPLICATE",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM"
+      ],
+      "explanation": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928706:HSKSWAP:0",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": false,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:46:52.861Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c736",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928706:HSKSWAP:0",
+      "cycleId": 736,
+      "timestamp": 1795722411,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795722411,
+        "blockNumber": "30687638",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:SKIPPED_DUPLICATE",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM"
+      ],
+      "explanation": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928706:HSKSWAP:0",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": false,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:47:07.803Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c737",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928707:HSKSWAP:0",
+      "cycleId": 737,
+      "timestamp": 1795722427,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795722427,
+        "blockNumber": "30687646",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "READ_ONLY_SWAP_HSKSWAP",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:READ_ONLY_SWAP_HSKSWAP",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM",
+        "EXECUTION_BLOCKED_READ_ONLY"
+      ],
+      "explanation": "[READ-ONLY MODE — EXECUTION BLOCKED, NO TX BROADCAST] Selected HSKSwap (cost 7954375, impact 30 bps) — Tranche ineligible: [NO_ELIGIBLE_OFFER]",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": true,
+      "txBroadcastCount": 0
+    },
+    {
+      "recordType": "agent_decision",
+      "sessionId": "soak-2026-11-26T16-43-03-222Z-20555",
+      "recordedAt": "2026-11-26T19:47:22.842Z",
+      "decisionId": "soak-2026-11-26T16-43-03-222Z-20555:c738",
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928707:HSKSWAP:0",
+      "cycleId": 738,
+      "timestamp": 1795722441,
+      "strategyType": "price_threshold",
+      "policyVersion": 1,
+      "snapshotRef": {
+        "snapshotTimestamp": 1795722441,
+        "blockNumber": "30687653",
+        "marketRegime": "CALM",
+        "dataSourceHealthy": true
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "expectedExecutionCostPayment": "7954375",
+      "estimatedGasUnits": "74526",
+      "estimatedGasCostPayment": "5548",
+      "reasoningCodes": [
+        "ACTION:SKIPPED_DUPLICATE",
+        "VENUE:HSKSWAP",
+        "SIGNAL:ENTER_LONG",
+        "REGIME:CALM"
+      ],
+      "explanation": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928707:HSKSWAP:0",
+      "executionMode": "read_only",
+      "executionBlockedByReadOnly": false,
+      "txBroadcastCount": 0
+    }
+  ]
+}

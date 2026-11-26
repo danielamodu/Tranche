@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-11-26T19:47:32.920Z",
+  "network": "HashKey Chain Mainnet (Local Anvil Fork — Zero Public Broadcasts)",
+  "chainId": 177,
+  "forkBlockNumber": "30687643",
+  "gasPriceWei": "439320812500",
+  "scenariosPassed": 10,
+  "scenariosTotal": 10,
+  "scenarios": {
+    "1_tranche_reserve_and_exercise": {
+      "passed": true,
+      "snapshot": {
+        "blockNumber": "30687661",
+        "timestamp": 1795722447,
+        "spotPriceX36": "79218147100067574508514",
+        "twapPriceX36": "79240274371236763540964",
+        "liquidity": "1475813786831558685",
+        "marketRegime": "CALM"
+      },
+      "selectedVenue": "TRANCHE",
+      "selectedAction": "RESERVE_TRANCHE",
+      "reasoning": "Selected Tranche Offer #1: all-in cost (7773131) <= HSKSwap (7946303), saving 173172 payment units -> Reserved Ticket #1",
+      "expectedExecutionCostPayment": "7773131",
+      "expectedTokenPaymentExGas": "7771919",
+      "actualTokenPaymentSpent": "7771919",
+      "costDiscrepancyPayment": "0",
+      "slippageBps": 0,
+      "gasUsedReserve": "468253",
+      "gasUsedExercise": "125188",
+      "totalGasUsed": "593441",
+      "txReceipts": {
+        "reserve": {
+          "hash": "0x8f37b4f68ca6b62a0189aecd0d518309a34bebe1493ec9e99a4ec58d717056ef",
+          "blockNumber": "30687662",
+          "status": "success"
+        },
+        "exercise": {
+          "hash": "0x39f0802bb8137bd240c3b8be3ffcc8f56e5a8f0245362844440fa694dfeb6ed4",
+          "blockNumber": "30687663",
+          "status": "success"
+        }
+      },
+      "positionAccounting": {
+        "ticketId": "1",
+        "positionId": "pos-tranche-1-1",
+        "receivedInventory": "100000000000000000000",
+        "costBasisPayment": "7771919",
+        "reservationPremiumPaid": "8540"
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      }
+    },
+    "10_duplicate_execution_prevention": {
+      "passed": true,
+      "decisionKey": "0xb210d2120d57b758ee163cffb43e73728c471cf1:29928707:TRANCHE:1",
+      "selectedAction": "SKIPPED_DUPLICATE",
+      "txCount": 0,
+      "rationale": "Duplicate decision prevented for key 0xb210d2120d57b758ee163cffb43e73728c471cf1:29928707:TRANCHE:1"
+    },
+    "2_hskswap_quote_and_swap": {
+      "passed": true,
+      "snapshot": {
+        "blockNumber": "30687663",
+        "timestamp": 1795722451,
+        "spotPriceX36": "79218147100067574508514",
+        "twapPriceX36": "79240274371236763540964",
+        "liquidity": "1475813786831558685",
+        "marketRegime": "CALM"
+      },
+      "selectedVenue": "HSKSWAP",
+      "selectedAction": "SWAP_HSKSWAP",
+      "reasoning": "Selected HSKSwap (cost 7946303, impact 30 bps) — Tranche ineligible: [NO_ELIGIBLE_OFFER] -> Swapped 7945804 for 100000002621021293112",
+      "expectedExecutionCostPayment": "7946303",
+      "expectedTokenPaymentExGas": "7945804",
+      "actualTokenPaymentSpent": "7945804",
+      "costDiscrepancyPayment": "0",
+      "quotedPriceImpactBps": 30,
+      "realizedOutputShortfallBps": 0,
+      "gasUsedSwap": "103631",
+      "txReceipt": {
+        "hash": "0x4bc0297d6f4b059d6e466f7e72c68611943b4c7472b5d66db16e22cd7459ee11",
+        "blockNumber": "30687665",
+        "status": "success"
+      },
+      "positionAccounting": {
+        "positionId": "pos-dex-1-1795722451",
+        "receivedInventory": "100000002621021293112",
+        "costBasisPayment": "7945804"
+      },
+      "riskEvaluation": {
+        "allowed": true,
+        "failedChecks": []
+      }
+    },
+    "3_no_trade_decision": {
+      "passed": true,
+      "selectedVenue": "NONE",
+      "selectedAction": "WAIT",
+      "rationale": "Neither venue eligible. Tranche: [INSUFFICIENT_NET_EDGE:521191<50000000]; HSKSwap: [INSUFFICIENT_NET_EDGE:347003<50000000]",
+      "txCount": 0
+    },
+    "4_risk_limit_rejection": {
+      "passed": true,
+      "selectedAction": "BLOCKED_RISK",
+      "failedChecks": [
+        {
+          "name": "max_position_size",
+          "passed": false,
+          "detail": "target=100000000000000000000 <= cap=50000000000000000000"
+        }
+      ],
+      "txCount": 0
+    },
+    "5_slippage_rejection": {
+      "passed": true,
+      "selectedVenue": "NONE",
+      "selectedAction": "WAIT",
+      "rejectionReasons": [
+        "SLIPPAGE_EXCEEDED:30bps>1bps"
+      ],
+      "txCount": 0
+    },
+    "6_failed_tx_handling": {
+      "passed": true,
+      "selectedAction": "EXECUTION_FAILED",
+      "error": "SwapRouter02: Too little received",
+      "pendingTxsRemaining": 0,
+      "stateCorrupted": false
+    },
+    "7_uncertain_tx_handling": {
+      "passed": true,
+      "selectedAction": "EXECUTION_FAILED",
+      "pendingTxStatus": "UNCERTAIN_TIMEOUT",
+      "pendingTxId": "tx-dex-1-1795722452"
+    },
+    "8_restart_with_pending_tx": {
+      "passed": true,
+      "restoredPendingCount": 1,
+      "selectedAction": "BLOCKED_RISK",
+      "failedChecks": [
+        {
+          "name": "no_pending_tx",
+          "passed": false,
+          "detail": "1 unresolved pending transaction(s) in flight"
+        }
+      ]
+    },
+    "9_reconciliation_after_restart": {
+      "passed": true,
+      "reconcilerForkReceiptCheck": {
+        "pendingTxId": "fork-reconcile-check",
+        "status": "CONFIRMED",
+        "canClearPending": true,
+        "blockNumber": "30687665",
+        "gasUsed": "103631",
+        "reason": "Transaction 0x4bc0297d6f4b059d6e466f7e72c68611943b4c7472b5d66db16e22cd7459ee11 confirmed in block 30687665"
+      },
+      "manualPendingCleared": true,
+      "remainingPendingTxs": 0
+    }
+  }
+}
