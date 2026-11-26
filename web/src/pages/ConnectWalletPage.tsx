@@ -69,7 +69,7 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
             aria-label="Tranche home"
             className="inline-flex items-center rounded-full py-1 transition-opacity hover:opacity-80 cursor-pointer"
           >
-            <TrancheLogo />
+            <TrancheLogo priority />
           </button>
 
           <button
