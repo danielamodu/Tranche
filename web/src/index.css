@@ -136,9 +136,9 @@
   --color-status-warn: var(--status-warn);
   --color-status-danger: var(--status-danger);
 
-  --font-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-mono: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -180,9 +180,9 @@
   }
 }
 
-/* Tabular numerals for zero horizontal jitter */
+/* Tabular numerals for zero horizontal jitter (unified DM Sans) */
 .tabular-nums-mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
 }
 

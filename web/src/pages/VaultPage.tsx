@@ -397,7 +397,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
     <AppShell
       activeRoute="/vault"
       title="Liquidity Vault"
-      subtitle="Segregated ERC-20 deposits, LP offers & proceeds"
+      subtitle="Deposits, offers & earnings"
       onNavigate={onNavigate}
       onRefresh={() => loadVaultData(true)}
       refreshing={refreshing}

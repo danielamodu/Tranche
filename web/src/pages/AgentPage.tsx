@@ -107,7 +107,6 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
-  const [connError, setConnError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ kind: "ok" | "err"; text: string } | null>(
     null,
@@ -151,7 +150,6 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         setSnapshot(data);
         setDisconnected(false);
         setRateLimited(false);
-        setConnError(null);
         if (
           forceFormSync ||
           lastSyncedVersionRef.current === null ||
@@ -163,15 +161,9 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         if (seq !== requestSeqRef.current) return;
         if (err instanceof AgentApiError && err.status === 429) {
           setRateLimited(true);
-          setConnError("Rate limit exceeded (HTTP 429). Polling backed off automatically.");
         } else {
           setDisconnected(true);
           setRateLimited(false);
-          setConnError(
-            err instanceof Error
-              ? err.message
-              : `Agent API unreachable at ${client.getBaseUrl()}`,
-          );
         }
       } finally {
         if (seq === requestSeqRef.current) {
@@ -292,7 +284,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
     <AppShell
       activeRoute="/agent"
       title="Tranche Agent"
-      subtitle={`Source: ${status?.dataSource ?? "—"} · Chain ${status?.chainId ?? "—"} · ${status?.quotesAreReal ? "Real Quotes" : "Simulated Fixture"} · ${isDryRun ? "DRY-RUN" : "LIVE"}`}
+      subtitle={isDryRun ? "Paper trading mode" : "Live autonomous trading"}
       onNavigate={onNavigate}
       onRefresh={() => void loadSnapshot(true)}
       refreshing={refreshing}
@@ -341,63 +333,24 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
       }
     >
       <div className="flex flex-col gap-8">
-        {/* Operational Status Ribbons (Theme-Aware Left-Rail Telemetry Callouts) */}
-        {hostedLocalMismatch && disconnected && (
-          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-amber-500/[0.08] py-4 pl-5 pr-5 text-xs text-amber-950 dark:text-amber-100">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
-                WARN · MIXED_CONTENT / LOCALHOST_CORS
-              </span>
-              <span className="tabular-nums-mono text-[10px] text-amber-800/70 dark:text-amber-200/70">
-                {normalizedApiUrl}
-              </span>
-            </div>
-            <p className="mt-1.5 font-medium">
-              Hosted HTTPS page cannot automatically call a localhost Agent API
-            </p>
-            <p className="mt-1 leading-relaxed opacity-80">
-              Browsers block <code className="font-mono">https://</code> →{" "}
-              <code className="font-mono">http://127.0.0.1</code> requests, and the local API
-              restricts CORS to <code className="font-mono">localhost:5173</code> by default:
-            </p>
-            <div className="mt-2.5 grid gap-2 text-[11px] sm:grid-cols-2">
-              <div className="rounded-[10px] border border-amber-500/20 bg-card/80 px-3 py-2">
-                <span className="font-semibold">Local Operator Mode</span>
-                <p className="mt-0.5 opacity-80">
-                  Run <code className="font-mono">cd agent && npm run api</code> +{" "}
-                  <code className="font-mono">cd web && npm run dev</code>, then open{" "}
-                  <code className="font-mono">http://localhost:5173/agent</code>.
-                </p>
-              </div>
-              <div className="rounded-[10px] border border-amber-500/20 bg-card/80 px-3 py-2">
-                <span className="font-semibold">Remote API Mode</span>
-                <p className="mt-0.5 opacity-80">
-                  Enter a reachable HTTPS Agent API URL in the Control Panel with{" "}
-                  <code className="font-mono">AGENT_API_ALLOWED_ORIGINS</code> configured.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {disconnected && !hostedLocalMismatch && (
-          <div className="relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-[14px] border border-destructive/30 bg-destructive/[0.07] py-3.5 pl-5 pr-5 text-xs">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
-            <div className="flex flex-col gap-0.5">
-              <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-destructive">
-                OFFLINE · API_UNREACHABLE
-              </span>
-              <span className="text-foreground/85">
-                Cannot reach{" "}
-                <code className="tabular-nums-mono text-foreground">{client.getBaseUrl()}</code> (
-                {connError ?? "Unavailable"}). Start with{" "}
-                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
-                  cd agent && npm run api
-                </code>{" "}
-                or update the URL in the Control Panel.
+        {/* Clean Consumer Connection Notice */}
+        {disconnected && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-card px-5 py-3.5 text-xs">
+            <div className="flex items-center gap-2.5 text-muted-foreground">
+              <WifiOff className="size-4 shrink-0 text-amber-500" />
+              <span>
+                {hostedLocalMismatch
+                  ? "Agent is offline. Connect a hosted Agent URL to stream live quotes and decisions."
+                  : "Agent is currently offline. Check your connection settings or start your agent."}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={() => setConnOpen((p) => !p)}
+              className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent cursor-pointer"
+            >
+              {connOpen ? "Hide Connection" : "Connect Agent"}
+            </button>
           </div>
         )}
 
@@ -503,91 +456,73 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
           </div>
         )}
 
-        {/* 1. Editorial Hairline Telemetry Spine (Zero Generic KPI Boxes) */}
-        <section className="grid grid-cols-2 gap-y-6 border-b border-border/80 pb-8 lg:grid-cols-4 lg:divide-x lg:divide-border/80">
-          <div className="flex flex-col gap-1.5 pr-5">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              01 · Runtime State
-            </span>
-            <span className="font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+        {/* 1. Clean Telemetry Strip */}
+        <section className="grid grid-cols-2 gap-y-6 border-b border-border/80 pb-7 lg:grid-cols-4 lg:divide-x lg:divide-border/80">
+          <div className="flex flex-col gap-1 pr-5">
+            <span className="text-xs font-medium text-muted-foreground">Status</span>
+            <span className="text-2xl font-semibold tracking-tight text-foreground">
               {loading
-                ? "Syncing…"
+                ? "Connecting…"
                 : status?.killSwitch
-                  ? "KILLED"
+                  ? "Stopped"
                   : status?.stateCorrupted
-                    ? "CORRUPTED"
+                    ? "Locked"
                     : status?.paused
-                      ? "PAUSED"
+                      ? "Paused"
                       : status?.running
-                        ? "RUNNING"
-                        : "IDLE"}
+                        ? "Running"
+                        : "Idle"}
             </span>
-            <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-              RPC:{" "}
-              <strong
-                className={cn(
-                  "font-medium",
-                  health?.rpcHealthy === false ? "text-destructive" : "text-foreground",
-                )}
-              >
-                {health ? (health.rpcHealthy ? "Healthy" : "Unhealthy") : "Unavailable"}
-              </strong>{" "}
-              · {health?.recoveryState ?? "—"}
+            <span className="text-xs text-muted-foreground">
+              {health ? (health.rpcHealthy ? "Connected" : "Reconnecting") : "Offline"}
             </span>
           </div>
 
-          <div className="flex flex-col gap-1.5 lg:px-6">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              02 · Market &amp; Regime
-            </span>
-            <div className="flex items-baseline gap-2.5">
-              <span className="font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+          <div className="flex flex-col gap-1 lg:px-6">
+            <span className="text-xs font-medium text-muted-foreground">Market</span>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-semibold tracking-tight text-foreground">
                 {status?.market ?? "—"}
               </span>
               {markets?.marketRegime && (
-                <span className="tabular-nums-mono rounded-full border border-border px-2 py-0.5 text-[10px] text-foreground">
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                   {markets.marketRegime}
                 </span>
               )}
             </div>
-            <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-              Strategy: <strong className="font-medium text-foreground">{status?.activeStrategy ?? "—"}</strong>
+            <span className="text-xs text-muted-foreground">
+              {status?.activeStrategy ? status.activeStrategy.replace("_", " ") : "No strategy"}
             </span>
           </div>
 
-          <div className="flex flex-col gap-1.5 pr-5 lg:px-6">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              03 · Realized P&amp;L
+          <div className="flex flex-col gap-1 pr-5 lg:px-6">
+            <span className="text-xs font-medium text-muted-foreground">Realized P&amp;L</span>
+            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
+              {metrics ? fmtPayment6(metrics.totalRealizedPnlPayment, paymentSymbol) : "—"}
             </span>
-            <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
-              {fmtPayment6(metrics?.totalRealizedPnlPayment, paymentSymbol)}
-            </span>
-            <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-              Unrealized {fmtPayment6(metrics?.totalUnrealizedPnlPayment, paymentSymbol)} · Exp{" "}
-              {fmtPayment6(metrics?.currentTotalExposurePayment, paymentSymbol)}
+            <span className="tabular-nums-mono text-xs text-muted-foreground">
+              {metrics
+                ? `Unrealized ${fmtPayment6(metrics.totalUnrealizedPnlPayment, paymentSymbol)}`
+                : "No open P&L"}
             </span>
           </div>
 
-          <div className="flex flex-col gap-1.5 lg:pl-6">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              04 · Executions &amp; Pulse
-            </span>
+          <div className="flex flex-col gap-1 lg:pl-6">
+            <span className="text-xs font-medium text-muted-foreground">Executions</span>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
                 {metrics
                   ? isDryRun
-                    ? `${metrics.dryRunEvaluationsCount} sim`
+                    ? `${metrics.dryRunEvaluationsCount} simulated`
                     : `${metrics.liveExecutionsCount} live`
                   : "—"}
               </span>
-              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
+              <span className="tabular-nums-mono text-xs text-muted-foreground">
                 {fmtTime(health?.lastSuccessfulCycleAt ?? status?.lastCycleTimestamp)}
               </span>
             </div>
-            <span className="tabular-nums-mono flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>
-                {metrics ? `${metrics.wins}W / ${metrics.losses}L · ${metrics.totalCycles} cyc` : "Unavailable"}
-              </span>
+            <span className="tabular-nums-mono flex items-center justify-between text-xs text-muted-foreground">
+              <span>{metrics ? `${metrics.wins}W / ${metrics.losses}L` : "—"}</span>
               {status?.lastTxHash && (
                 <a
                   href={explorerTxUrl(status.lastTxHash)}
@@ -603,155 +538,140 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
           </div>
         </section>
 
-        {/* 2. Dual-Venue Arena (Archival Cream TRANCHE vs. Obsidian Carbon HSKSWAP) */}
-        <section className="overflow-hidden rounded-[24px] border border-border">
+        {/* 2. Dual-Venue Comparison */}
+        <section className="overflow-hidden rounded-[20px] border border-border">
           <div className="grid grid-cols-1 lg:grid-cols-12">
-            {/* Left Wing: Tranche Reserved Inventory (Archival Cream Stock) */}
+            {/* Left Wing: Tranche */}
             <div
               className={cn(
-                "relative flex flex-col justify-between gap-4 p-6 sm:p-7 lg:col-span-5 transition-opacity",
+                "relative flex flex-col justify-between gap-4 p-6 lg:col-span-5 transition-opacity",
                 winningVenue === "TRANCHE" ? "opacity-100" : "opacity-90",
               )}
               style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
             >
               <div className="flex items-center justify-between">
-                <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
-                  Venue A · Tranche Reserved
-                </span>
+                <span className="text-xs font-semibold opacity-65">Tranche</span>
                 <span
-                  className="tabular-nums-mono rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
+                  className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
                   style={{
                     backgroundColor: winningVenue === "TRANCHE" ? "#050505" : "rgba(5,5,5,0.08)",
                     color: winningVenue === "TRANCHE" ? "#f8f7ee" : "#050505",
                   }}
                 >
                   {winningVenue === "TRANCHE"
-                    ? "SELECTED ROUTE"
+                    ? "Selected"
                     : markets?.venueComparison?.tranche.eligible
-                      ? "ELIGIBLE"
-                      : "INELIGIBLE"}
+                      ? "Available"
+                      : "Waiting"}
                 </span>
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em]">
+                <span className="tabular-nums-mono text-2xl font-semibold tracking-tight">
                   {markets?.venueComparison
                     ? fmtPayment6(
                         markets.venueComparison.tranche.acquisitionCostPayment,
                         paymentSymbol,
                       )
-                    : "Unavailable"}
+                    : "—"}
                 </span>
                 <span className="tabular-nums-mono text-xs opacity-65">
                   {markets?.venueComparison
-                    ? `Prem ${fmtPayment6(markets.venueComparison.tranche.reservationPremiumPayment, paymentSymbol)} + Ex ${fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}`
-                    : "Awaiting live market snapshot"}
+                    ? `Hold fee ${fmtPayment6(markets.venueComparison.tranche.reservationPremiumPayment, paymentSymbol)} · Strike ${fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}`
+                    : "No quote yet"}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between border-t border-black/15 pt-3 text-[11px] opacity-75">
+              <div className="flex items-center justify-between border-t border-black/10 pt-3 text-xs opacity-70">
                 <span className="tabular-nums-mono">
-                  Offers discovered: {markets?.trancheOffersCount ?? 0}
+                  {markets?.trancheOffersCount ?? 0} offers
                 </span>
-                <span className="tabular-nums-mono">Zero AMM slippage</span>
+                <span>Zero slippage</span>
               </div>
             </div>
 
-            {/* Center Telemetry Spine */}
-            <div className="flex flex-col justify-between gap-4 border-y border-border bg-muted/60 px-5 py-6 lg:col-span-2 lg:border-x lg:border-y-0">
+            {/* Center Verdict */}
+            <div className="flex flex-col justify-between gap-4 border-y border-border bg-muted/50 px-5 py-6 lg:col-span-2 lg:border-x lg:border-y-0">
               <div className="flex flex-col items-center gap-1 text-center">
-                <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  Router Verdict
-                </span>
-                <span className="font-display text-lg font-bold tracking-[-0.03em] text-foreground">
-                  {winningVenue === "NONE" ? "WAIT" : winningVenue}
+                <span className="text-xs text-muted-foreground">Route</span>
+                <span className="text-lg font-semibold text-foreground">
+                  {winningVenue === "NONE" ? "Wait" : winningVenue === "TRANCHE" ? "Tranche" : "HSKSwap"}
                 </span>
               </div>
 
-              <dl className="grid grid-cols-3 gap-2 text-center text-[11px] lg:grid-cols-1 lg:gap-2.5">
+              <dl className="grid grid-cols-3 gap-2 text-center text-xs lg:grid-cols-1 lg:gap-2">
                 <div className="flex flex-col">
-                  <dt className="text-[10px] text-muted-foreground">Oracle Age / Dev</dt>
+                  <dt className="text-[11px] text-muted-foreground">Oracle</dt>
                   <dd className="tabular-nums-mono font-medium text-foreground">
                     {markets?.oracleAgeSec !== null && markets?.oracleAgeSec !== undefined
                       ? `${markets.oracleAgeSec}s`
                       : "—"}
-                    {" / "}
-                    {markets?.oracleDeviationBps !== null &&
-                    markets?.oracleDeviationBps !== undefined
-                      ? `${markets.oracleDeviationBps}bp`
-                      : "—"}
                   </dd>
                 </div>
                 <div className="flex flex-col">
-                  <dt className="text-[10px] text-muted-foreground">Vol / Mom</dt>
+                  <dt className="text-[11px] text-muted-foreground">Volatility</dt>
                   <dd className="tabular-nums-mono font-medium text-foreground">
                     {markets?.realizedVolatilityBps !== undefined
-                      ? `${markets.realizedVolatilityBps}bp`
-                      : "—"}
-                    {" / "}
-                    {markets?.momentumReturnBps !== undefined
-                      ? `${markets.momentumReturnBps >= 0 ? "+" : ""}${markets.momentumReturnBps}bp`
+                      ? `${(markets.realizedVolatilityBps / 100).toFixed(2)}%`
                       : "—"}
                   </dd>
                 </div>
                 <div className="flex flex-col">
-                  <dt className="text-[10px] text-muted-foreground">TWAP Disloc.</dt>
+                  <dt className="text-[11px] text-muted-foreground">Momentum</dt>
                   <dd className="tabular-nums-mono font-medium text-foreground">
-                    {markets?.dislocationVsTwapBps !== undefined
-                      ? `${markets.dislocationVsTwapBps >= 0 ? "+" : ""}${markets.dislocationVsTwapBps}bp`
+                    {markets?.momentumReturnBps !== undefined
+                      ? `${markets.momentumReturnBps >= 0 ? "+" : ""}${(markets.momentumReturnBps / 100).toFixed(2)}%`
                       : "—"}
                   </dd>
                 </div>
               </dl>
 
-              <span className="tabular-nums-mono text-center text-[10px] text-muted-foreground">
-                {markets?.available ? `Snap ${fmtTime(markets.timestamp)}` : "No snapshot"}
+              <span className="tabular-nums-mono text-center text-[11px] text-muted-foreground">
+                {markets?.available ? fmtTime(markets.timestamp) : "—"}
               </span>
             </div>
 
-            {/* Right Wing: HSKSwap V3 Immediate AMM */}
-            <div className="relative flex flex-col justify-between gap-4 bg-card p-6 text-card-foreground sm:p-7 lg:col-span-5">
+            {/* Right Wing: HSKSwap */}
+            <div className="relative flex flex-col justify-between gap-4 bg-card p-6 text-card-foreground lg:col-span-5">
               <div className="flex items-center justify-between">
-                <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Venue B · HSKSwap V3 AMM
-                </span>
+                <span className="text-xs font-semibold text-muted-foreground">HSKSwap</span>
                 <span
                   className={cn(
-                    "tabular-nums-mono rounded-full px-2.5 py-0.5 text-[10px] font-semibold",
+                    "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
                     winningVenue === "HSKSWAP"
                       ? "bg-primary text-primary-foreground"
                       : "border border-border text-muted-foreground",
                   )}
                 >
                   {winningVenue === "HSKSWAP"
-                    ? "SELECTED ROUTE"
+                    ? "Selected"
                     : markets?.venueComparison?.hskswap.eligible
-                      ? "ELIGIBLE"
-                      : "INELIGIBLE"}
+                      ? "Available"
+                      : "Waiting"}
                 </span>
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em]">
+                <span className="tabular-nums-mono text-2xl font-semibold tracking-tight">
                   {markets?.venueComparison
                     ? fmtPayment6(
                         markets.venueComparison.hskswap.acquisitionCostPayment,
                         paymentSymbol,
                       )
-                    : "Unavailable"}
+                    : "—"}
                 </span>
                 <span className="tabular-nums-mono text-xs text-muted-foreground">
                   {markets?.venueComparison
                     ? `Price impact: ${markets.venueComparison.hskswap.priceImpactBps ?? "—"} bps`
-                    : "Awaiting live QuoterV2 quote"}
+                    : "No quote yet"}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between border-t border-border pt-3 text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
                 <span className="tabular-nums-mono">
-                  Exit quote: {fmtPayment6(markets?.dexSellQuote?.paymentAmountOut, paymentSymbol)}
+                  Exit: {markets?.dexSellQuote ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol) : "—"}
                 </span>
-                <span className="tabular-nums-mono">SwapRouter02</span>
+                <span>Instant swap</span>
               </div>
             </div>
           </div>
@@ -779,16 +699,9 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
             {/* Decision Tape */}
             <section className="flex flex-col gap-4">
               <div className="flex items-baseline justify-between border-b border-border pb-3">
-                <div>
-                  <h2 className="font-display text-xl font-semibold tracking-[-0.03em]">
-                    Execution Decision Tape
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    Live cycle-by-cycle traces with dual-venue quotes, risk checks, and receipts
-                  </p>
-                </div>
+                <h2 className="text-lg font-semibold tracking-tight">Recent Decisions</h2>
                 <span className="tabular-nums-mono text-xs text-muted-foreground">
-                  {snapshot?.decisions.length ?? 0} cycles
+                  {snapshot?.decisions.length ?? 0}
                 </span>
               </div>
 
@@ -1012,63 +925,59 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                 {/* Slip Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] opacity-55">
-                      Signed Policy Mandate · v{policyVersion}
+                    <span className="text-xs font-medium opacity-60">
+                      Policy v{policyVersion}
                     </span>
-                    <h2 className="font-display text-xl font-bold tracking-[-0.03em]">
-                      Risk &amp; Control Slip
+                    <h2 className="text-lg font-semibold tracking-tight">
+                      Controls &amp; Policy
                     </h2>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setConnOpen((p) => !p)}
-                      title="Configure Agent API URL & Bearer Token"
-                      className="inline-flex h-8 items-center gap-1 rounded-full border border-black/15 px-2.5 text-[11px] font-medium transition-colors hover:bg-black/5 cursor-pointer"
+                      title="Connection settings"
+                      className="inline-flex h-8 items-center gap-1 rounded-full border border-black/15 px-2.5 text-xs font-medium transition-colors hover:bg-black/5 cursor-pointer"
                     >
                       <Settings2 className="size-3" />
-                      <span>{isLocalApi ? "Local" : "Remote"}</span>
+                      <span>Connect</span>
                     </button>
                     <button
                       type="button"
                       disabled={disconnected || actionBusy || status?.killSwitch}
                       onClick={() => setKillDialogOpen(true)}
-                      className="inline-flex h-8 items-center gap-1 rounded-full bg-red-600 px-3 text-[11px] font-semibold text-white transition-opacity hover:bg-red-700 disabled:opacity-45 cursor-pointer"
+                      className="inline-flex h-8 items-center gap-1 rounded-full bg-red-600 px-3 text-xs font-semibold text-white transition-opacity hover:bg-red-700 disabled:opacity-45 cursor-pointer"
                     >
                       <OctagonAlert className="size-3" />
-                      <span>{status?.killSwitch ? "Killed" : "Kill"}</span>
+                      <span>{status?.killSwitch ? "Stopped" : "Kill"}</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Collapsible API URL & Bearer Token Config (Paper Ledger Inputs) */}
-                {(connOpen || disconnected || !tokenInput) && (
-                  <div className="flex flex-col gap-3 rounded-[12px] border border-dashed border-black/20 bg-black/[0.025] p-3.5">
+                {/* Collapsible API URL & Bearer Token Config (Hidden until clicked) */}
+                {connOpen && (
+                  <div className="flex flex-col gap-3 rounded-[12px] border border-black/12 bg-black/[0.03] p-3.5">
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.08em] opacity-60">
-                        <span>Agent API URL</span>
-                        <span className="tabular-nums-mono">
-                          {isLocalApi ? "Localhost" : "Remote"}
-                        </span>
+                      <div className="flex items-center justify-between text-[11px] font-medium opacity-65">
+                        <span>Agent URL</span>
+                        <span>{isLocalApi ? "Local" : "Remote"}</span>
                       </div>
                       <input
                         type="url"
                         placeholder={DEFAULT_AGENT_API_URL}
                         value={apiUrlInput}
                         onChange={(e) => handleSaveApiUrl(e.target.value)}
-                        className="tabular-nums-mono h-8 w-full border-b border-black/25 bg-transparent px-0.5 text-xs font-medium text-black placeholder:text-black/35 transition-colors focus:border-black focus:outline-none"
+                        className="h-8 w-full border-b border-black/25 bg-transparent px-0.5 text-xs font-medium text-black placeholder:text-black/35 transition-colors focus:border-black focus:outline-none"
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] opacity-60">
-                        Bearer Token (sessionStorage)
-                      </span>
+                      <span className="text-[11px] font-medium opacity-65">Access Token</span>
                       <input
                         type="password"
-                        placeholder="Paste token for Start / Pause / Policy"
+                        placeholder="Paste token"
                         value={tokenInput}
                         onChange={(e) => handleSaveToken(e.target.value)}
-                        className="tabular-nums-mono h-8 w-full border-b border-black/25 bg-transparent px-0.5 text-xs font-medium text-black placeholder:text-black/35 transition-colors focus:border-black focus:outline-none"
+                        className="h-8 w-full border-b border-black/25 bg-transparent px-0.5 text-xs font-medium text-black placeholder:text-black/35 transition-colors focus:border-black focus:outline-none"
                       />
                     </div>
                   </div>

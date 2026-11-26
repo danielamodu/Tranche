@@ -313,7 +313,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
     <AppShell
       activeRoute="/tickets"
       title="My Tickets"
-      subtitle="ERC-721 execution tickets owned by your wallet"
+      subtitle="Your execution tickets"
       onNavigate={onNavigate}
       onRefresh={() => loadTickets(true)}
       refreshing={refreshing}

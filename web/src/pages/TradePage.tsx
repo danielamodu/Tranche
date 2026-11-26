@@ -280,7 +280,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
     <AppShell
       activeRoute="/trade"
       title="Trade Desk"
-      subtitle={`Live on-chain offers · ${ACTIVE_NETWORK.shortName}`}
+      subtitle="Live offers"
       onNavigate={onNavigate}
       onRefresh={() => loadOffers(true)}
       refreshing={refreshing}
