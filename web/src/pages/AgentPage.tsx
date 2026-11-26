@@ -29,6 +29,7 @@ import {
   AgentApiClient,
   AgentApiError,
   DEFAULT_AGENT_API_URL,
+  buildProfileSignMessage,
   normalizeAgentApiUrl,
   type AgentDashboardSnapshot,
   type AgentIntelligenceSnapshot,
@@ -227,7 +228,7 @@ function parsePersonalRule(instruction: string): {
 }
 
 export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
-  const { address } = useWallet();
+  const { address, activeProvider } = useWallet();
   const personalKey = `tranche-personal-agent-${(address ?? "guest").toLowerCase()}`;
   const [personalAgent, setPersonalAgent] = useState<PersonalAgentState>(() => {
     try {
@@ -237,6 +238,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
       return DEFAULT_PERSONAL_AGENT;
     }
   });
+  const [feedbackFading, setFeedbackFading] = useState(false);
 
   useEffect(() => {
     try {
@@ -255,9 +257,11 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
   }, [personalKey]);
 
   const savePersonalAgent = useCallback(
-    (updater: (prev: PersonalAgentState) => PersonalAgentState) => {
+    (updater: (prev: PersonalAgentState) => PersonalAgentState): PersonalAgentState => {
+      let computed = DEFAULT_PERSONAL_AGENT;
       setPersonalAgent((prev) => {
         const next = updater(prev);
+        computed = next;
         try {
           localStorage.setItem(personalKey, JSON.stringify(next));
         } catch {
@@ -265,6 +269,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
         }
         return next;
       });
+      return computed;
     },
     [personalKey],
   );
@@ -419,16 +424,109 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
 
   const isOperator = tokenInput.trim().length > 0;
 
-  async function handlePauseToggle() {
-    if (!isOperator) {
-      const nextPaused = !personalAgent.paused;
-      savePersonalAgent((prev) => ({ ...prev, paused: nextPaused }));
+  // Auto-fade success & error banners smoothly after 3.8s
+  useEffect(() => {
+    if (!actionFeedback) {
+      setFeedbackFading(false);
+      return;
+    }
+    setFeedbackFading(false);
+    const fadeTimer = setTimeout(() => setFeedbackFading(true), 3500);
+    const clearTimer = setTimeout(() => {
+      setActionFeedback(null);
+      setFeedbackFading(false);
+    }, 4100);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [actionFeedback]);
+
+  // Load saved server-side profile for this wallet across devices/browsers
+  useEffect(() => {
+    if (!address) return;
+    let cancelled = false;
+    void client
+      .getUserProfile(address)
+      .then(({ profile }) => {
+        if (cancelled || !profile) return;
+        const remote: PersonalAgentState = {
+          paused: profile.paused,
+          strategyType: profile.strategyType,
+          takeProfitBps: profile.takeProfitBps,
+          stopLossBps: profile.stopLossBps,
+          maxSlippageBps: profile.maxSlippageBps,
+          version: profile.version,
+        };
+        setPersonalAgent(remote);
+        setStrategyType(remote.strategyType);
+        setTpInput(String(remote.takeProfitBps));
+        setSlInput(String(remote.stopLossBps));
+        setSlipInput(String(remote.maxSlippageBps));
+        try {
+          localStorage.setItem(personalKey, JSON.stringify(remote));
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {
+        // Fallback silently to localStorage if server doesn't have /profiles yet
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, client, personalKey]);
+
+  async function syncProfileToServer(next: PersonalAgentState, successPrefix: string) {
+    if (!address || !activeProvider) {
+      setActionFeedback({ kind: "ok", text: `${successPrefix} (saved on this device).` });
+      return;
+    }
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const message = buildProfileSignMessage({
+        address,
+        paused: next.paused,
+        strategyType: next.strategyType,
+        takeProfitBps: next.takeProfitBps,
+        stopLossBps: next.stopLossBps,
+        maxSlippageBps: next.maxSlippageBps,
+        timestamp,
+      });
+      const signature = (await activeProvider.request({
+        method: "personal_sign",
+        params: [message, address],
+      })) as string;
+      const saved = await client.saveUserProfile(address, {
+        paused: next.paused,
+        strategyType: next.strategyType,
+        takeProfitBps: next.takeProfitBps,
+        stopLossBps: next.stopLossBps,
+        maxSlippageBps: next.maxSlippageBps,
+        timestamp,
+        signature,
+      });
+      savePersonalAgent((prev) => ({ ...prev, version: saved.profile.version }));
+      setActionFeedback({ kind: "ok", text: `${successPrefix} — synced to your wallet.` });
+    } catch {
       setActionFeedback({
         kind: "ok",
-        text: nextPaused
-          ? "Your personal agent is paused. Other users are unaffected."
-          : "Your personal agent is active again.",
+        text: `${successPrefix} (saved on this device).`,
       });
+    }
+  }
+
+  async function handlePauseToggle() {
+    if (!isOperator) {
+      const nextState: PersonalAgentState = {
+        ...personalAgent,
+        paused: !personalAgent.paused,
+      };
+      savePersonalAgent(() => nextState);
+      await syncProfileToServer(
+        nextState,
+        nextState.paused ? "Your agent is paused" : "Your agent is active",
+      );
       return;
     }
     await runControl(
@@ -447,18 +545,16 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
       return;
     }
     if (!isOperator) {
-      savePersonalAgent((prev) => ({
-        ...prev,
+      const nextState: PersonalAgentState = {
+        ...personalAgent,
         strategyType,
         takeProfitBps,
         stopLossBps,
         maxSlippageBps,
-        version: prev.version + 1,
-      }));
-      setActionFeedback({
-        kind: "ok",
-        text: `Saved to your personal agent (${humanStrategy(strategyType)}).`,
-      });
+        version: personalAgent.version + 1,
+      };
+      savePersonalAgent(() => nextState);
+      await syncProfileToServer(nextState, `Saved ${humanStrategy(strategyType)}`);
       return;
     }
     if (!/^\d+$/.test(trimmedMaxPos)) {
@@ -531,27 +627,22 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
         setActionFeedback({ kind: "err", text: parsed.rejectedFields.join(", ") });
         return;
       }
-      savePersonalAgent((prev) => {
-        const next: PersonalAgentState = {
-          ...prev,
-          strategyType: (parsed.patch.strategyType as StrategyType) ?? prev.strategyType,
-          takeProfitBps: (parsed.patch.takeProfitBps as number) ?? prev.takeProfitBps,
-          stopLossBps: (parsed.patch.stopLossBps as number) ?? prev.stopLossBps,
-          maxSlippageBps: (parsed.patch.maxSlippageBps as number) ?? prev.maxSlippageBps,
-          version: prev.version + 1,
-        };
-        setStrategyType(next.strategyType);
-        setTpInput(String(next.takeProfitBps));
-        setSlInput(String(next.stopLossBps));
-        setSlipInput(String(next.maxSlippageBps));
-        return next;
-      });
+      const nextState: PersonalAgentState = {
+        ...personalAgent,
+        strategyType: (parsed.patch.strategyType as StrategyType) ?? personalAgent.strategyType,
+        takeProfitBps: (parsed.patch.takeProfitBps as number) ?? personalAgent.takeProfitBps,
+        stopLossBps: (parsed.patch.stopLossBps as number) ?? personalAgent.stopLossBps,
+        maxSlippageBps: (parsed.patch.maxSlippageBps as number) ?? personalAgent.maxSlippageBps,
+        version: personalAgent.version + 1,
+      };
+      savePersonalAgent(() => nextState);
+      setStrategyType(nextState.strategyType);
+      setTpInput(String(nextState.takeProfitBps));
+      setSlInput(String(nextState.stopLossBps));
+      setSlipInput(String(nextState.maxSlippageBps));
       setNlProposal(null);
       setNlInstruction("");
-      setActionFeedback({
-        kind: "ok",
-        text: `Applied to your personal agent: ${parsed.summary}.`,
-      });
+      await syncProfileToServer(nextState, `Applied: ${parsed.summary}`);
       return;
     }
     await runControl("Apply policy", () => client.applyPolicy(nlInstruction.trim()), {
@@ -807,11 +898,14 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               ))}
             </div>
 
-            {/* Inline Preview / Feedback */}
+            {/* Inline Preview / Feedback (auto-fades smoothly) */}
             {actionFeedback && (
               <div
+                role="status"
+                onClick={() => setActionFeedback(null)}
                 className={cn(
-                  "flex items-center gap-2 rounded-[12px] border px-3.5 py-2 text-xs",
+                  "flex items-center gap-2 rounded-[12px] border px-3.5 py-2 text-xs transition-opacity duration-500 cursor-pointer",
+                  feedbackFading ? "opacity-0" : "opacity-100",
                   actionFeedback.kind === "ok"
                     ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-800"
                     : "border-red-600/30 bg-red-500/10 text-red-700",
@@ -1145,8 +1239,11 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
         <div className="flex w-full flex-col gap-6 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
           {actionFeedback && (
             <div
+              role="status"
+              onClick={() => setActionFeedback(null)}
               className={cn(
-                "flex shrink-0 items-center gap-2 rounded-[14px] border px-4 py-2.5 text-xs",
+                "flex shrink-0 items-center gap-2 rounded-[14px] border px-4 py-2.5 text-xs transition-opacity duration-500 cursor-pointer",
+                feedbackFading ? "opacity-0" : "opacity-100",
                 actionFeedback.kind === "ok"
                   ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                   : "border-destructive/35 bg-destructive/10 text-destructive",

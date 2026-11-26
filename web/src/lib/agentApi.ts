@@ -518,6 +518,64 @@ export class AgentApiClient {
   getIntelligence(): Promise<AgentIntelligenceSnapshot> {
     return this.request<AgentIntelligenceSnapshot>("GET", "/agent/intelligence");
   }
+
+  getUserProfile(address: string): Promise<{ profile: UserAgentProfile | null }> {
+    return this.request<{ profile: UserAgentProfile | null }>(
+      "GET",
+      `/profiles/${encodeURIComponent(address)}`,
+    );
+  }
+
+  saveUserProfile(
+    address: string,
+    payload: {
+      paused: boolean;
+      strategyType: StrategyType;
+      takeProfitBps: number;
+      stopLossBps: number;
+      maxSlippageBps: number;
+      timestamp: number;
+      signature: string;
+    },
+  ): Promise<{ ok: true; profile: UserAgentProfile }> {
+    return this.request<{ ok: true; profile: UserAgentProfile }>(
+      "POST",
+      `/profiles/${encodeURIComponent(address)}`,
+      payload,
+    );
+  }
+}
+
+export interface UserAgentProfile {
+  address: string;
+  paused: boolean;
+  strategyType: StrategyType;
+  takeProfitBps: number;
+  stopLossBps: number;
+  maxSlippageBps: number;
+  version: number;
+  updatedAt: number;
+}
+
+export function buildProfileSignMessage(params: {
+  address: string;
+  paused: boolean;
+  strategyType: StrategyType;
+  takeProfitBps: number;
+  stopLossBps: number;
+  maxSlippageBps: number;
+  timestamp: number;
+}): string {
+  return [
+    "Tranche Agent Profile Update",
+    `Wallet: ${params.address.toLowerCase()}`,
+    `Status: ${params.paused ? "paused" : "active"}`,
+    `Strategy: ${params.strategyType}`,
+    `TakeProfitBps: ${params.takeProfitBps}`,
+    `StopLossBps: ${params.stopLossBps}`,
+    `MaxSlippageBps: ${params.maxSlippageBps}`,
+    `Timestamp: ${params.timestamp}`,
+  ].join("\n");
 }
 
 export type DataProvenance = "LIVE" | "FORK" | "REPLAY" | "MOCK";
