@@ -13,6 +13,7 @@ import {
   type DexVenueAdapter,
 } from "./hskswap.js";
 import type { PolicyValidationBounds } from "./llm.js";
+import { StructuredLogger } from "./logger.js";
 import { MarketIntelligence, type OracleReader } from "./market.js";
 import { PositionStore } from "./positions.js";
 import {
@@ -26,6 +27,11 @@ import {
 import type { RiskLimits } from "./risk.js";
 import { AgentRuntime, TrancheAutonomousAgent, type AgentExecutionMode } from "./runtime.js";
 import { AgentApiServer } from "./server.js";
+import {
+  findLatestSoakSessionDir,
+  inspectSoakSession,
+  type SoakStatusProvider,
+} from "./soak-evidence.js";
 import type { StrategyConfig } from "./strategy.js";
 
 /**
@@ -40,6 +46,17 @@ async function main() {
   const port = Number(process.env.AGENT_API_PORT ?? "8787");
   const apiToken = process.env.AGENT_API_TOKEN ?? randomBytes(16).toString("hex");
   const pollIntervalMs = Number(process.env.AGENT_POLL_MS ?? "15000");
+  const stateFile = path.resolve(
+    process.env.AGENT_STATE_FILE ?? "node_modules/.tmp/agent-state.json",
+  );
+  const allowedOrigins = process.env.AGENT_ALLOWED_ORIGINS
+    ? process.env.AGENT_ALLOWED_ORIGINS.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
+  const marketLabel = process.env.AGENT_MARKET_LABEL ?? "WHSK/USDT";
+  const soakLogDir = process.env.AGENT_SOAK_LOG_DIR?.trim() || undefined;
+  const logger = new StructuredLogger();
 
   const rawSource = (process.env.AGENT_DATA_SOURCE ?? "dry_run").toLowerCase();
   const dataSource: AgentDataSourceMode =
@@ -67,8 +84,12 @@ async function main() {
   // Fail-closed safety check before touching any network or wallet
   validateRuntimeSafety({ dataSource, executionMode, rpcUrl });
 
-  const INV_TOKEN = CANONICAL_CHAIN_177_TOKENS.WHSK.address;
-  const PAY_TOKEN = CANONICAL_CHAIN_177_TOKENS.USDT.address;
+  const INV_TOKEN =
+    (process.env.AGENT_INVENTORY_TOKEN as Address | undefined) ??
+    CANONICAL_CHAIN_177_TOKENS.WHSK.address;
+  const PAY_TOKEN =
+    (process.env.AGENT_PAYMENT_TOKEN as Address | undefined) ??
+    CANONICAL_CHAIN_177_TOKENS.USDT.address;
   const POOL_ADDR = CANONICAL_CHAIN_177_HSKSWAP.pools.WHSK_USDT_3000;
   const DRY_RUN_ADDR = "0x000000000000000000000000000000000000dEaD" as Address;
   const TARGET_QTY = 100n * 10n ** 18n;
@@ -192,19 +213,55 @@ async function main() {
       multicall3: CANONICAL_CHAIN_177_HSKSWAP.multicall3,
       readOnly: executionMode === "read_only",
     });
-    dexVenue = hskVenue;
 
-    const poolNow = await hskVenue.getPoolState(POOL_ADDR, INV_TOKEN, PAY_TOKEN);
-    trancheGasCostPayment = await estimateGasCostInPaymentUnits({
-      publicClient,
-      gasUnits: 340_000n,
-      whskToPaymentPriceX36: poolNow.spotPriceX36,
-    });
-    dexGasCostPayment = await estimateGasCostInPaymentUnits({
-      publicClient,
-      gasUnits: 140_000n,
-      whskToPaymentPriceX36: poolNow.spotPriceX36,
-    });
+    if (chainId === 133) {
+      // Chain 133 testnet has NO deployed HSKSwap V3 liquidity — report honestly without fabricating quotes
+      dexVenue = {
+        name: "HSKSwapV3-Unavailable-Chain133",
+        async getPoolState(): Promise<DexPoolState> {
+          const blk = await publicClient.getBlock();
+          return {
+            venue: "HSKSwapV3-Unavailable-Chain133",
+            poolAddress: "0x0000000000000000000000000000000000000000" as Address,
+            token0: INV_TOKEN,
+            token1: PAY_TOKEN,
+            fee: 3000,
+            liquidity: 0n,
+            sqrtPriceX96: 0n,
+            tick: 0,
+            observationCardinality: 0,
+            spotPriceX36: 0n,
+            twapPriceX36: null,
+            timestamp: Number(blk.timestamp),
+            blockNumber: blk.number,
+          };
+        },
+        async quoteBuyInventory() {
+          throw new Error("NO_HSKSWAP_LIQUIDITY_ON_CHAIN_133");
+        },
+        async quoteSellInventory() {
+          throw new Error("NO_HSKSWAP_LIQUIDITY_ON_CHAIN_133");
+        },
+        async executeSwapExactInput() {
+          throw new Error("READ_ONLY_MODE_BLOCKED: execution disabled on Chain 133 observer");
+        },
+      };
+      trancheGasCostPayment = 0n;
+      dexGasCostPayment = 0n;
+    } else {
+      dexVenue = hskVenue;
+      const poolNow = await hskVenue.getPoolState(POOL_ADDR, INV_TOKEN, PAY_TOKEN);
+      trancheGasCostPayment = await estimateGasCostInPaymentUnits({
+        publicClient,
+        gasUnits: 340_000n,
+        whskToPaymentPriceX36: poolNow.spotPriceX36,
+      });
+      dexGasCostPayment = await estimateGasCostInPaymentUnits({
+        publicClient,
+        gasUnits: 140_000n,
+        whskToPaymentPriceX36: poolNow.spotPriceX36,
+      });
+    }
 
     const managerAddr = process.env.TRANCHE_COMMITMENT_MANAGER as Address | undefined;
     const vaultAddr = process.env.TRANCHE_LIQUIDITY_VAULT as Address | undefined;
@@ -300,7 +357,7 @@ async function main() {
     maxOracleDeviationBps: riskLimits.maxOracleDeviationBps,
   });
 
-  const positions = new PositionStore(path.resolve("node_modules/.tmp/agent-state.json"));
+  const positions = new PositionStore(stateFile);
   const agent = new TrancheAutonomousAgent({
     trancheAgent,
     dexVenue,
@@ -326,9 +383,76 @@ async function main() {
       trancheGasCostPayment,
       dexGasCostPayment,
     },
+    logger,
   });
 
-  const runtime = new AgentRuntime({ agent, pollIntervalMs });
+  const runtime = new AgentRuntime({
+    agent,
+    pollIntervalMs,
+    autoRecoverFromRpcErrors: executionMode === "read_only",
+    logger,
+  });
+
+  let soakProvider: SoakStatusProvider | undefined;
+  if (soakLogDir) {
+    soakProvider = {
+      getStatusSummary() {
+        const latestDir = findLatestSoakSessionDir(soakLogDir);
+        if (!latestDir) {
+          throw new Error("No soak session found");
+        }
+        const rep = inspectSoakSession(latestDir);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const uptimeSec = Math.max(0, nowSec - rep.metadata.startedAtSec);
+        const remainingPlannedSec = Math.max(
+          0,
+          rep.metadata.startedAtSec + Math.round(rep.metadata.plannedDurationHours * 3600) - nowSec,
+        );
+        const m = rep.latestMetrics;
+        return {
+          active: rep.metadata.status === "RUNNING",
+          sessionId: rep.metadata.sessionId,
+          status: rep.metadata.status,
+          plannedDurationHours: rep.metadata.plannedDurationHours,
+          mode: rep.metadata.executionMode,
+          dataSource: rep.metadata.dataSource,
+          chainId: rep.metadata.chainId,
+          marketLabel: rep.metadata.marketLabel,
+          startedAt: rep.metadata.startedAt,
+          uptimeSec,
+          restartsCount: rep.metadata.restartsCount ?? 0,
+          lastResumedAt: rep.metadata.lastResumedAt ?? null,
+          remainingPlannedSec,
+          lastSuccessfulObservationAt: rep.latestSnapshot?.snapshotTimestamp ?? null,
+          latestSnapshot: rep.latestSnapshot,
+          rpcHealth: {
+            healthy: (m?.rpcSuccessRate ?? 1) > 0,
+            successRate: m?.rpcSuccessRate ?? 1,
+            avgLatencyMs: m?.avgRpcLatencyMs ?? 0,
+            maxLatencyMs: m?.maxRpcLatencyMs ?? 0,
+            lastLatencyMs: m?.lastRpcLatencyMs ?? null,
+          },
+          cycles: {
+            total: Math.max(rep.counts.decisions, m?.totalCycles ?? 0),
+            successful: Math.max(rep.counts.decisions, m?.successfulCycles ?? 0),
+            failed: m?.failedCycles ?? 0,
+            missed: m?.missedCycles ?? 0,
+          },
+          decisionsByVenue: m?.decisionsByVenue ?? { TRANCHE: 0, HSKSWAP: 0, NONE: 0 },
+          riskRejectionCount: m?.riskRejectionCount ?? 0,
+          duplicateDecisionCount: m?.duplicateDecisionCount ?? 0,
+          observedRegimes: rep.observedRegimes,
+          unobservedRegimes: rep.unobservedRegimes,
+          errorsCount: m?.errorCount ?? 0,
+          recoveriesCount: m?.recoveryCount ?? 0,
+          retriesCount: m?.retryCount ?? 0,
+          txBroadcastCount: rep.txBroadcastCount,
+          evidenceDir: rep.sessionDir,
+        };
+      },
+    };
+  }
+
   const server = new AgentApiServer({
     agent,
     runtime,
@@ -336,19 +460,22 @@ async function main() {
     apiToken,
     host,
     port,
-    marketLabel: "WHSK/USDT",
+    allowedOrigins,
+    marketLabel,
     dataSource,
     chainId,
+    soakProvider,
   });
 
   const addr = await server.start();
-  await runtime.tickOnce();
-  console.log(
-    `Tranche Agent Local API listening on ${addr.url} (dataSource=${dataSource}, mode=${executionMode}, chainId=${chainId})`,
-  );
-  if (!process.env.AGENT_API_TOKEN) {
-    console.log(`Generated local session token (set AGENT_API_TOKEN to customize): ${apiToken}`);
-  }
+  runtime.start();
+  logger.info("api.listening", {
+    url: addr.url,
+    dataSource,
+    mode: executionMode,
+    chainId,
+    marketLabel,
+  });
 
   const shutdown = async () => {
     await runtime.stop();
