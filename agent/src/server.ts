@@ -10,6 +10,7 @@ import {
 } from "./llm.js";
 import type { AgentDataSourceMode } from "./protocol-config.js";
 import type { AgentRuntime, AutonomousDecisionTrace, TrancheAutonomousAgent } from "./runtime.js";
+import type { SoakStatusProvider } from "./soak-evidence.js";
 
 export interface AgentApiServerConfig {
   agent: TrancheAutonomousAgent;
@@ -24,6 +25,7 @@ export interface AgentApiServerConfig {
   chainId?: number;
   llmProvider?: LlmProvider;
   maxRequestsPerMinute?: number;
+  soakProvider?: SoakStatusProvider;
 }
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -237,6 +239,7 @@ export class AgentApiServer {
         const store = this.cfg.agent.getPositionStore();
         const health = this.cfg.runtime.getHealthInfo();
         const dataSource = this.cfg.dataSource ?? "fixture";
+        const soak = this.cfg.soakProvider?.getStatusSummary() ?? null;
         return sendJson(res, 200, {
           ok: !store.isStateCorrupted(),
           uptimeSec: Math.floor(Date.now() / 1000) - this.startedAt,
@@ -250,6 +253,8 @@ export class AgentApiServer {
           quotesAreReal: dataSource !== "fixture",
           stateCorrupted: store.isStateCorrupted(),
           pendingTxCount: store.getPendingTxs().length,
+          soakSessionId: soak?.sessionId ?? null,
+          evidenceDir: soak?.evidenceDir ?? null,
         });
       }
 
@@ -267,6 +272,52 @@ export class AgentApiServer {
         });
       }
 
+      if (method === "GET" && pathname === "/agent/soak") {
+        if (this.cfg.soakProvider) {
+          return sendJson(res, 200, this.cfg.soakProvider.getStatusSummary());
+        }
+        const health = this.cfg.runtime.getHealthInfo();
+        const traces = this.cfg.agent.getTraces();
+        const dataSource = this.cfg.dataSource ?? "fixture";
+        return sendJson(res, 200, {
+          active: false,
+          sessionId: null,
+          status: "INACTIVE",
+          plannedDurationHours: null,
+          mode: this.cfg.agent.getExecutionMode(),
+          dataSource,
+          chainId: this.cfg.chainId ?? 0,
+          marketLabel: this.cfg.marketLabel ?? "WHSK/USDT",
+          startedAt: new Date(this.startedAt * 1000).toISOString(),
+          uptimeSec: Math.floor(Date.now() / 1000) - this.startedAt,
+          lastSuccessfulObservationAt: health.lastSuccessfulCycleAt,
+          latestSnapshot: null,
+          rpcHealth: {
+            healthy: health.rpcHealthy,
+            successRate: 1,
+            avgLatencyMs: 0,
+            maxLatencyMs: 0,
+            lastLatencyMs: null,
+          },
+          cycles: {
+            total: traces.length,
+            successful: traces.length,
+            failed: 0,
+            missed: 0,
+          },
+          decisionsByVenue: { TRANCHE: 0, HSKSWAP: 0, NONE: 0 },
+          riskRejectionCount: 0,
+          duplicateDecisionCount: 0,
+          observedRegimes: { CALM: 0, TRENDING: 0, VOLATILE: 0, DISLOCATED: 0 },
+          unobservedRegimes: ["CALM", "TRENDING", "VOLATILE", "DISLOCATED"],
+          errorsCount: health.consecutiveErrors,
+          recoveriesCount: 0,
+          retriesCount: 0,
+          txBroadcastCount: 0,
+          evidenceDir: null,
+        });
+      }
+
       if (method === "GET" && pathname === "/agent/status") {
         const limits = this.cfg.agent.getRiskLimits();
         const strategy = this.cfg.agent.getStrategyConfig();
@@ -275,6 +326,7 @@ export class AgentApiServer {
         const store = this.cfg.agent.getPositionStore();
         const health = this.cfg.runtime.getHealthInfo();
         const dataSource = this.cfg.dataSource ?? "fixture";
+        const soak = this.cfg.soakProvider?.getStatusSummary() ?? null;
         return sendJson(res, 200, {
           running: health.running,
           rpcHealthy: health.rpcHealthy,
@@ -290,6 +342,8 @@ export class AgentApiServer {
           killSwitch: limits.killSwitch,
           stateCorrupted: store.isStateCorrupted(),
           pendingTxs: store.getPendingTxs(),
+          soakSessionId: soak?.sessionId ?? null,
+          evidenceDir: soak?.evidenceDir ?? null,
           lastCycleId: last?.cycleId ?? null,
           lastCycleTimestamp: last?.timestamp ?? null,
           lastDecisionAction: last?.selectedAction ?? null,

@@ -43,12 +43,20 @@ async function main() {
 
   const rawSource = (process.env.AGENT_DATA_SOURCE ?? "dry_run").toLowerCase();
   const dataSource: AgentDataSourceMode =
-    rawSource === "fixture" || rawSource === "fork" || rawSource === "dry_run"
+    rawSource === "fixture" ||
+    rawSource === "fork" ||
+    rawSource === "dry_run" ||
+    rawSource === "chain177_read_only"
       ? rawSource
       : "dry_run";
 
+  const rawExecMode = process.env.AGENT_EXECUTION_MODE?.toLowerCase();
   const executionMode: AgentExecutionMode =
-    dataSource === "fork" && process.env.AGENT_FORK_EXECUTE === "true" ? "live" : "dry_run";
+    rawExecMode === "read_only" || dataSource === "chain177_read_only"
+      ? "read_only"
+      : dataSource === "fork" && process.env.AGENT_FORK_EXECUTE === "true"
+        ? "live"
+        : "dry_run";
 
   const rpcUrl =
     dataSource === "fixture"
@@ -182,6 +190,7 @@ async function main() {
       quoterV2: CANONICAL_CHAIN_177_HSKSWAP.quoterV2,
       swapRouter02: CANONICAL_CHAIN_177_HSKSWAP.swapRouter02,
       multicall3: CANONICAL_CHAIN_177_HSKSWAP.multicall3,
+      readOnly: executionMode === "read_only",
     });
     dexVenue = hskVenue;
 
@@ -214,14 +223,18 @@ async function main() {
           oraclePriceAdapter: oracleAddr,
         },
       });
-      trancheAgent = new TrancheExecutionAgent(realClient);
+      trancheAgent = new TrancheExecutionAgent(realClient, {
+        readOnly: executionMode === "read_only",
+      });
     } else {
       // No Tranche contracts deployed yet on Chain 177 -> real empty offer list (never faked)
       const emptyClient = {
         discoverOffers: async () => [],
         publicClient,
       } as unknown as TrancheClient;
-      trancheAgent = new TrancheExecutionAgent(emptyClient);
+      trancheAgent = new TrancheExecutionAgent(emptyClient, {
+        readOnly: executionMode === "read_only",
+      });
     }
 
     oracleReader = oracleAddr
