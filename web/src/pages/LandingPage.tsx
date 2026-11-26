@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Bot, CheckCircle2, Plus, ShieldCheck, Waves } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Bot, CheckCircle2, Plus, ShieldCheck, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Reveal } from "@/components/Reveal";
@@ -300,28 +300,28 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         </div>
       </header>
 
-      {/* 1. Full-Bleed 100vh Poster Hero (Jeton asymmetric anchoring + Ethena centered centerpiece) */}
-      <section className="relative flex min-h-[100svh] flex-col justify-between gap-12 overflow-hidden px-6 pt-32 pb-16 sm:pt-36 sm:pb-20">
+      {/* 1. Full-Bleed 100svh Animated Dual-Venue Hero Stage (pure visual focus, zero text crowding) */}
+      <section className="relative flex min-h-[100svh] flex-col items-center justify-between overflow-hidden px-6 pt-28 pb-10 sm:pt-32 sm:pb-12">
         {/* Subtle monochrome studio rim glow behind centerpiece */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[75vh]"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[80vh]"
           style={{
             background:
-              "radial-gradient(48% 42% at 50% 34%, rgba(248, 247, 238, 0.09) 0%, rgba(248, 247, 238, 0) 100%)",
+              "radial-gradient(50% 45% at 50% 42%, rgba(248, 247, 238, 0.095) 0%, rgba(248, 247, 238, 0) 100%)",
           }}
         />
 
-        {/* Upper-center sculptural visual diagram: Agent → Dual-Venue Comparison → Tranche Ticket vs HSKSwap */}
-        <div className="relative z-10 mx-auto my-auto flex w-full max-w-[1080px] flex-col items-center justify-center gap-6 py-8 lg:flex-row lg:gap-0 lg:py-12">
+        {/* Center sculptural visual diagram: Agent ──▶ [Cream Ticket] ── HSKSwap */}
+        <div className="relative z-10 mx-auto my-auto flex w-full max-w-[1080px] flex-col items-center justify-center gap-6 lg:flex-row lg:gap-0">
           {/* Left Satellite: Tranche Agent Brain */}
-          <div className="animate-rise flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/90 bg-card/85 p-4 backdrop-blur-md lg:w-[230px] lg:shrink-0">
+          <div className="animate-rise flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/90 bg-card/85 p-4 backdrop-blur-md transition-transform duration-500 hover:-translate-y-1 lg:w-[232px] lg:shrink-0">
             <div className="flex items-center justify-between">
               <span className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <Bot className="size-3.5" />
               </span>
               <span className="tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                <span className="size-1.5 rounded-full bg-emerald-400" />
+                <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
                 ROUTING
               </span>
             </div>
@@ -339,20 +339,20 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
 
-          {/* Connecting Active Route Line (Left → Center Ticket) */}
-          <div aria-hidden="true" className="hidden w-14 shrink-0 items-center lg:flex">
-            <svg viewBox="0 0 64 24" className="h-6 w-full overflow-visible">
+          {/* Animated Active Route Beam (Left → Center Ticket) */}
+          <div aria-hidden="true" className="hidden w-16 shrink-0 items-center lg:flex">
+            <svg viewBox="0 0 72 24" className="h-6 w-full overflow-visible">
               <line
                 x1="0"
                 y1="12"
-                x2="56"
+                x2="64"
                 y2="12"
                 stroke="currentColor"
                 strokeWidth="1.5"
                 strokeDasharray="4 4"
-                className="text-foreground/70"
+                className="animate-dash-flow text-foreground/80"
               />
-              <circle cx="58" cy="12" r="3.5" className="fill-primary" />
+              <circle cx="66" cy="12" r="3.5" className="fill-primary" />
             </svg>
           </div>
 
@@ -361,25 +361,25 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <TicketSpecimen stage={0} mode="FIXED" />
           </div>
 
-          {/* Connecting Dimmed Comparison Line (Center ← Right AMM) */}
-          <div aria-hidden="true" className="hidden w-14 shrink-0 items-center lg:flex">
-            <svg viewBox="0 0 64 24" className="h-6 w-full overflow-visible">
+          {/* Dimmed Comparison Line (Center ← Right AMM) */}
+          <div aria-hidden="true" className="hidden w-16 shrink-0 items-center lg:flex">
+            <svg viewBox="0 0 72 24" className="h-6 w-full overflow-visible">
               <line
                 x1="6"
                 y1="12"
-                x2="64"
+                x2="72"
                 y2="12"
                 stroke="currentColor"
                 strokeWidth="1.25"
                 strokeDasharray="3 5"
-                className="text-muted-foreground/40"
+                className="text-muted-foreground/35"
               />
-              <circle cx="4" cy="12" r="2.5" className="fill-muted-foreground/50" />
+              <circle cx="4" cy="12" r="2.5" className="fill-muted-foreground/45" />
             </svg>
           </div>
 
           {/* Right Satellite: HSKSwap V3 AMM (Compared & Skipped) */}
-          <div className="animate-rise-delay-2 flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/70 bg-card/55 p-4 opacity-80 backdrop-blur-md lg:w-[230px] lg:shrink-0">
+          <div className="animate-rise-delay-2 flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/70 bg-card/55 p-4 opacity-80 backdrop-blur-md transition-opacity duration-300 hover:opacity-100 lg:w-[232px] lg:shrink-0">
             <div className="flex items-center justify-between">
               <span className="inline-flex size-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
                 <Waves className="size-3.5" />
@@ -403,35 +403,46 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           </div>
         </div>
 
-        {/* Bottom-anchored asymmetric poster typography + single crisp CTA */}
-        <div className="relative z-10 mx-auto grid w-full max-w-[1080px] grid-cols-1 items-end gap-10 lg:grid-cols-12">
-          <h1 className="font-display text-[2.85rem] font-bold leading-[0.98] tracking-[-0.045em] text-foreground sm:text-[4.4rem] lg:col-span-7">
-            <span className="block overflow-hidden pb-1">
-              <span className="block animate-mask-up">Trade autonomously.</span>
-            </span>
-            <span className="block overflow-hidden pb-1">
-              <span className="block animate-mask-up-delay text-muted-foreground">
-                Route across two venues.
-              </span>
-            </span>
-          </h1>
+        {/* Clean Scroll Transition Cue into Trade Statement Section */}
+        <a
+          href="#trade-statement"
+          className="animate-rise-delay-3 relative z-10 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-4 py-2 text-[11px] font-medium text-muted-foreground backdrop-blur-md transition-colors hover:border-foreground/30 hover:text-foreground"
+        >
+          <span className="tabular-nums-mono uppercase tracking-[0.12em]">Explore</span>
+          <ArrowDown className="size-3 animate-bounce" />
+        </a>
+      </section>
 
-          <div className="animate-rise-delay-2 flex flex-col items-start gap-6 lg:col-span-5 lg:items-end lg:text-right">
-            <p className="max-w-[400px] text-base leading-relaxed text-muted-foreground">
-              The autonomous trading agent on HashKey Chain that compares HSKSwap V3 pools against
-              on-chain reserved inventory — routing every trade to the better venue, or walking away.
-            </p>
-            <Button
-              type="button"
-              size="lg"
-              onClick={handleLaunchApp}
-              className="h-12 rounded-full px-7 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-            >
-              Launch App
-              <ArrowUpRight data-icon="inline-end" />
-            </Button>
+      {/* 1B. Dedicated Editorial Trade Statement & Launch App Section */}
+      <section
+        id="trade-statement"
+        className="scroll-mt-24 border-t border-border/60 px-6 py-28 sm:py-36"
+      >
+        <Reveal>
+          <div className="mx-auto grid w-full max-w-[1080px] grid-cols-1 items-end gap-10 lg:grid-cols-12">
+            <h1 className="font-display text-[2.85rem] font-bold leading-[0.98] tracking-[-0.045em] text-foreground sm:text-[4.4rem] lg:col-span-7">
+              <span className="block">Trade autonomously.</span>
+              <span className="block text-muted-foreground">Route across two venues.</span>
+            </h1>
+
+            <div className="flex flex-col items-start gap-6 lg:col-span-5 lg:items-end lg:text-right">
+              <p className="max-w-[400px] text-base leading-relaxed text-muted-foreground">
+                The autonomous trading agent on HashKey Chain that compares HSKSwap V3 pools against
+                on-chain reserved inventory — routing every trade to the better venue, or walking
+                away.
+              </p>
+              <Button
+                type="button"
+                size="lg"
+                onClick={handleLaunchApp}
+                className="h-12 rounded-full px-7 text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+              >
+                Launch App
+                <ArrowUpRight data-icon="inline-end" />
+              </Button>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* 2. Live On-Chain Telemetry Strip */}

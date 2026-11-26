@@ -257,13 +257,28 @@
   animation: tranche-mask-up 680ms var(--ease-out-expo) 110ms both;
 }
 
+/* Smooth animated routing flow along hero SVG connector */
+@keyframes tranche-dash-flow {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-dash-flow {
+  animation: tranche-dash-flow 1.4s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-rise-delay-1,
   .animate-rise-delay-2,
   .animate-rise-delay-3,
   .animate-mask-up,
-  .animate-mask-up-delay {
+  .animate-mask-up-delay,
+  .animate-dash-flow {
     animation: none;
   }
 }
