@@ -28,7 +28,6 @@ import {
   AgentApiClient,
   AgentApiError,
   DEFAULT_AGENT_API_URL,
-  isHostedHttpsToLocalApi,
   normalizeAgentApiUrl,
   type AgentDashboardSnapshot,
   type AgentIntelligenceSnapshot,
@@ -154,16 +153,12 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
   );
   const [controlsOpen, setControlsOpen] = useState(false);
   const [killDialogOpen, setKillDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"decisions" | "positions" | "tickets">("decisions");
+  const [activeTab, setActiveTab] = useState<"decisions" | "positions" | "tickets" | "insights">("decisions");
 
   const normalizedApiUrl = useMemo(() => normalizeAgentApiUrl(apiUrlInput), [apiUrlInput]);
   const client = useMemo(
     () => new AgentApiClient({ baseUrl: normalizedApiUrl, token: tokenInput }),
     [normalizedApiUrl, tokenInput],
-  );
-  const hostedLocalMismatch = useMemo(
-    () => isHostedHttpsToLocalApi(normalizedApiUrl),
-    [normalizedApiUrl],
   );
 
   const [snapshot, setSnapshot] = useState<AgentDashboardSnapshot | null>(null);
@@ -460,248 +455,272 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
         </div>
       }
     >
-      {/* VIEW 1: AIRY OVERVIEW — One focal point, generous breathing room, zero scroll */}
+      {/* VIEW 1: INTERACTIVE AGENT HOME — Command your agent, zero scroll, tons of breathing room */}
       {view === "overview" && (
-        <div className="flex w-full flex-col justify-between gap-8 py-2 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
-          {/* Calm Editorial Hero */}
-          <section className="flex flex-col justify-between gap-5 pt-2 sm:flex-row sm:items-end">
-            <div className="flex flex-col gap-2">
+        <div className="flex w-full flex-col justify-between gap-6 py-2 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
+          {/* 1. Personal Hero + Direct Pause/Resume Control */}
+          <section className="flex flex-col justify-between gap-4 pt-1 sm:flex-row sm:items-end">
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <span
                   className={cn(
                     "size-2 rounded-full",
-                    disconnected ? "bg-amber-500" : "bg-emerald-500",
+                    disconnected
+                      ? "bg-amber-500"
+                      : status?.paused || status?.killSwitch
+                        ? "bg-amber-500"
+                        : "bg-emerald-500",
                   )}
                 />
                 <span>
                   {disconnected
-                    ? "Reconnecting to live prices…"
-                    : isReadOnly
-                      ? "HashKey Chain · Watching live prices"
-                      : "HashKey Chain · Auto-trading active"}
+                    ? "Connecting to your agent…"
+                    : status?.killSwitch
+                      ? "Agent stopped"
+                      : status?.paused
+                        ? "Agent paused"
+                        : `Active · Watching ${status?.market ?? "WHSK/USDT"}`}
                 </span>
               </div>
               <h1 className="font-display text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
-                {disconnected
-                  ? "Connecting to live prices."
-                  : `Watching ${status?.market ?? "WHSK/USDT"} live.`}
+                Tell your agent how to trade.
               </h1>
-              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-                {disconnected
-                  ? hostedLocalMismatch
-                    ? "Your connection URL is pointed at your local computer. Open Rules & Controls to update it."
-                    : "Retrying automatically. No funds are at risk."
-                  : isReadOnly
-                    ? "Checking whether Tranche or HSKSwap gives you a better deal every 15 seconds. No money is spent in preview mode."
-                    : "Automatically picking the better deal between Tranche and HSKSwap within your spending limits."}
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Set a rule in plain English. Your agent compares Tranche price locks against
+                HSKSwap every 15 seconds and never crosses your spending limit.
               </p>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2.5">
+            <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
-                size="lg"
-                onClick={() => onNavigate("/trade")}
-                className="h-11 rounded-full px-6 text-sm font-medium cursor-pointer"
+                size="sm"
+                variant="outline"
+                disabled={disconnected || actionBusy || status?.killSwitch}
+                onClick={() =>
+                  void runControl(
+                    status?.paused ? "Resume agent" : "Pause agent",
+                    () => (status?.paused ? client.resume() : client.pause()),
+                  )
+                }
+                className="h-10 rounded-full px-4 text-xs font-medium cursor-pointer"
               >
-                Make a Trade
-                <ArrowRight className="ml-1.5 size-4" />
+                {status?.paused ? (
+                  <>
+                    <Play className="mr-1.5 size-3.5" />
+                    Resume Agent
+                  </>
+                ) : (
+                  <>
+                    <Pause className="mr-1.5 size-3.5" />
+                    Pause Agent
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onNavigate("/agent/policy")}
+                className="h-10 rounded-full px-5 text-xs font-medium cursor-pointer"
+              >
+                Full Controls
+                <ArrowRight className="ml-1.5 size-3.5" />
               </Button>
             </div>
           </section>
 
-          {/* The ONE Centerpiece: Clean, Spacious Venue Comparison */}
-          <section className="overflow-hidden rounded-[24px] border border-border">
-            <div className="grid grid-cols-1 lg:grid-cols-12">
-              {/* Left: Tranche */}
+          {/* 2. THE CENTERPIECE: Interactive Plain-English Command Box */}
+          <section
+            className="flex flex-col gap-4 rounded-[24px] border border-border p-6 sm:p-7"
+            style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
+          >
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-semibold">Give your agent a rule</span>
+              <span className="text-xs opacity-65">
+                Pick a preset below or type your own instruction — preview before applying.
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2.5 sm:flex-row">
+              <input
+                type="text"
+                value={nlInstruction}
+                onChange={(e) => setNlInstruction(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && nlInstruction.trim() && !disconnected && !actionBusy) {
+                    void handleProposePolicy();
+                  }
+                }}
+                placeholder='e.g. "Switch to momentum, take profit 4%, stop loss 2%, max slippage 0.8%"'
+                className="h-12 flex-1 rounded-full border border-black/15 bg-white px-5 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
+              />
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disconnected || actionBusy || !nlInstruction.trim()}
+                  onClick={() => void handleProposePolicy()}
+                  className="h-12 rounded-full border-black/20 bg-white px-5 text-xs font-medium text-black hover:bg-black/5 cursor-pointer"
+                >
+                  Preview
+                </Button>
+                <Button
+                  type="button"
+                  disabled={disconnected || actionBusy || !nlInstruction.trim()}
+                  onClick={() => void handleApplyPolicy()}
+                  className="h-12 rounded-full bg-black px-6 text-xs font-medium text-[#f8f7ee] hover:bg-black/85 cursor-pointer"
+                >
+                  Apply Rule
+                </Button>
+              </div>
+            </div>
+
+            {/* One-tap consumer presets */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-medium opacity-55">Try a preset:</span>
+              {[
+                {
+                  label: "Conservative · 2% profit",
+                  prompt: "Use buy below target price, take profit 2%, stop loss 1%, max slippage 0.5%",
+                },
+                {
+                  label: "Trend Follower · 4% profit",
+                  prompt: "Switch to momentum, take profit 4%, stop loss 2%, max slippage 0.8%",
+                },
+                {
+                  label: "Volatility Shield",
+                  prompt: "Switch to volatility aware, take profit 3%, stop loss 1.5%, max slippage 0.5%",
+                },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setNlInstruction(preset.prompt)}
+                  className="rounded-full border border-black/15 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-black transition-colors hover:bg-white cursor-pointer"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Inline Preview / Feedback */}
+            {actionFeedback && (
               <div
-                className="flex flex-col justify-between gap-8 p-7 lg:col-span-5"
-                style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <span className="block text-sm font-semibold">Tranche</span>
-                    <span className="text-xs opacity-60">Lock your price first</span>
-                  </div>
-                  <span
-                    className="rounded-full px-3 py-1 text-[11px] font-medium"
-                    style={{
-                      backgroundColor: winningVenue === "TRANCHE" ? "#050505" : "rgba(5,5,5,0.08)",
-                      color: winningVenue === "TRANCHE" ? "#f8f7ee" : "#050505",
-                    }}
-                  >
-                    {winningVenue === "TRANCHE"
-                      ? "Best Option"
-                      : (markets?.trancheOffersCount ?? 0) > 0
-                        ? "Available"
-                        : "No Offers Yet"}
-                  </span>
-                </div>
-
-                {(markets?.trancheOffersCount ?? 0) > 0 && markets?.venueComparison ? (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="tabular-nums-mono text-3xl font-semibold tracking-tight">
-                      {fmtPayment6(markets.venueComparison.tranche.acquisitionCostPayment, paymentSymbol)}
-                    </span>
-                    <span className="tabular-nums-mono text-xs opacity-65">
-                      Hold fee{" "}
-                      {fmtPayment6(
-                        markets.venueComparison.tranche.reservationPremiumPayment,
-                        paymentSymbol,
-                      )}{" "}
-                      · Buy price{" "}
-                      {fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xl font-semibold tracking-tight">
-                      No offers on this pair yet
-                    </span>
-                    <p className="text-xs leading-relaxed opacity-70">
-                      No sellers have posted a locked price for WHSK yet. You can try locking a
-                      price on other pairs in the Trade Desk.
-                    </p>
-                  </div>
+                className={cn(
+                  "flex items-center gap-2 rounded-[12px] border px-3.5 py-2 text-xs",
+                  actionFeedback.kind === "ok"
+                    ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-800"
+                    : "border-red-600/30 bg-red-500/10 text-red-700",
                 )}
-
-                <div className="flex items-center justify-between border-t border-black/10 pt-4 text-xs opacity-75">
-                  <span>Fixed price · no surprises</span>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate("/trade")}
-                    className="inline-flex items-center gap-1 font-medium underline underline-offset-4 hover:opacity-100 cursor-pointer"
-                  >
-                    Trade Desk
-                    <ArrowRight className="size-3" />
-                  </button>
-                </div>
+              >
+                {actionFeedback.kind === "ok" ? (
+                  <CheckCircle2 className="size-3.5 shrink-0" />
+                ) : (
+                  <ShieldAlert className="size-3.5 shrink-0" />
+                )}
+                <span>{actionFeedback.text}</span>
               </div>
-
-              {/* Center: Quiet Verdict */}
-              <div className="flex flex-row items-center justify-between gap-4 border-y border-border bg-muted/40 px-6 py-5 lg:col-span-2 lg:flex-col lg:justify-center lg:border-x lg:border-y-0 lg:text-center">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Best Now
-                  </span>
-                  <span className="text-xl font-semibold text-foreground">
-                    {winningVenue === "NONE"
-                      ? "Wait"
-                      : winningVenue === "TRANCHE"
-                        ? "Tranche"
-                        : "HSKSwap"}
-                  </span>
-                </div>
-                <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground">
-                  {humanRegime(markets?.marketRegime)}
+            )}
+            {nlProposal && (
+              <div className="flex items-center justify-between gap-3 rounded-[12px] border border-black/10 bg-white/80 px-4 py-2.5 text-xs">
+                <span className="truncate font-medium">
+                  Ready to apply:{" "}
+                  <code className="tabular-nums-mono opacity-75">
+                    {JSON.stringify(nlProposal.proposedPatch)}
+                  </code>
                 </span>
+                <button
+                  type="button"
+                  onClick={() => void handleApplyPolicy()}
+                  className="shrink-0 rounded-full bg-black px-3.5 py-1 text-[11px] font-medium text-[#f8f7ee] cursor-pointer"
+                >
+                  Confirm
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* 3. Two Clean Summary Cards: Your Current Plan + Latest Market Check */}
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* Left: Your Current Plan */}
+            <div className="flex flex-col justify-between gap-4 rounded-[20px] border border-border bg-card p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Your Current Plan
+                  </span>
+                  <h2 className="mt-0.5 text-base font-semibold text-foreground">
+                    {humanStrategy(status?.activeStrategy)}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("/agent/policy")}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Edit limits
+                  <ArrowRight className="size-3.5" />
+                </button>
               </div>
 
-              {/* Right: HSKSwap */}
-              <div className="flex flex-col justify-between gap-8 bg-card p-7 text-card-foreground lg:col-span-5">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <span className="block text-sm font-semibold">HSKSwap</span>
-                    <span className="text-xs text-muted-foreground">Buy right away</span>
-                  </div>
-                  <span
-                    className={cn(
-                      "rounded-full px-3 py-1 text-[11px] font-medium",
-                      winningVenue === "HSKSWAP"
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border text-muted-foreground",
-                    )}
-                  >
-                    {winningVenue === "HSKSWAP" ? "Best Option" : "Available"}
+              <div className="flex flex-col gap-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Spending limit used</span>
+                  <span className="tabular-nums-mono font-semibold text-foreground">
+                    {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"} /{" "}
+                    {config ? fmtPayment6(config.riskLimits.maxTotalExposurePayment, "USDT") : "$50.00"}
                   </span>
                 </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-foreground"
+                    style={{ width: `${exposurePct}%` }}
+                  />
+                </div>
+              </div>
+            </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <span className="tabular-nums-mono text-3xl font-semibold tracking-tight">
-                    {markets?.venueComparison
-                      ? fmtPayment6(
-                          markets.venueComparison.hskswap.acquisitionCostPayment,
-                          paymentSymbol,
-                        )
-                      : "—"}
+            {/* Right: Latest Market Check */}
+            <div className="flex flex-col justify-between gap-4 rounded-[20px] border border-border bg-card p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Latest Market Check · {fmtTime(health?.lastSuccessfulCycleAt)}
                   </span>
-                  <span className="tabular-nums-mono text-xs text-muted-foreground">
-                    {markets?.venueComparison
-                      ? `For 100 WHSK · ${((markets.venueComparison.hskswap.priceImpactBps ?? 0) / 100).toFixed(2)}% fee`
-                      : "Loading live price…"}
-                  </span>
+                  <h2 className="mt-0.5 text-base font-semibold text-foreground">
+                    {winningVenue === "TRANCHE"
+                      ? "Tranche is cheaper right now"
+                      : winningVenue === "HSKSWAP"
+                        ? `HSKSwap is best right now (${markets?.venueComparison ? fmtPayment6(markets.venueComparison.hskswap.acquisitionCostPayment, paymentSymbol) : "—"})`
+                        : "Waiting for a better price"}
+                  </h2>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("/agent/activity")}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Activity ({snapshot?.decisions.length ?? 0})
+                  <ArrowRight className="size-3.5" />
+                </button>
+              </div>
 
-                <div className="flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-                  <span className="tabular-nums-mono">
-                    Sell price:{" "}
-                    {markets?.dexSellQuote
-                      ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol)
-                      : "—"}
-                  </span>
-                  <span>Updated {fmtTime(health?.lastSuccessfulCycleAt)}</span>
-                </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>
+                  {humanRegime(markets?.marketRegime)} · {metrics?.totalCycles ?? 0} checks ·{" "}
+                  {metrics?.liveExecutionsCount ?? 0} trades made
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("/trade")}
+                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4 cursor-pointer"
+                >
+                  Lock a price manually
+                  <ArrowRight className="size-3" />
+                </button>
               </div>
             </div>
           </section>
-
-          <AgentIntelligencePanel intelligence={intelligence} />
-
-          {/* Quiet Bottom Strip — Clean inline stats & clear next-page links */}
-          <footer className="flex flex-col justify-between gap-4 border-t border-border pt-5 sm:flex-row sm:items-center">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
-              <span>
-                Status:{" "}
-                <strong className="font-semibold text-foreground">
-                  {disconnected
-                    ? "Offline"
-                    : status?.killSwitch
-                      ? "Stopped"
-                      : status?.paused
-                        ? "Paused"
-                        : "Active"}
-                </strong>
-              </span>
-              <span>
-                Price checks:{" "}
-                <strong className="tabular-nums-mono font-semibold text-foreground">
-                  {metrics?.totalCycles ?? 0}
-                </strong>
-              </span>
-              <span>
-                Spent:{" "}
-                <strong className="tabular-nums-mono font-semibold text-foreground">
-                  {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"} /{" "}
-                  {config ? fmtPayment6(config.riskLimits.maxTotalExposurePayment, "USDT") : "$50.00"}
-                </strong>
-              </span>
-              <span>
-                Trades made:{" "}
-                <strong className="tabular-nums-mono font-semibold text-foreground">
-                  {metrics?.liveExecutionsCount ?? 0}
-                </strong>
-              </span>
-            </div>
-
-            <div className="flex items-center gap-5 text-xs font-medium">
-              <button
-                type="button"
-                onClick={() => onNavigate("/agent/activity")}
-                className="inline-flex items-center gap-1 text-foreground transition-opacity hover:opacity-70 cursor-pointer"
-              >
-                View Activity ({snapshot?.decisions.length ?? 0})
-                <ArrowRight className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate("/agent/policy")}
-                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
-              >
-                Rules &amp; Controls
-                <ArrowRight className="size-3.5" />
-              </button>
-            </div>
-          </footer>
         </div>
       )}
 
@@ -715,6 +734,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                   { id: "decisions", label: `Decisions (${snapshot?.decisions.length ?? 0})` },
                   { id: "positions", label: `Positions (${snapshot?.positions.open.length ?? 0})` },
                   { id: "tickets", label: `Tickets (${snapshot?.tickets.active.length ?? 0})` },
+                  { id: "insights", label: "Performance" },
                 ] as const
               ).map((t) => (
                 <button
@@ -889,6 +909,22 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                   </Button>
                 </div>
               ))}
+
+            {activeTab === "insights" && (
+              <div className="p-6">
+                {intelligence ? (
+                  <AgentIntelligencePanel intelligence={intelligence} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+                    <p className="text-sm font-medium text-foreground">No performance stats yet</p>
+                    <p className="max-w-sm text-xs text-muted-foreground">
+                      Performance analytics populate once the agent completes live cycles with
+                      intelligence tracking enabled.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
       )}
