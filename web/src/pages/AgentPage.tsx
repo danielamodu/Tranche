@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  ArrowRight,
   ArrowUpRight,
   Bot,
   CheckCircle2,
-  History,
+  Eye,
   OctagonAlert,
   Pause,
   Play,
   Settings2,
   ShieldAlert,
+  ShieldCheck,
   WifiOff,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -27,7 +29,6 @@ import {
   AgentApiError,
   DEFAULT_AGENT_API_URL,
   isHostedHttpsToLocalApi,
-  isLocalAgentApiUrl,
   normalizeAgentApiUrl,
   type AgentDashboardSnapshot,
   type StrategyType,
@@ -45,13 +46,13 @@ const BASE_POLL_MS = 15_000;
 const RATE_LIMITED_POLL_MS = 35_000;
 
 function fmtPayment6(raw: string | undefined | null, symbol = "USDT"): string {
-  if (raw === undefined || raw === null || raw === "") return "Unavailable";
+  if (raw === undefined || raw === null || raw === "") return "—";
   try {
     const val = Number(BigInt(raw)) / 1e6;
-    if (!Number.isFinite(val)) return "Unavailable";
-    return `${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${symbol}`;
+    if (!Number.isFinite(val)) return "—";
+    return `$${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
   } catch {
-    return "Unavailable";
+    return "—";
   }
 }
 
@@ -80,6 +81,65 @@ function pctBar(numRaw: string, denRaw: string): number {
   }
 }
 
+function humanStrategy(type: string | undefined): string {
+  if (type === "price_threshold") return "Buy Below Target Price";
+  if (type === "momentum") return "Trend Following";
+  if (type === "volatility_aware") return "Volatility-Protected";
+  return "Default Strategy";
+}
+
+function humanRegime(regime: string | undefined): string {
+  if (regime === "CALM") return "Calm Market";
+  if (regime === "TRENDING") return "Trending";
+  if (regime === "VOLATILE") return "High Volatility";
+  if (regime === "DISLOCATED") return "Price Gap";
+  return "Checking…";
+}
+
+function humanAction(action: string): { label: string; tone: "neutral" | "good" | "warn" } {
+  switch (action) {
+    case "READ_ONLY_SWAP_HSKSWAP":
+      return { label: "Would buy on HSKSwap (no tx sent)", tone: "good" };
+    case "READ_ONLY_RESERVE_TRANCHE":
+      return { label: "Would reserve on Tranche (no tx sent)", tone: "good" };
+    case "DRY_RUN_SWAP_HSKSWAP":
+      return { label: "Simulated HSKSwap buy", tone: "good" };
+    case "DRY_RUN_RESERVE_TRANCHE":
+      return { label: "Simulated Tranche reservation", tone: "good" };
+    case "SWAP_HSKSWAP":
+      return { label: "Bought on HSKSwap", tone: "good" };
+    case "RESERVE_TRANCHE":
+      return { label: "Reserved on Tranche", tone: "good" };
+    case "SKIPPED_DUPLICATE":
+      return { label: "Cooldown active (skipped repeat)", tone: "neutral" };
+    case "WAIT":
+      return { label: "Waiting for better conditions", tone: "neutral" };
+    case "BLOCKED_RISK":
+      return { label: "Blocked by safety limit", tone: "warn" };
+    case "EXECUTION_FAILED":
+      return { label: "Execution failed safely", tone: "warn" };
+    default:
+      return { label: action.replace(/_/g, " ").toLowerCase(), tone: "neutral" };
+  }
+}
+
+function humanDecisionSummary(d: AgentDashboardSnapshot["decisions"][number]): string {
+  if (d.selectedAction === "SKIPPED_DUPLICATE") {
+    return "Already evaluated this 60-second window — deduplication prevented a repeat order.";
+  }
+  if (d.selectedAction === "READ_ONLY_SWAP_HSKSWAP") {
+    return `Price met target. Selected HSKSwap (${fmtPayment6(d.hskswap.acquisitionCostPayment)}) because no mainnet Tranche offers are posted yet. Read-Only Mode blocked transaction broadcast.`;
+  }
+  if (d.selectedAction === "READ_ONLY_RESERVE_TRANCHE") {
+    return `Price met target. Selected Tranche (${fmtPayment6(d.tranche.acquisitionCostPayment)}) as the cheaper venue. Read-Only Mode blocked transaction broadcast.`;
+  }
+  if (d.selectedAction === "BLOCKED_RISK") {
+    const failed = d.failedRiskChecks.map((c) => c.name.replace(/_/g, " ")).join(", ");
+    return `Safety guardrails blocked this trade (${failed || "risk limit reached"}).`;
+  }
+  return d.rationale;
+}
+
 export function AgentPage({ onNavigate }: AgentPageProps) {
   const [apiUrlInput, setApiUrlInput] = useState<string>(() => {
     const saved = sessionStorage.getItem(API_URL_STORAGE_KEY);
@@ -88,15 +148,15 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
   const [tokenInput, setTokenInput] = useState<string>(
     () => sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? "",
   );
-  const [connOpen, setConnOpen] = useState(false);
-  const [ledgerTab, setLedgerTab] = useState<"positions" | "tickets">("positions");
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [killDialogOpen, setKillDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"decisions" | "positions" | "tickets">("decisions");
 
   const normalizedApiUrl = useMemo(() => normalizeAgentApiUrl(apiUrlInput), [apiUrlInput]);
   const client = useMemo(
     () => new AgentApiClient({ baseUrl: normalizedApiUrl, token: tokenInput }),
     [normalizedApiUrl, tokenInput],
   );
-  const isLocalApi = useMemo(() => isLocalAgentApiUrl(normalizedApiUrl), [normalizedApiUrl]);
   const hostedLocalMismatch = useMemo(
     () => isHostedHttpsToLocalApi(normalizedApiUrl),
     [normalizedApiUrl],
@@ -111,18 +171,13 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
   const [actionFeedback, setActionFeedback] = useState<{ kind: "ok" | "err"; text: string } | null>(
     null,
   );
-  const [killDialogOpen, setKillDialogOpen] = useState(false);
 
-  // Strategy form state (re-synced whenever backend policyVersion changes)
+  // Strategy & NL Policy form state (inside Controls modal)
   const [strategyType, setStrategyType] = useState<StrategyType>("price_threshold");
   const [tpInput, setTpInput] = useState("500");
   const [slInput, setSlInput] = useState("300");
   const [slipInput, setSlipInput] = useState("100");
-  const [maxPosInput, setMaxPosInput] = useState("");
-  const lastSyncedVersionRef = useRef<number | null>(null);
-  const requestSeqRef = useRef(0);
-
-  // Bounded NL Policy Proposal state
+  const [maxPosInput, setMaxPosInput] = useState("200000000000000000000");
   const [nlInstruction, setNlInstruction] = useState("");
   const [nlProposal, setNlProposal] = useState<{
     instruction: string;
@@ -130,6 +185,9 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
     valid: boolean;
     rejectedFields: string[];
   } | null>(null);
+
+  const requestSeqRef = useRef(0);
+  const lastSyncedVersionRef = useRef<number | null>(null);
 
   const syncFormFromSnapshot = useCallback((data: AgentDashboardSnapshot) => {
     setStrategyType(data.config.strategy.type);
@@ -182,11 +240,8 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
       if (typeof document !== "undefined" && document.hidden) return;
       void loadSnapshot(false);
     }, intervalMs);
-
     const onVisibility = () => {
-      if (typeof document !== "undefined" && !document.hidden) {
-        void loadSnapshot(false);
-      }
+      if (typeof document !== "undefined" && !document.hidden) void loadSnapshot(false);
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
@@ -238,1130 +293,828 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
     const stopLossBps = Number(slInput);
     const maxSlippageBps = Number(slipInput);
     const trimmedMaxPos = maxPosInput.trim();
+    if (!Number.isFinite(takeProfitBps) || !Number.isFinite(stopLossBps) || !Number.isFinite(maxSlippageBps)) {
+      setActionFeedback({ kind: "err", text: "Take-profit, stop-loss, and slippage must be numbers." });
+      return;
+    }
+    if (!/^\d+$/.test(trimmedMaxPos)) {
+      setActionFeedback({ kind: "err", text: "Max position size must be a whole integer." });
+      return;
+    }
     await runControl(
-      "Strategy update",
+      "Update strategy",
       () =>
         client.updateStrategy({
           strategyType,
           takeProfitBps,
           stopLossBps,
           maxSlippageBps,
-          ...(trimmedMaxPos ? { maxPositionSizeInventory: trimmedMaxPos } : {}),
+          maxPositionSizeInventory: trimmedMaxPos,
         }),
       { forceFormSync: true },
     );
   }
 
-  const isStale = snapshot ? Date.now() - snapshot.fetchedAt > 40_000 : false;
-  const isDryRun = (snapshot?.status.mode ?? "dry_run") === "dry_run";
-  const health = snapshot?.health;
-  const ready = snapshot?.ready;
-  const status = snapshot?.status;
-  const metrics = snapshot?.metrics;
-  const markets = snapshot?.markets;
-  const config = snapshot?.config;
-  const policyVersion = snapshot?.policyHistory.currentVersion ?? 0;
-  const policyHistory = snapshot?.policyHistory.history ?? [];
-  const paymentSymbol = status?.market?.split("/")[1] || "USDT";
-  const winningVenue = markets?.venueComparison?.selectedVenue ?? status?.lastSelectedVenue ?? "NONE";
+  async function handleProposePolicy() {
+    if (!nlInstruction.trim()) return;
+    setActionBusy(true);
+    setActionFeedback(null);
+    try {
+      const res = await client.proposePolicy(nlInstruction.trim());
+      setNlProposal({
+        instruction: res.instruction,
+        proposedPatch: res.proposedPatch,
+        valid: res.validation.valid,
+        rejectedFields: res.validation.rejectedFields,
+      });
+      setActionFeedback({
+        kind: res.validation.valid ? "ok" : "err",
+        text: res.validation.valid
+          ? "Proposal passed safety bounds. Click Apply to save."
+          : `Rejected out-of-bounds: ${res.validation.rejectedFields.join(", ")}`,
+      });
+    } catch (err) {
+      setActionFeedback({
+        kind: "err",
+        text: err instanceof AgentApiError ? `${err.code}: ${err.message}` : "Proposal failed",
+      });
+    } finally {
+      setActionBusy(false);
+    }
+  }
 
-  const canStart =
-    !disconnected &&
-    !actionBusy &&
-    !status?.running &&
-    !status?.killSwitch &&
-    !status?.stateCorrupted;
+  async function handleApplyPolicy() {
+    if (!nlInstruction.trim()) return;
+    await runControl("Apply policy", () => client.applyPolicy(nlInstruction.trim()), {
+      forceFormSync: true,
+    });
+    setNlProposal(null);
+  }
 
-  const canResume =
-    !disconnected &&
-    !actionBusy &&
-    Boolean(status?.paused) &&
-    !status?.killSwitch &&
-    !status?.stateCorrupted &&
-    (status?.pendingTxs.length ?? 0) === 0;
+  const health = snapshot?.health ?? null;
+  const status = snapshot?.status ?? null;
+  const metrics = snapshot?.metrics ?? null;
+  const markets = snapshot?.markets ?? null;
+  const config = snapshot?.config ?? null;
+  const policyHistory = snapshot?.policyHistory ?? null;
+
+  const mode = (status?.mode ?? health?.mode ?? "read_only") as string;
+  const isReadOnly = mode === "read_only";
+  const isDryRun = mode === "dry_run";
+  const isSafeObservation = isReadOnly || isDryRun;
+  const winningVenue = markets?.venueComparison?.selectedVenue ?? "NONE";
+  const paymentSymbol = "USDT";
+  const policyVersion = policyHistory?.currentVersion ?? 0;
+
+  const exposurePct =
+    metrics && config
+      ? pctBar(metrics.currentTotalExposurePayment, config.riskLimits.maxTotalExposurePayment)
+      : 0;
+  const lossPct =
+    metrics && config
+      ? pctBar(metrics.dailyRealizedLossPayment, config.riskLimits.maxDailyRealizedLossPayment)
+      : 0;
 
   return (
     <AppShell
       activeRoute="/agent"
-      title="Tranche Agent"
-      subtitle={isDryRun ? "Paper trading mode" : "Live autonomous trading"}
       onNavigate={onNavigate}
-      onRefresh={() => void loadSnapshot(true)}
+      title="Tranche Agent"
+      subtitle={
+        disconnected
+          ? "Connecting to Agent API…"
+          : isReadOnly
+            ? `Safe Read-Only Mode · Watching Chain ${status?.chainId ?? 177} live`
+            : isDryRun
+              ? `Dry-Run Mode · Chain ${status?.chainId ?? 177}`
+              : `Live Execution · Chain ${status?.chainId ?? 177}`
+      }
       refreshing={refreshing}
+      onRefresh={() => void loadSnapshot(true)}
       headerActions={
-        <div className="flex flex-wrap items-center gap-2">
-          {!disconnected && ready && (
-            <span
-              className={cn(
-                "tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium",
-                ready.ready
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-300",
-              )}
-            >
-              {ready.ready ? "READY" : `NOT READY (${ready.httpStatus})`}
-            </span>
-          )}
+        <div className="flex items-center gap-2">
           <span
             className={cn(
-              "tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium",
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium",
               disconnected
                 ? "border-destructive/40 bg-destructive/10 text-destructive"
-                : isDryRun
-                  ? "border-border bg-card text-foreground"
-                  : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+                : isSafeObservation
+                  ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-emerald-500/40 bg-emerald-500/10 text-emerald-500",
             )}
           >
             {disconnected ? (
               <>
                 <WifiOff className="size-3" />
-                API Offline
+                Offline
+              </>
+            ) : isReadOnly ? (
+              <>
+                <Eye className="size-3" />
+                Read-Only · Live Feed
               </>
             ) : isDryRun ? (
               <>
                 <Bot className="size-3" />
-                DRY-RUN
+                Dry-Run
               </>
             ) : (
               <>
                 <Activity className="size-3" />
-                LIVE
+                Live
               </>
             )}
           </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setControlsOpen(true)}
+            className="h-8 rounded-full px-3 text-xs cursor-pointer"
+          >
+            <Settings2 className="mr-1.5 size-3.5" />
+            Controls
+          </Button>
         </div>
       }
     >
-      <div className="flex flex-col gap-8">
-        {/* Clean Consumer Connection Notice */}
-        {disconnected && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-card px-5 py-3.5 text-xs">
-            <div className="flex items-center gap-2.5 text-muted-foreground">
-              <WifiOff className="size-4 shrink-0 text-amber-500" />
-              <span>
-                {hostedLocalMismatch
-                  ? "Agent is offline. Connect a hosted Agent URL to stream live quotes and decisions."
-                  : "Agent is currently offline. Check your connection settings or start your agent."}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setConnOpen((p) => !p)}
-              className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent cursor-pointer"
+      {/* Fixed single-viewport cockpit on desktop (zero outer page scroll) */}
+      <div className="flex flex-col gap-4 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
+        {/* 1. Plain-English Live Story Banner */}
+        <section
+          className={cn(
+            "flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-[16px] border px-4 py-3",
+            disconnected
+              ? "border-amber-500/35 bg-amber-500/[0.08]"
+              : "border-border bg-card",
+          )}
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center rounded-full",
+                disconnected
+                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                  : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+              )}
             >
-              {connOpen ? "Hide Connection" : "Connect Agent"}
-            </button>
-          </div>
-        )}
-
-        {rateLimited && !disconnected && (
-          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-amber-500/[0.08] py-3 pl-5 pr-5 text-xs text-amber-950 dark:text-amber-100">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
-              THROTTLED · HTTP_429
-            </span>
-            <p className="mt-0.5 opacity-85">
-              Agent API rate limit reached. Polling automatically backed off to 35s; close extra
-              Agent Console tabs if open.
-            </p>
-          </div>
-        )}
-
-        {!disconnected && isStale && (
-          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-amber-500/[0.08] py-3 pl-5 pr-5 text-xs text-amber-950 dark:text-amber-100">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
-              STALE · TELEMETRY_LAG
-            </span>
-            <p className="mt-0.5 opacity-85">Last successful snapshot is over 40 seconds old.</p>
-          </div>
-        )}
-
-        {status?.stateCorrupted && (
-          <div className="relative overflow-hidden rounded-[14px] border border-destructive/40 bg-destructive/[0.08] py-3.5 pl-5 pr-5 text-xs">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-destructive">
-              FAIL-CLOSED · STATE_CORRUPTED
-            </span>
-            <p className="mt-0.5 text-foreground/90">
-              Persisted state failed integrity verification. Runtime Start and Resume are locked
-              until state is repaired on disk.
-            </p>
-          </div>
-        )}
-
-        {status?.killSwitch && (
-          <div className="relative overflow-hidden rounded-[14px] border border-destructive/40 bg-destructive/[0.08] py-3.5 pl-5 pr-5 text-xs">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-destructive">
-              HALT · AUTHORITATIVE_KILL_SWITCH
-            </span>
-            <p className="mt-0.5 text-foreground/90">
-              All entries, exercises, and exits are blocked. Unlike ordinary Pause, the kill switch
-              cannot be cleared via Resume.
-            </p>
-          </div>
-        )}
-
-        {status && status.pendingTxs.length > 0 && (
-          <div className="relative flex flex-col gap-3 overflow-hidden rounded-[14px] border border-amber-500/35 bg-amber-500/[0.08] py-4 pl-5 pr-5 text-xs">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
-              PENDING · {status.pendingTxs.length} UNCERTAIN TX(S) BLOCKING RESUME
-            </span>
-            {status.pendingTxs.map((ptx) => (
-              <div
-                key={ptx.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-border bg-card px-3.5 py-2.5"
-              >
-                <div className="flex flex-col gap-0.5">
-                  <span className="tabular-nums-mono font-medium text-foreground">
-                    {ptx.id} · {ptx.action} ({ptx.status})
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {ptx.note ?? "Awaiting reconciliation"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={actionBusy}
-                    onClick={() =>
-                      void runControl("Reconcile (failed)", () =>
-                        client.reconcile(ptx.id, "CONFIRMED_FAILED"),
-                      )
-                    }
-                    className="h-8 rounded-full text-[11px] cursor-pointer"
-                  >
-                    Mark Failed
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={actionBusy}
-                    onClick={() =>
-                      void runControl("Reconcile (manual)", () =>
-                        client.reconcile(ptx.id, "CONFIRMED_MANUAL"),
-                      )
-                    }
-                    className="h-8 rounded-full text-[11px] cursor-pointer"
-                  >
-                    Mark Reconciled
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 1. Clean Telemetry Strip */}
-        <section className="grid grid-cols-2 gap-y-6 border-b border-border/80 pb-7 lg:grid-cols-4 lg:divide-x lg:divide-border/80">
-          <div className="flex flex-col gap-1 pr-5">
-            <span className="text-xs font-medium text-muted-foreground">Status</span>
-            <span className="text-2xl font-semibold tracking-tight text-foreground">
-              {loading
-                ? "Connecting…"
-                : status?.killSwitch
-                  ? "Stopped"
-                  : status?.stateCorrupted
-                    ? "Locked"
-                    : status?.paused
-                      ? "Paused"
-                      : status?.running
-                        ? "Running"
-                        : "Idle"}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {health ? (health.rpcHealthy ? "Connected" : "Reconnecting") : "Offline"}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-1 lg:px-6">
-            <span className="text-xs font-medium text-muted-foreground">Market</span>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold tracking-tight text-foreground">
-                {status?.market ?? "—"}
-              </span>
-              {markets?.marketRegime && (
-                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {markets.marketRegime}
-                </span>
-              )}
+              {disconnected ? <WifiOff className="size-4" /> : <ShieldCheck className="size-4" />}
             </div>
-            <span className="text-xs text-muted-foreground">
-              {status?.activeStrategy ? status.activeStrategy.replace("_", " ") : "No strategy"}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-1 pr-5 lg:px-6">
-            <span className="text-xs font-medium text-muted-foreground">Realized P&amp;L</span>
-            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-              {metrics ? fmtPayment6(metrics.totalRealizedPnlPayment, paymentSymbol) : "—"}
-            </span>
-            <span className="tabular-nums-mono text-xs text-muted-foreground">
-              {metrics
-                ? `Unrealized ${fmtPayment6(metrics.totalUnrealizedPnlPayment, paymentSymbol)}`
-                : "No open P&L"}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-1 lg:pl-6">
-            <span className="text-xs font-medium text-muted-foreground">Executions</span>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-                {metrics
-                  ? isDryRun
-                    ? `${metrics.dryRunEvaluationsCount} simulated`
-                    : `${metrics.liveExecutionsCount} live`
-                  : "—"}
-              </span>
-              <span className="tabular-nums-mono text-xs text-muted-foreground">
-                {fmtTime(health?.lastSuccessfulCycleAt ?? status?.lastCycleTimestamp)}
-              </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-foreground">
+                {disconnected
+                  ? hostedLocalMismatch
+                    ? "Agent API is pointed at localhost — open Controls to set a hosted API URL."
+                    : "Agent API is currently unreachable. Retrying automatically…"
+                  : isReadOnly
+                    ? `Watching live ${status?.market ?? "WHSK/USDT"} on HashKey Chain (Chain ${status?.chainId ?? 177}) — Safe Observation Mode`
+                    : `Autonomous Agent Active on ${status?.market ?? "WHSK/USDT"} (Chain ${status?.chainId ?? 177})`}
+              </p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {disconnected
+                  ? "No live quotes loaded yet. Verify your Agent URL in Controls."
+                  : isReadOnly
+                    ? `Comparing Tranche vs. HSKSwap every 15s using real mainnet prices. 0 funds spent · ${metrics?.totalCycles ?? 0} live checks completed · last check ${fmtTime(health?.lastSuccessfulCycleAt)}.`
+                    : `Comparing Tranche vs. HSKSwap under code-enforced risk limits. Last check ${fmtTime(health?.lastSuccessfulCycleAt)}.`}
+              </p>
             </div>
-            <span className="tabular-nums-mono flex items-center justify-between text-xs text-muted-foreground">
-              <span>{metrics ? `${metrics.wins}W / ${metrics.losses}L` : "—"}</span>
-              {status?.lastTxHash && (
-                <a
-                  href={explorerTxUrl(status.lastTxHash)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
-                >
-                  {shortHash(status.lastTxHash)}
-                  <ArrowUpRight className="size-3" />
-                </a>
-              )}
-            </span>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setControlsOpen(true)}
+              className="h-8 rounded-full px-3 text-xs cursor-pointer"
+            >
+              Configure Policy
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onNavigate("/trade")}
+              className="h-8 rounded-full px-3.5 text-xs cursor-pointer"
+            >
+              Try Testnet Trade
+              <ArrowRight className="ml-1 size-3.5" />
+            </Button>
           </div>
         </section>
 
-        {/* 2. Dual-Venue Comparison */}
-        <section className="overflow-hidden rounded-[20px] border border-border">
+        {/* 2. Compact Dual-Venue Comparison (Tranche vs HSKSwap) */}
+        <section className="shrink-0 overflow-hidden rounded-[18px] border border-border">
           <div className="grid grid-cols-1 lg:grid-cols-12">
-            {/* Left Wing: Tranche */}
+            {/* Left: Tranche */}
             <div
-              className={cn(
-                "relative flex flex-col justify-between gap-4 p-6 lg:col-span-5 transition-opacity",
-                winningVenue === "TRANCHE" ? "opacity-100" : "opacity-90",
-              )}
+              className="flex flex-col justify-between gap-2.5 p-4 lg:col-span-5"
               style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold opacity-65">Tranche</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold">Tranche Protocol</span>
+                  <span className="text-[11px] opacity-60">Price-locked reservation</span>
+                </div>
                 <span
-                  className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                  className="rounded-full px-2.5 py-0.5 text-[10px] font-medium"
                   style={{
                     backgroundColor: winningVenue === "TRANCHE" ? "#050505" : "rgba(5,5,5,0.08)",
                     color: winningVenue === "TRANCHE" ? "#f8f7ee" : "#050505",
                   }}
                 >
                   {winningVenue === "TRANCHE"
-                    ? "Selected"
-                    : markets?.venueComparison?.tranche.eligible
+                    ? "Best Route"
+                    : (markets?.trancheOffersCount ?? 0) > 0
                       ? "Available"
-                      : "Waiting"}
+                      : "No Mainnet Offers Yet"}
                 </span>
               </div>
 
-              <div className="flex flex-col gap-1">
-                <span className="tabular-nums-mono text-2xl font-semibold tracking-tight">
-                  {markets?.venueComparison
-                    ? fmtPayment6(
-                        markets.venueComparison.tranche.acquisitionCostPayment,
-                        paymentSymbol,
-                      )
-                    : "—"}
-                </span>
-                <span className="tabular-nums-mono text-xs opacity-65">
-                  {markets?.venueComparison
-                    ? `Hold fee ${fmtPayment6(markets.venueComparison.tranche.reservationPremiumPayment, paymentSymbol)} · Strike ${fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}`
-                    : "No quote yet"}
-                </span>
-              </div>
+              {(markets?.trancheOffersCount ?? 0) > 0 && markets?.venueComparison ? (
+                <div>
+                  <span className="tabular-nums-mono text-xl font-semibold tracking-tight">
+                    {fmtPayment6(markets.venueComparison.tranche.acquisitionCostPayment, paymentSymbol)}
+                  </span>
+                  <p className="tabular-nums-mono text-[11px] opacity-65">
+                    Hold fee {fmtPayment6(markets.venueComparison.tranche.reservationPremiumPayment, paymentSymbol)} · Exercise{" "}
+                    {fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs leading-snug opacity-75">
+                    Mainnet contracts aren&apos;t deployed yet, so the agent sees 0 offers on Chain 177.
+                    Try live reservations on Chain 133 testnet.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("/trade")}
+                    className="shrink-0 rounded-full bg-black px-2.5 py-1 text-[11px] font-medium text-[#f8f7ee] hover:opacity-85 cursor-pointer"
+                  >
+                    Open Trade Desk
+                  </button>
+                </div>
+              )}
 
-              <div className="flex items-center justify-between border-t border-black/10 pt-3 text-xs opacity-70">
-                <span className="tabular-nums-mono">
-                  {markets?.trancheOffersCount ?? 0} offers
-                </span>
-                <span>Zero slippage</span>
+              <div className="flex items-center justify-between border-t border-black/10 pt-2 text-[11px] opacity-70">
+                <span className="tabular-nums-mono">{markets?.trancheOffersCount ?? 0} active offers</span>
+                <span>Zero slippage · Capped downside</span>
               </div>
             </div>
 
-            {/* Center Verdict */}
-            <div className="flex flex-col justify-between gap-4 border-y border-border bg-muted/50 px-5 py-6 lg:col-span-2 lg:border-x lg:border-y-0">
-              <div className="flex flex-col items-center gap-1 text-center">
-                <span className="text-xs text-muted-foreground">Route</span>
-                <span className="text-lg font-semibold text-foreground">
+            {/* Center: Plain-English Verdict */}
+            <div className="flex flex-row items-center justify-between gap-3 border-y border-border bg-muted/50 px-4 py-3 lg:col-span-2 lg:flex-col lg:justify-center lg:border-x lg:border-y-0 lg:text-center">
+              <div>
+                <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Agent Pick
+                </span>
+                <span className="text-base font-semibold text-foreground">
                   {winningVenue === "NONE" ? "Wait" : winningVenue === "TRANCHE" ? "Tranche" : "HSKSwap"}
                 </span>
               </div>
-
-              <dl className="grid grid-cols-3 gap-2 text-center text-xs lg:grid-cols-1 lg:gap-2">
-                <div className="flex flex-col">
-                  <dt className="text-[11px] text-muted-foreground">Oracle</dt>
-                  <dd className="tabular-nums-mono font-medium text-foreground">
-                    {markets?.oracleAgeSec !== null && markets?.oracleAgeSec !== undefined
-                      ? `${markets.oracleAgeSec}s`
-                      : "—"}
-                  </dd>
-                </div>
-                <div className="flex flex-col">
-                  <dt className="text-[11px] text-muted-foreground">Volatility</dt>
-                  <dd className="tabular-nums-mono font-medium text-foreground">
-                    {markets?.realizedVolatilityBps !== undefined
-                      ? `${(markets.realizedVolatilityBps / 100).toFixed(2)}%`
-                      : "—"}
-                  </dd>
-                </div>
-                <div className="flex flex-col">
-                  <dt className="text-[11px] text-muted-foreground">Momentum</dt>
-                  <dd className="tabular-nums-mono font-medium text-foreground">
-                    {markets?.momentumReturnBps !== undefined
-                      ? `${markets.momentumReturnBps >= 0 ? "+" : ""}${(markets.momentumReturnBps / 100).toFixed(2)}%`
-                      : "—"}
-                  </dd>
-                </div>
-              </dl>
-
-              <span className="tabular-nums-mono text-center text-[11px] text-muted-foreground">
-                {markets?.available ? fmtTime(markets.timestamp) : "—"}
-              </span>
+              <div className="flex items-center gap-3 text-[11px] lg:flex-col lg:gap-1">
+                <span className="rounded-full border border-border bg-background px-2 py-0.5 font-medium text-foreground">
+                  {humanRegime(markets?.marketRegime)}
+                </span>
+                <span className="tabular-nums-mono text-muted-foreground">
+                  Oracle {markets?.oracleAgeSec ?? "—"}s · Vol{" "}
+                  {markets?.realizedVolatilityBps !== undefined
+                    ? `${(markets.realizedVolatilityBps / 100).toFixed(2)}%`
+                    : "—"}
+                </span>
+              </div>
             </div>
 
-            {/* Right Wing: HSKSwap */}
-            <div className="relative flex flex-col justify-between gap-4 bg-card p-6 text-card-foreground lg:col-span-5">
+            {/* Right: HSKSwap */}
+            <div className="flex flex-col justify-between gap-2.5 bg-card p-4 text-card-foreground lg:col-span-5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground">HSKSwap</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold">HSKSwap V3</span>
+                  <span className="text-[11px] text-muted-foreground">Instant AMM swap</span>
+                </div>
                 <span
                   className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-medium",
                     winningVenue === "HSKSWAP"
                       ? "bg-primary text-primary-foreground"
                       : "border border-border text-muted-foreground",
                   )}
                 >
                   {winningVenue === "HSKSWAP"
-                    ? "Selected"
-                    : markets?.venueComparison?.hskswap.eligible
-                      ? "Available"
-                      : "Waiting"}
+                    ? isReadOnly
+                      ? "Best Route (Simulated)"
+                      : "Best Route"
+                    : "Available"}
                 </span>
               </div>
 
-              <div className="flex flex-col gap-1">
-                <span className="tabular-nums-mono text-2xl font-semibold tracking-tight">
+              <div>
+                <span className="tabular-nums-mono text-xl font-semibold tracking-tight">
                   {markets?.venueComparison
-                    ? fmtPayment6(
-                        markets.venueComparison.hskswap.acquisitionCostPayment,
-                        paymentSymbol,
-                      )
+                    ? fmtPayment6(markets.venueComparison.hskswap.acquisitionCostPayment, paymentSymbol)
                     : "—"}
                 </span>
-                <span className="tabular-nums-mono text-xs text-muted-foreground">
+                <p className="tabular-nums-mono text-[11px] text-muted-foreground">
                   {markets?.venueComparison
-                    ? `Price impact: ${markets.venueComparison.hskswap.priceImpactBps ?? "—"} bps`
-                    : "No quote yet"}
-                </span>
+                    ? `For 100 WHSK · Pool fee & impact: ${((markets.venueComparison.hskswap.priceImpactBps ?? 0) / 100).toFixed(2)}%`
+                    : "Waiting for live Chain 177 quote…"}
+                </p>
               </div>
 
-              <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between border-t border-border pt-2 text-[11px] text-muted-foreground">
                 <span className="tabular-nums-mono">
-                  Exit: {markets?.dexSellQuote ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol) : "—"}
+                  Instant sell value:{" "}
+                  {markets?.dexSellQuote
+                    ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol)
+                    : "—"}
                 </span>
-                <span>Instant swap</span>
+                <span>Live Chain 177 quote</span>
               </div>
             </div>
           </div>
-
-          {/* Venue Rationale Footer Strip */}
-          {markets?.available && markets.venueComparison && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card/70 px-6 py-3 text-[11px] text-muted-foreground">
-              <span>
-                <strong className="font-medium text-foreground">Rationale:</strong>{" "}
-                {markets.venueComparison.rationale}
-              </span>
-              {markets.anomalies && markets.anomalies.length > 0 && (
-                <span className="tabular-nums-mono rounded-full border border-destructive/40 bg-destructive/10 px-2.5 py-0.5 text-destructive">
-                  Anomalies: {markets.anomalies.join(", ")}
-                </span>
-              )}
-            </div>
-          )}
         </section>
 
-        {/* 3. Asymmetric 7/5 Stage: Execution Tape (Left) + Signed Cream Mandate Slip (Right) */}
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-          {/* LEFT 7 COLS: Chronological Execution Decision Tape + Tabbed Portfolio Ledger */}
-          <div className="flex flex-col gap-10 lg:col-span-7">
-            {/* Decision Tape */}
-            <section className="flex flex-col gap-4">
-              <div className="flex items-baseline justify-between border-b border-border pb-3">
-                <h2 className="text-lg font-semibold tracking-tight">Recent Decisions</h2>
-                <span className="tabular-nums-mono text-xs text-muted-foreground">
-                  {snapshot?.decisions.length ?? 0}
-                </span>
+        {/* 3. Main Split Cockpit — Fills remaining viewport height cleanly */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-12">
+          {/* LEFT 7 COLS: Internal-scroll Live Feed / Positions / Tickets */}
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[18px] border border-border bg-card lg:col-span-7">
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
+              <div className="flex items-center gap-1 rounded-full border border-border bg-background p-0.5 text-xs">
+                {(
+                  [
+                    { id: "decisions", label: `Live Activity (${snapshot?.decisions.length ?? 0})` },
+                    { id: "positions", label: `Positions (${snapshot?.positions.open.length ?? 0})` },
+                    { id: "tickets", label: `Tickets (${snapshot?.tickets.active.length ?? 0})` },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setActiveTab(t.id)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer",
+                      activeTab === t.id
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
               </div>
+              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
+                Updated {fmtTime(health?.lastSuccessfulCycleAt)}
+              </span>
+            </div>
 
-              {snapshot && snapshot.decisions.length > 0 ? (
-                <div className="divide-y divide-border/70">
-                  {snapshot.decisions.map((d) => (
-                    <article
-                      key={`${d.cycleId}-${d.decisionKey}`}
-                      className="flex flex-col gap-2 py-4 transition-colors hover:bg-card/40"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="tabular-nums-mono text-xs font-semibold text-foreground">
-                            #{d.cycleId}
-                          </span>
-                          <span className="rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-medium text-foreground">
-                            {d.selectedAction}
-                          </span>
-                          <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                            {d.selectedVenue} · {d.signalAction}
-                          </span>
-                        </div>
-                        <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                          {fmtTime(d.timestamp)}
-                        </span>
-                      </div>
-
-                      <p className="text-xs leading-relaxed text-muted-foreground">{d.rationale}</p>
-
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-                        <span className="tabular-nums-mono">
-                          Tranche {fmtPayment6(d.tranche.acquisitionCostPayment, paymentSymbol)} (
-                          {d.tranche.eligible ? "OK" : d.tranche.rejectionReasons.join(", ")})
-                        </span>
-                        <span className="tabular-nums-mono">
-                          HSKSwap {fmtPayment6(d.hskswap.acquisitionCostPayment, paymentSymbol)} (
-                          {d.hskswap.eligible ? "OK" : d.hskswap.rejectionReasons.join(", ")})
-                        </span>
-                        <span
-                          className={cn(
-                            "tabular-nums-mono font-medium",
-                            d.riskAllowed ? "text-emerald-400" : "text-destructive",
-                          )}
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+              {activeTab === "decisions" &&
+                (snapshot && snapshot.decisions.length > 0 ? (
+                  <div className="divide-y divide-border/70">
+                    {snapshot.decisions.map((d) => {
+                      const act = humanAction(d.selectedAction);
+                      return (
+                        <article
+                          key={`${d.cycleId}-${d.decisionKey}`}
+                          className="flex flex-col gap-1 py-2.5"
                         >
-                          Risk: {d.riskAllowed ? "PASSED" : `BLOCKED (${d.failedRiskChecks.map((c) => c.name).join(", ")})`}
-                        </span>
-                        {d.txHashes.map((hash) => (
-                          <a
-                            key={hash}
-                            href={explorerTxUrl(hash)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
-                          >
-                            Tx {shortHash(hash)}
-                            <ArrowUpRight className="size-3" />
-                          </a>
-                        ))}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-[18px] border border-dashed border-border px-6 py-12 text-center text-xs text-muted-foreground">
-                  No decision traces recorded yet. Start the agent runtime to stream execution
-                  traces.
-                </div>
-              )}
-            </section>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="tabular-nums-mono text-[11px] font-semibold text-muted-foreground">
+                                #{d.cycleId}
+                              </span>
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                  act.tone === "good"
+                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                    : act.tone === "warn"
+                                      ? "bg-destructive/15 text-destructive"
+                                      : "bg-accent text-foreground",
+                                )}
+                              >
+                                {act.label}
+                              </span>
+                              <span
+                                className={cn(
+                                  "text-[11px] font-medium",
+                                  d.riskAllowed
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-destructive",
+                                )}
+                              >
+                                {d.riskAllowed ? "Safety OK" : "Blocked"}
+                              </span>
+                            </div>
+                            <span className="tabular-nums-mono shrink-0 text-[11px] text-muted-foreground">
+                              {fmtTime(d.timestamp)}
+                            </span>
+                          </div>
+                          <p className="text-xs leading-relaxed text-muted-foreground">
+                            {humanDecisionSummary(d)}
+                          </p>
+                          {d.txHashes.length > 0 && (
+                            <div className="flex gap-3">
+                              {d.txHashes.map((hash) => (
+                                <a
+                                  key={hash}
+                                  href={explorerTxUrl(hash)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="tabular-nums-mono inline-flex items-center gap-0.5 text-[11px] text-foreground underline underline-offset-4"
+                                >
+                                  Tx {shortHash(hash)}
+                                  <ArrowUpRight className="size-3" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center py-8 text-center text-xs text-muted-foreground">
+                    {loading
+                      ? "Loading live Chain 177 decisions…"
+                      : "No agent checks recorded yet."}
+                  </div>
+                ))}
 
-            {/* Tabbed Portfolio Ledger (Positions / Tranche Tickets) */}
-            <section className="flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
-                  <button
-                    type="button"
-                    onClick={() => setLedgerTab("positions")}
-                    className={cn(
-                      "h-7 rounded-full px-3.5 text-xs font-medium transition-colors cursor-pointer",
-                      ledgerTab === "positions"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Positions ({snapshot?.positions.all.length ?? 0})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLedgerTab("tickets")}
-                    className={cn(
-                      "h-7 rounded-full px-3.5 text-xs font-medium transition-colors cursor-pointer",
-                      ledgerTab === "tickets"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Tranche Tickets ({snapshot?.tickets.all.length ?? 0})
-                  </button>
-                </div>
-                <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                  {isDryRun ? "Dry-run paper ledger" : "Live on-chain ledger"}
-                </span>
-              </div>
-
-              {ledgerTab === "positions" ? (
-                snapshot && snapshot.positions.all.length > 0 ? (
+              {activeTab === "positions" &&
+                (snapshot && snapshot.positions.all.length > 0 ? (
                   <div className="divide-y divide-border/70">
                     {snapshot.positions.all.map((p) => (
-                      <div key={p.positionId} className="flex flex-col gap-1.5 py-3.5 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-foreground">
-                            {p.positionId} · {p.venue} ({p.status})
-                          </span>
-                          <span className="tabular-nums-mono text-muted-foreground">
-                            Unrealized {fmtPayment6(p.unrealizedPnlPayment, paymentSymbol)}
-                          </span>
+                      <div key={p.positionId} className="flex items-center justify-between py-2.5 text-xs">
+                        <div>
+                          <span className="font-medium text-foreground">{p.venue}</span>
+                          <span className="ml-2 text-muted-foreground">{p.status}</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                          <span className="tabular-nums-mono">
-                            Cost {fmtPayment6(p.entryCostPayment, paymentSymbol)} · Realized{" "}
-                            {fmtPayment6(p.realizedPnlPayment, paymentSymbol)}
-                          </span>
-                          {p.entryTxHashes.map((hash) => (
-                            <a
-                              key={`in-${hash}`}
-                              href={explorerTxUrl(hash)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
-                            >
-                              Entry {shortHash(hash)}
-                              <ArrowUpRight className="size-3" />
-                            </a>
-                          ))}
-                          {p.exitTxHashes.map((hash) => (
-                            <a
-                              key={`out-${hash}`}
-                              href={explorerTxUrl(hash)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
-                            >
-                              Exit {shortHash(hash)}
-                              <ArrowUpRight className="size-3" />
-                            </a>
-                          ))}
-                        </div>
+                        <span className="tabular-nums-mono text-muted-foreground">
+                          Cost {fmtPayment6(p.entryCostPayment, paymentSymbol)}
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="py-6 text-xs text-muted-foreground">
-                    No positions opened ({isDryRun ? "dry-run mode does not broadcast trades" : "none"}).
-                  </p>
-                )
-              ) : snapshot && snapshot.tickets.all.length > 0 ? (
-                <div className="divide-y divide-border/70">
-                  {snapshot.tickets.all.map((t) => (
-                    <div key={t.ticketId} className="flex flex-col gap-1.5 py-3.5 text-xs">
-                      <span className="font-medium text-foreground">
-                        Ticket #{t.ticketId} · Offer #{t.offerId} ({t.status})
-                      </span>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        <span className="tabular-nums-mono">
-                          Premium {fmtPayment6(t.premiumPaidPayment, paymentSymbol)} · Expires{" "}
-                          {fmtTime(t.expiresAt)}
+                  <div className="flex h-full flex-col items-center justify-center gap-1 py-8 text-center text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">No open positions</span>
+                    <span>In Read-Only Mode, the agent evaluates trades without spending funds.</span>
+                  </div>
+                ))}
+
+              {activeTab === "tickets" &&
+                (snapshot && snapshot.tickets.all.length > 0 ? (
+                  <div className="divide-y divide-border/70">
+                    {snapshot.tickets.all.map((t) => (
+                      <div key={t.ticketId} className="flex items-center justify-between py-2.5 text-xs">
+                        <span className="font-medium text-foreground">
+                          Ticket #{t.ticketId} ({t.status})
                         </span>
-                        {t.reserveTxHash && (
-                          <a
-                            href={explorerTxUrl(t.reserveTxHash)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
-                          >
-                            Reserve {shortHash(t.reserveTxHash)}
-                            <ArrowUpRight className="size-3" />
-                          </a>
-                        )}
-                        {t.exerciseTxHashes.map((hash) => (
-                          <a
-                            key={`ex-${hash}`}
-                            href={explorerTxUrl(hash)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
-                          >
-                            Exercise {shortHash(hash)}
-                            <ArrowUpRight className="size-3" />
-                          </a>
-                        ))}
-                        {t.reclaimTxHash && (
-                          <a
-                            href={explorerTxUrl(t.reclaimTxHash)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="tabular-nums-mono inline-flex items-center gap-0.5 text-foreground underline underline-offset-4"
-                          >
-                            Reclaim {shortHash(t.reclaimTxHash)}
-                            <ArrowUpRight className="size-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="py-6 text-xs text-muted-foreground">
-                  No active Tranche tickets ({isDryRun ? "dry-run mode" : "none"}).
-                </p>
-              )}
-            </section>
-          </div>
-
-          {/* RIGHT 5 COLS (STICKY): Signed Archival Cream Policy & Risk Mandate Slip */}
-          <aside className="lg:sticky lg:top-24 lg:col-span-5">
-            <div className="flex flex-col drop-shadow-[0_12px_28px_rgba(12,13,16,0.08)] dark:drop-shadow-[0_32px_72px_rgba(0,0,0,0.75)]">
-              <div
-                className="relative flex flex-col gap-5 overflow-hidden rounded-t-[22px] border border-b-0 border-black/10 px-6 pt-6 pb-5 dark:border-0"
-                style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
-              >
-                {/* Slip Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="text-xs font-medium opacity-60">
-                      Policy v{policyVersion}
-                    </span>
-                    <h2 className="text-lg font-semibold tracking-tight">
-                      Controls &amp; Policy
-                    </h2>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setConnOpen((p) => !p)}
-                      title="Connection settings"
-                      className="inline-flex h-8 items-center gap-1 rounded-full border border-black/15 px-2.5 text-xs font-medium transition-colors hover:bg-black/5 cursor-pointer"
-                    >
-                      <Settings2 className="size-3" />
-                      <span>Connect</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={disconnected || actionBusy || status?.killSwitch}
-                      onClick={() => setKillDialogOpen(true)}
-                      className="inline-flex h-8 items-center gap-1 rounded-full bg-red-600 px-3 text-xs font-semibold text-white transition-opacity hover:bg-red-700 disabled:opacity-45 cursor-pointer"
-                    >
-                      <OctagonAlert className="size-3" />
-                      <span>{status?.killSwitch ? "Stopped" : "Kill"}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Collapsible API URL & Bearer Token Config (Hidden until clicked) */}
-                {connOpen && (
-                  <div className="flex flex-col gap-3 rounded-[12px] border border-black/12 bg-black/[0.03] p-3.5">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between text-[11px] font-medium opacity-65">
-                        <span>Agent URL</span>
-                        <span>{isLocalApi ? "Local" : "Remote"}</span>
-                      </div>
-                      <input
-                        type="url"
-                        placeholder={DEFAULT_AGENT_API_URL}
-                        value={apiUrlInput}
-                        onChange={(e) => handleSaveApiUrl(e.target.value)}
-                        className="h-8 w-full border-b border-black/25 bg-transparent px-0.5 text-xs font-medium text-black placeholder:text-black/35 transition-colors focus:border-black focus:outline-none"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[11px] font-medium opacity-65">Access Token</span>
-                      <input
-                        type="password"
-                        placeholder="Paste token"
-                        value={tokenInput}
-                        onChange={(e) => handleSaveToken(e.target.value)}
-                        className="h-8 w-full border-b border-black/25 bg-transparent px-0.5 text-xs font-medium text-black placeholder:text-black/35 transition-colors focus:border-black focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Runtime Action Bar */}
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    disabled={!canStart}
-                    onClick={() => void runControl("Start runtime", () => client.start())}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-black text-xs font-medium text-[#f8f7ee] transition-transform active:scale-[0.98] disabled:opacity-35 cursor-pointer"
-                  >
-                    <Play className="size-3" />
-                    Start
-                  </button>
-                  <button
-                    type="button"
-                    disabled={disconnected || actionBusy || status?.paused}
-                    onClick={() => void runControl("Pause entries", () => client.pause())}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-black/20 text-xs font-medium text-black transition-colors hover:bg-black/5 disabled:opacity-35 cursor-pointer"
-                  >
-                    <Pause className="size-3" />
-                    Pause
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!canResume}
-                    onClick={() => void runControl("Resume entries", () => client.resume())}
-                    className="inline-flex h-9 items-center justify-center rounded-full border border-black/20 text-xs font-medium text-black transition-colors hover:bg-black/5 disabled:opacity-35 cursor-pointer"
-                  >
-                    Resume
-                  </button>
-                </div>
-
-                {/* Risk Utilization Bars */}
-                {config && metrics && (
-                  <div className="grid grid-cols-2 gap-3 text-[11px]">
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex justify-between">
-                        <span className="opacity-65">Exposure</span>
-                        <span className="tabular-nums-mono font-medium">
-                          {pctBar(
-                            metrics.currentTotalExposurePayment,
-                            config.riskLimits.maxTotalExposurePayment,
-                          )}
-                          %
+                        <span className="tabular-nums-mono text-muted-foreground">
+                          Premium {fmtPayment6(t.premiumPaidPayment, paymentSymbol)}
                         </span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
-                        <div
-                          className="h-full bg-black transition-all"
-                          style={{
-                            width: `${pctBar(metrics.currentTotalExposurePayment, config.riskLimits.maxTotalExposurePayment)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex justify-between">
-                        <span className="opacity-65">Daily Loss</span>
-                        <span className="tabular-nums-mono font-medium">
-                          {pctBar(
-                            metrics.dailyRealizedLossPayment,
-                            config.riskLimits.maxDailyRealizedLossPayment,
-                          )}
-                          %
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
-                        <div
-                          className="h-full bg-red-600 transition-all"
-                          style={{
-                            width: `${pctBar(metrics.dailyRealizedLossPayment, config.riskLimits.maxDailyRealizedLossPayment)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Perforated Tear-Line with Semicircular Notches */}
-                <div className="relative flex items-center">
-                  <span
-                    aria-hidden="true"
-                    className="absolute -left-8 size-4 rounded-full bg-background"
-                  />
-                  <div className="w-full border-t border-dashed border-black/20" />
-                  <span
-                    aria-hidden="true"
-                    className="absolute -right-8 size-4 rounded-full bg-background"
-                  />
-                </div>
-
-                {/* Deterministic Strategy Parameters */}
-                <div className="flex flex-col gap-3">
-                  <div className="grid grid-cols-3 gap-1 rounded-full border border-black/15 bg-black/[0.04] p-1">
-                    {(["price_threshold", "momentum", "volatility_aware"] as const).map((st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setStrategyType(st)}
-                        className={cn(
-                          "h-7 rounded-full text-[11px] font-medium transition-colors cursor-pointer",
-                          strategyType === st
-                            ? "bg-black text-[#f8f7ee]"
-                            : "text-black/60 hover:text-black",
-                        )}
-                      >
-                        {st === "price_threshold"
-                          ? "Threshold"
-                          : st === "momentum"
-                            ? "Momentum"
-                            : "Volatility"}
-                      </button>
                     ))}
                   </div>
-
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[10px] font-semibold uppercase tracking-[0.08em] opacity-60">
-                        Take Profit (bps)
-                      </label>
-                      <input
-                        type="number"
-                        value={tpInput}
-                        onChange={(e) => setTpInput(e.target.value)}
-                        className="tabular-nums-mono h-9 w-full border-b border-black/25 bg-transparent px-0.5 text-sm font-semibold text-black transition-colors focus:border-black focus:outline-none"
-                      />
-                      {config && (
-                        <span className="tabular-nums-mono text-[10px] opacity-50">
-                          Bounds {config.policyBounds.minTakeProfitBps}–{config.policyBounds.maxTakeProfitBps}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[10px] font-semibold uppercase tracking-[0.08em] opacity-60">
-                        Stop Loss (bps)
-                      </label>
-                      <input
-                        type="number"
-                        value={slInput}
-                        onChange={(e) => setSlInput(e.target.value)}
-                        className="tabular-nums-mono h-9 w-full border-b border-black/25 bg-transparent px-0.5 text-sm font-semibold text-black transition-colors focus:border-black focus:outline-none"
-                      />
-                      {config && (
-                        <span className="tabular-nums-mono text-[10px] opacity-50">
-                          Bounds {config.policyBounds.minStopLossBps}–{config.policyBounds.maxStopLossBps}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[10px] font-semibold uppercase tracking-[0.08em] opacity-60">
-                        Max Slippage (bps)
-                      </label>
-                      <input
-                        type="number"
-                        value={slipInput}
-                        onChange={(e) => setSlipInput(e.target.value)}
-                        className="tabular-nums-mono h-9 w-full border-b border-black/25 bg-transparent px-0.5 text-sm font-semibold text-black transition-colors focus:border-black focus:outline-none"
-                      />
-                      {config && (
-                        <span className="tabular-nums-mono text-[10px] opacity-50">
-                          Cap ≤ {config.policyBounds.hardMaxSlippageBps}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[10px] font-semibold uppercase tracking-[0.08em] opacity-60">
-                        Max Position (raw)
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={maxPosInput}
-                        onChange={(e) => setMaxPosInput(e.target.value)}
-                        className="tabular-nums-mono h-9 w-full border-b border-black/25 bg-transparent px-0.5 text-sm font-semibold text-black transition-colors focus:border-black focus:outline-none"
-                      />
-                      {config && (
-                        <span className="tabular-nums-mono truncate text-[10px] opacity-50">
-                          Cap ≤ {config.policyBounds.hardMaxPositionSizeInventory}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={disconnected || actionBusy}
-                    onClick={() => void handleStrategySave()}
-                    className="h-9 w-full rounded-full bg-black text-xs font-medium text-[#f8f7ee] transition-transform active:scale-[0.985] disabled:opacity-40 cursor-pointer"
-                  >
-                    Apply Validated Policy
-                  </button>
-                </div>
-
-                {/* Perforated Tear-Line 2 */}
-                <div className="relative flex items-center">
-                  <span
-                    aria-hidden="true"
-                    className="absolute -left-8 size-4 rounded-full bg-background"
-                  />
-                  <div className="w-full border-t border-dashed border-black/20" />
-                  <span
-                    aria-hidden="true"
-                    className="absolute -right-8 size-4 rounded-full bg-background"
-                  />
-                </div>
-
-                {/* Natural-Language Policy Translator */}
-                <div className="flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-semibold">NL Policy Translator</span>
-                    <span className="tabular-nums-mono opacity-60">
-                      {policyHistory.length} saved
-                    </span>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <input
-                      type="text"
-                      placeholder='e.g. "momentum, take profit 4%, stop loss 2%"'
-                      value={nlInstruction}
-                      onChange={(e) => setNlInstruction(e.target.value)}
-                      className="h-9 flex-1 border-b border-black/25 bg-transparent px-0.5 text-xs font-medium text-black placeholder:text-black/40 transition-colors focus:border-black focus:outline-none"
-                    />
-                    <button
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 py-8 text-center text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">No reserved tickets yet</span>
+                    <span>Want to mint a real Tranche reservation ticket on Chain 133 testnet?</span>
+                    <Button
                       type="button"
-                      disabled={disconnected || actionBusy || !nlInstruction.trim()}
-                      onClick={async () => {
-                        setActionBusy(true);
-                        setActionFeedback(null);
-                        try {
-                          const prop = await client.proposePolicy(nlInstruction.trim());
-                          setNlProposal({
-                            instruction: prop.instruction,
-                            proposedPatch: prop.proposedPatch,
-                            valid: prop.validation.valid,
-                            rejectedFields: prop.validation.rejectedFields,
-                          });
-                        } catch (err) {
-                          setActionFeedback({
-                            kind: "err",
-                            text: err instanceof Error ? err.message : "Proposal failed",
-                          });
-                        } finally {
-                          setActionBusy(false);
-                        }
-                      }}
-                      className="h-8 shrink-0 rounded-full border border-black/25 px-3 text-[11px] font-semibold transition-colors hover:bg-black hover:text-[#f8f7ee] disabled:opacity-40 cursor-pointer"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onNavigate("/trade")}
+                      className="mt-1 h-7 rounded-full px-3 text-xs cursor-pointer"
                     >
-                      Propose
-                    </button>
+                      Go to Trade Desk
+                    </Button>
                   </div>
+                ))}
+            </div>
+          </section>
 
-                  {nlProposal && (
-                    <div className="flex flex-col gap-2 rounded-[10px] border border-black/15 bg-white/80 p-3 text-[11px]">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold">
-                          Patch ({nlProposal.valid ? "Valid" : "Rejected"})
-                        </span>
-                        {nlProposal.valid && (
-                          <button
-                            type="button"
-                            disabled={actionBusy}
-                            onClick={async () => {
-                              await runControl(
-                                "Apply NL policy",
-                                () => client.applyPolicy(nlProposal.instruction),
-                                { forceFormSync: true },
-                              );
-                              setNlProposal(null);
-                              setNlInstruction("");
-                            }}
-                            className="h-6 rounded-full bg-black px-2.5 text-[10px] font-medium text-[#f8f7ee] cursor-pointer"
-                          >
-                            Authorize &amp; Apply
-                          </button>
-                        )}
-                      </div>
-                      <pre className="overflow-x-auto font-mono text-[10px] opacity-75">
-                        {JSON.stringify(nlProposal.proposedPatch, null, 2)}
-                      </pre>
-                      {nlProposal.rejectedFields.length > 0 && (
-                        <span className="font-medium text-red-700">
-                          Blocked: {nlProposal.rejectedFields.join(", ")}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {policyHistory.length > 0 && (
-                    <div className="flex flex-col gap-1.5 pt-1 text-[11px]">
-                      <div className="flex items-center gap-1.5 font-semibold opacity-75">
-                        <History className="size-3" />
-                        <span>Policy History</span>
-                      </div>
-                      <div className="flex max-h-32 flex-col gap-1 overflow-y-auto">
-                        {policyHistory
-                          .slice()
-                          .reverse()
-                          .map((entry) => (
-                            <div
-                              key={`${entry.version}-${entry.timestamp}`}
-                              className="flex items-center justify-between gap-2 rounded-[8px] border border-black/10 bg-black/[0.03] px-2.5 py-1.5"
-                            >
-                              <div className="flex min-w-0 flex-col">
-                                <span className="tabular-nums-mono font-medium">
-                                  v{entry.version} · {entry.source} · {fmtTime(entry.timestamp)}
-                                </span>
-                                {entry.instruction && (
-                                  <span className="truncate text-[10px] opacity-65">
-                                    &ldquo;{entry.instruction}&rdquo;
-                                  </span>
-                                )}
-                              </div>
-                              {entry.version !== policyVersion && (
-                                <button
-                                  type="button"
-                                  disabled={disconnected || actionBusy}
-                                  onClick={() =>
-                                    void runControl(
-                                      `Rollback to v${entry.version}`,
-                                      () => client.rollbackPolicy(entry.version),
-                                      { forceFormSync: true },
-                                    )
-                                  }
-                                  className="shrink-0 rounded-full border border-black/20 px-2 py-0.5 text-[10px] font-medium hover:bg-black hover:text-[#f8f7ee] cursor-pointer disabled:opacity-40"
-                                >
-                                  Rollback
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {actionFeedback && (
-                  <div
-                    className={cn(
-                      "flex items-start gap-2 rounded-[10px] border px-3 py-2 text-xs",
-                      actionFeedback.kind === "ok"
-                        ? "border-emerald-700/30 bg-emerald-700/10 text-emerald-900"
-                        : "border-red-700/30 bg-red-700/10 text-red-900",
-                    )}
-                  >
-                    {actionFeedback.kind === "ok" ? (
-                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
-                    ) : (
-                      <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
-                    )}
-                    <span>{actionFeedback.text}</span>
-                  </div>
-                )}
+          {/* RIGHT 5 COLS: Plain-English Overview, Safety Guardrails & Next Steps */}
+          <aside
+            className="flex min-h-0 flex-col justify-between gap-3 overflow-hidden rounded-[18px] border border-border p-4 lg:col-span-5"
+            style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
+          >
+            {/* Compact Live Metrics */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+                <span className="block text-[10px] uppercase tracking-wider opacity-60">Status</span>
+                <span className="text-sm font-semibold">
+                  {disconnected
+                    ? "Offline"
+                    : status?.killSwitch
+                      ? "Emergency Stop"
+                      : status?.paused
+                        ? "Paused"
+                        : "Running Safely"}
+                </span>
               </div>
+              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+                <span className="block text-[10px] uppercase tracking-wider opacity-60">Strategy</span>
+                <span className="truncate block text-sm font-semibold">
+                  {humanStrategy(status?.activeStrategy)}
+                </span>
+              </div>
+              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+                <span className="block text-[10px] uppercase tracking-wider opacity-60">
+                  Live Checks
+                </span>
+                <span className="tabular-nums-mono text-sm font-semibold">
+                  {metrics?.totalCycles ?? 0} cycles
+                </span>
+              </div>
+              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+                <span className="block text-[10px] uppercase tracking-wider opacity-60">
+                  Broadcast Txs
+                </span>
+                <span className="tabular-nums-mono text-sm font-semibold">
+                  {metrics?.liveExecutionsCount ?? 0} sent
+                </span>
+              </div>
+            </div>
 
-              {/* Exact Tranche Double-Chevron Serrated Bottom Edge */}
-              <svg
-                viewBox="0 0 440 32"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-                className="block h-6 w-full -mt-[2px]"
-              >
-                <polygon
-                  points="0,0 440,0 440,32 330,4 220,32 110,4 0,32"
-                  style={{ fill: "#f8f7ee" }}
-                />
-              </svg>
+            {/* Compact Safety Guardrails */}
+            <div className="flex flex-col gap-2 rounded-[12px] border border-black/10 bg-white/60 p-3">
+              <div className="flex items-center justify-between text-[11px] font-semibold">
+                <span>Safety Guardrails (Code-Enforced)</span>
+                <span className="tabular-nums-mono opacity-65">Policy v{policyVersion}</span>
+              </div>
+              <div className="flex flex-col gap-1.5 text-[11px]">
+                <div className="flex items-center justify-between">
+                  <span className="opacity-70">Exposure Cap</span>
+                  <span className="tabular-nums-mono font-medium">
+                    {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"} /{" "}
+                    {config ? fmtPayment6(config.riskLimits.maxTotalExposurePayment, "USDT") : "$50.00"}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
+                  <div className="h-full rounded-full bg-black" style={{ width: `${exposurePct}%` }} />
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <span className="opacity-70">Daily Loss Limit</span>
+                  <span className="tabular-nums-mono font-medium">
+                    {metrics ? fmtPayment6(metrics.dailyRealizedLossPayment, "USDT") : "$0.00"} /{" "}
+                    {config ? fmtPayment6(config.riskLimits.maxDailyRealizedLossPayment, "USDT") : "$5.00"}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
+                  <div className="h-full rounded-full bg-black" style={{ width: `${lossPct}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Clear "What You Can Do Next" Actions */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-60">
+                What You Can Do Next
+              </span>
+              <div className="grid grid-cols-1 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onNavigate("/trade")}
+                  className="flex items-center justify-between rounded-[11px] bg-black px-3.5 py-2 text-left text-xs font-medium text-[#f8f7ee] transition-opacity hover:opacity-90 cursor-pointer"
+                >
+                  <span>1. Reserve a real Tranche ticket on Chain 133 testnet</span>
+                  <ArrowRight className="size-3.5 shrink-0" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setControlsOpen(true)}
+                  className="flex items-center justify-between rounded-[11px] border border-black/15 bg-white/80 px-3.5 py-2 text-left text-xs font-medium text-black transition-colors hover:bg-white cursor-pointer"
+                >
+                  <span>2. Edit strategy rules or give plain-English instructions</span>
+                  <Settings2 className="size-3.5 shrink-0 opacity-70" />
+                </button>
+                <a
+                  href={`${normalizedApiUrl}/agent/soak`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between rounded-[11px] border border-black/15 bg-white/80 px-3.5 py-2 text-left text-xs font-medium text-black transition-colors hover:bg-white"
+                >
+                  <span>3. Inspect live 24-hour Chain 177 soak proof (JSON)</span>
+                  <ArrowUpRight className="size-3.5 shrink-0 opacity-70" />
+                </a>
+              </div>
             </div>
           </aside>
         </div>
       </div>
 
+      {/* Operator Controls & Policy Modal (keeps main page uncluttered & non-scrollable) */}
+      <Dialog open={controlsOpen} onOpenChange={setControlsOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-[20px] border-border bg-card sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Agent Controls &amp; Policy</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Read-only telemetry works without a token. Paste your Bearer token to pause, tune
+              strategy limits, or apply natural-language policy rules.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 pt-2 text-xs">
+            {/* Connection */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Agent API URL</span>
+                <input
+                  type="url"
+                  value={apiUrlInput}
+                  onChange={(e) => handleSaveApiUrl(e.target.value)}
+                  placeholder="https://api.tranche.space"
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Operator Token (for POST controls)
+                </span>
+                <input
+                  type="password"
+                  value={tokenInput}
+                  onChange={(e) => handleSaveToken(e.target.value)}
+                  placeholder="Bearer token"
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+                />
+              </label>
+            </div>
+
+            {/* Runtime Controls */}
+            <div className="flex flex-wrap items-center gap-2 border-y border-border py-3">
+              <Button
+                type="button"
+                size="sm"
+                disabled={disconnected || actionBusy || status?.killSwitch}
+                onClick={() => void runControl("Start", () => client.start())}
+                className="h-8 rounded-full text-xs cursor-pointer"
+              >
+                <Play className="mr-1 size-3" /> Start
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={disconnected || actionBusy}
+                onClick={() =>
+                  void runControl(
+                    status?.paused ? "Resume" : "Pause",
+                    () => (status?.paused ? client.resume() : client.pause()),
+                  )
+                }
+                className="h-8 rounded-full text-xs cursor-pointer"
+              >
+                <Pause className="mr-1 size-3" /> {status?.paused ? "Resume" : "Pause"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={disconnected || actionBusy}
+                onClick={() => setKillDialogOpen(true)}
+                className="ml-auto h-8 rounded-full text-xs cursor-pointer"
+              >
+                <OctagonAlert className="mr-1 size-3" /> Emergency Kill
+              </Button>
+            </div>
+
+            {/* Natural-Language Policy */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] font-semibold text-foreground">
+                Plain-English Policy Update (Bounded)
+              </span>
+              <input
+                type="text"
+                value={nlInstruction}
+                onChange={(e) => setNlInstruction(e.target.value)}
+                placeholder='e.g. "Switch to momentum, take profit 4%, max slippage 0.8%"'
+                className="rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={disconnected || actionBusy || !nlInstruction.trim()}
+                  onClick={() => void handleProposePolicy()}
+                  className="h-8 rounded-full text-xs cursor-pointer"
+                >
+                  Preview Changes
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={disconnected || actionBusy || !nlInstruction.trim()}
+                  onClick={() => void handleApplyPolicy()}
+                  className="h-8 rounded-full text-xs cursor-pointer"
+                >
+                  Apply Policy
+                </Button>
+              </div>
+              {nlProposal && (
+                <pre className="overflow-x-auto rounded-lg border border-border bg-muted/50 p-2.5 text-[11px]">
+                  {JSON.stringify(nlProposal.proposedPatch, null, 2)}
+                </pre>
+              )}
+            </div>
+
+            {/* Strategy Parameters */}
+            <div className="grid grid-cols-2 gap-2.5 border-t border-border pt-3">
+              <label className="col-span-2 flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Strategy Mode</span>
+                <select
+                  value={strategyType}
+                  onChange={(e) => setStrategyType(e.target.value as StrategyType)}
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+                >
+                  <option value="price_threshold">Buy Below Target Price (price_threshold)</option>
+                  <option value="momentum">Trend Following (momentum)</option>
+                  <option value="volatility_aware">Volatility-Protected (volatility_aware)</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Take-Profit (bps)</span>
+                <input
+                  type="number"
+                  value={tpInput}
+                  onChange={(e) => setTpInput(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Stop-Loss (bps)</span>
+                <input
+                  type="number"
+                  value={slInput}
+                  onChange={(e) => setSlInput(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Max Slippage (bps)</span>
+                <input
+                  type="number"
+                  value={slipInput}
+                  onChange={(e) => setSlipInput(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Max Size (raw wei)</span>
+                <input
+                  type="text"
+                  value={maxPosInput}
+                  onChange={(e) => setMaxPosInput(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
+                />
+              </label>
+              <div className="col-span-2 flex justify-end pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={disconnected || actionBusy}
+                  onClick={() => void handleStrategySave()}
+                  className="h-8 rounded-full px-4 text-xs cursor-pointer"
+                >
+                  Save Strategy Limits
+                </Button>
+              </div>
+            </div>
+
+            {actionFeedback && (
+              <div
+                className={cn(
+                  "flex items-start gap-2 rounded-lg border px-3 py-2 text-xs",
+                  actionFeedback.kind === "ok"
+                    ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "border-destructive/35 bg-destructive/10 text-destructive",
+                )}
+              >
+                {actionFeedback.kind === "ok" ? (
+                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
+                ) : (
+                  <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
+                )}
+                <span>{actionFeedback.text}</span>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Kill Switch Confirmation Dialog */}
       <Dialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
-        <DialogContent className="rounded-[22px] border-border bg-card sm:max-w-[400px]">
+        <DialogContent className="rounded-[20px] border-border bg-card sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="font-display text-xl text-destructive">
-              Activate Kill Switch?
+            <DialogTitle className="text-base font-semibold text-destructive">
+              Activate Emergency Kill Switch?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              This immediately stops the runtime and blocks all entries, exercises, and exits. The
-              kill switch is authoritative and cannot be cleared via Resume.
+              This immediately halts the agent runtime and blocks all entries, exercises, and exits.
+              It cannot be cleared via Resume.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 pt-3">
