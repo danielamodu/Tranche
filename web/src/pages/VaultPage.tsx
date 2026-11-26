@@ -682,7 +682,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                     return (
                       <div
                         key={o.offerId.toString()}
-                        className="flex flex-col drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)]"
+                        className="flex flex-col drop-shadow-[0_10px_22px_rgba(12,13,16,0.08)] dark:drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)]"
                       >
                         <div
                           className="relative flex flex-col gap-3 rounded-t-[18px] px-5 pt-5 pb-4"

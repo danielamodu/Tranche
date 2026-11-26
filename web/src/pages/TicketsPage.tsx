@@ -453,7 +453,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
             return (
               <div
                 key={t.ticketId.toString()}
-                className="flex flex-col drop-shadow-[0_24px_56px_rgba(0,0,0,0.65)]"
+                className="flex flex-col drop-shadow-[0_10px_24px_rgba(12,13,16,0.08)] dark:drop-shadow-[0_24px_56px_rgba(0,0,0,0.65)]"
               >
                 <div
                   className="relative flex flex-1 flex-col overflow-hidden rounded-t-[20px] px-6 pt-6 pb-5"

@@ -1004,9 +1004,9 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
 
           {/* RIGHT 5 COLS (STICKY): Signed Archival Cream Policy & Risk Mandate Slip */}
           <aside className="lg:sticky lg:top-24 lg:col-span-5">
-            <div className="flex flex-col drop-shadow-[0_32px_72px_rgba(0,0,0,0.75)]">
+            <div className="flex flex-col drop-shadow-[0_12px_28px_rgba(12,13,16,0.08)] dark:drop-shadow-[0_32px_72px_rgba(0,0,0,0.75)]">
               <div
-                className="relative flex flex-col gap-5 overflow-hidden rounded-t-[22px] px-6 pt-6 pb-5"
+                className="relative flex flex-col gap-5 overflow-hidden rounded-t-[22px] border border-b-0 border-black/10 px-6 pt-6 pb-5 dark:border-0"
                 style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
               >
                 {/* Slip Header */}
