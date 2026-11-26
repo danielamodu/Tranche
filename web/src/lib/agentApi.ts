@@ -514,4 +514,74 @@ export class AgentApiClient {
   getPolicyHistory(): Promise<PolicyHistoryResponse> {
     return this.request<PolicyHistoryResponse>("GET", "/agent/policy/history");
   }
+
+  getIntelligence(): Promise<AgentIntelligenceSnapshot> {
+    return this.request<AgentIntelligenceSnapshot>("GET", "/agent/intelligence");
+  }
+}
+
+export type DataProvenance = "LIVE" | "FORK" | "REPLAY" | "MOCK";
+
+export interface AgentIntelligenceSnapshot {
+  dataProvenance: DataProvenance;
+  marketRegime: MarketRegime | null;
+  adaptiveStrategy: {
+    regime: MarketRegime;
+    suitableForTrading: boolean;
+    unsuitableReasons: string[];
+    selectedStrategyType: StrategyType | "NONE";
+    adjustmentsApplied: string[];
+  } | null;
+  latestVenueEvidence: {
+    timestamp: number;
+    marketRegime: MarketRegime;
+    quoteAgeSec: number;
+    trancheCompleteCostPayment: string;
+    hskswapCompleteCostPayment: string;
+    costAdvantagePayment: string;
+    costAdvantageBps: number;
+    trancheFailureRateBps: number | null;
+    hskswapFailureRateBps: number | null;
+    factors: string[];
+  } | null;
+  positionIntegrity: {
+    healthy: boolean;
+    pendingTxBlocking: boolean;
+    issues: Array<{ severity: "WARN" | "CRITICAL"; code: string; entityId: string; detail: string }>;
+  } | null;
+  portfolio: {
+    availableBalancePayment: string;
+    totalEquityPayment: string;
+    totalCommittedCapitalPayment: string;
+    availableCapitalForAllocationPayment: string;
+    totalRealizedPnlPayment: string;
+    totalUnrealizedPnlPayment: string;
+    assetExposures: Array<{
+      inventoryToken: string;
+      totalCommittedPayment: string;
+      allocationBps: number;
+      openPositionsCount: number;
+      activeTicketsCount: number;
+    }>;
+  } | null;
+  evaluation: {
+    dataProvenance: DataProvenance;
+    totalDecisions: number;
+    executedDecisions: number;
+    rejectedDecisions: number;
+    netPnlAfterFeesPayment: string;
+    maxDrawdownPayment: string;
+    maxDrawdownBps: number;
+    closedTradesCount: number;
+    wins: number;
+    losses: number;
+    winRateBps: number;
+    profitFactor: number | null;
+    sharpeRatio: number | null;
+    venueSelectionAccuracyBps: number | null;
+    totalExecutionCostImprovementPayment: string;
+    riskLimitViolationsCount: number;
+    missedExecutionAttempts: number;
+    duplicateExecutionAttempts: number;
+  };
 }
