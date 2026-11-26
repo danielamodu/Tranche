@@ -29,6 +29,11 @@ export const ACTIVE_VIEM_CHAIN = defineChain({
 
 export const tranchePublicClient = createPublicClient({
   chain: ACTIVE_VIEM_CHAIN,
+  batch: {
+    multicall: {
+      wait: 24,
+    },
+  },
   transport: fallback(ACTIVE_NETWORK.rpcUrls.map((url) => http(url, { timeout: 10_000 }))),
 });
 
@@ -401,6 +406,19 @@ export interface ProtocolActivityItem {
   detail: string;
 }
 
+export async function fetchTotalTickets(
+  client: Pick<PublicClient, "readContract"> = tranchePublicClient,
+  config = ACTIVE_NETWORK,
+): Promise<number> {
+  if (!config.isLive) return 0;
+  const nextTicketId = await client.readContract({
+    address: config.contracts.commitmentManager,
+    abi: COMMITMENT_MANAGER_ABI,
+    functionName: "nextTicketId",
+  });
+  return Math.max(0, Number(nextTicketId) - 1);
+}
+
 export async function fetchRecentActivity(
   client: Pick<PublicClient, "getBlockNumber" | "readContract" | "getLogs"> = tranchePublicClient,
   config = ACTIVE_NETWORK,
@@ -425,24 +443,26 @@ export async function fetchRecentActivity(
     latestBlock > ACTIVITY_LOOKBACK_BLOCKS ? latestBlock - ACTIVITY_LOOKBACK_BLOCKS : 0n;
 
   try {
-    const createdLogs = await client.getLogs({
-      address: commitmentManager,
-      event: ACTIVITY_EVENTS[0],
-      fromBlock,
-      toBlock: latestBlock,
-    });
-    const reservedLogs = await client.getLogs({
-      address: commitmentManager,
-      event: ACTIVITY_EVENTS[1],
-      fromBlock,
-      toBlock: latestBlock,
-    });
-    const exercisedLogs = await client.getLogs({
-      address: commitmentManager,
-      event: ACTIVITY_EVENTS[2],
-      fromBlock,
-      toBlock: latestBlock,
-    });
+    const [createdLogs, reservedLogs, exercisedLogs] = await Promise.all([
+      client.getLogs({
+        address: commitmentManager,
+        event: ACTIVITY_EVENTS[0],
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+      client.getLogs({
+        address: commitmentManager,
+        event: ACTIVITY_EVENTS[1],
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+      client.getLogs({
+        address: commitmentManager,
+        event: ACTIVITY_EVENTS[2],
+        fromBlock,
+        toBlock: latestBlock,
+      }),
+    ]);
 
     const items: ProtocolActivityItem[] = [
       ...createdLogs.map((l) => ({

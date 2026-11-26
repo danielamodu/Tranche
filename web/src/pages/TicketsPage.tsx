@@ -89,11 +89,13 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
   const [reclaimingId, setReclaimingId] = useState<string | null>(null);
   const [reclaimError, setReclaimError] = useState<string | null>(null);
 
-  // Live 1-second countdown ticker
+  // Live 1-second countdown ticker — only active while unexpired tickets exist
   useEffect(() => {
+    const hasLiveCountdown = tickets.some((t) => t.status === 1 && t.expiresAt > nowSec);
+    if (!hasLiveCountdown) return;
     const id = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [tickets]);
 
   const loadTickets = useCallback(
     async (isManual = false) => {
@@ -171,27 +173,30 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
 
     let cancelled = false;
     setExQuoteLoading(true);
-    tranchePublicClient
-      .readContract({
-        address: ACTIVE_NETWORK.contracts.commitmentManager,
-        abi: COMMITMENT_MANAGER_ABI,
-        functionName: "quoteExercise",
-        args: [exerciseTicket.ticketId, parsed],
-      })
-      .then((res) => {
-        if (!cancelled) {
-          setExQuote(decodeQuoteExerciseResult(res));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setExQuote(null);
-      })
-      .finally(() => {
-        if (!cancelled) setExQuoteLoading(false);
-      });
+    const timer = setTimeout(() => {
+      tranchePublicClient
+        .readContract({
+          address: ACTIVE_NETWORK.contracts.commitmentManager,
+          abi: COMMITMENT_MANAGER_ABI,
+          functionName: "quoteExercise",
+          args: [exerciseTicket.ticketId, parsed],
+        })
+        .then((res) => {
+          if (!cancelled) {
+            setExQuote(decodeQuoteExerciseResult(res));
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setExQuote(null);
+        })
+        .finally(() => {
+          if (!cancelled) setExQuoteLoading(false);
+        });
+    }, 250);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [exerciseTicket, fillInput]);
 

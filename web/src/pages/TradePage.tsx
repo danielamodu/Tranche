@@ -18,6 +18,7 @@ import {
   decodeQuoteReservationResult,
   fetchAllOffers,
   fetchRecentActivity,
+  fetchTotalTickets,
   tranchePublicClient,
   type OnChainOffer,
   type ProtocolActivityItem,
@@ -67,26 +68,35 @@ export function TradePage({ onNavigate }: TradePageProps) {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
 
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+
   const loadOffers = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const [list, act] = await Promise.all([fetchAllOffers(), fetchRecentActivity()]);
+      const [list, ticketsCount] = await Promise.all([fetchAllOffers(), fetchTotalTickets()]);
       setOffers(list);
-      setActivity(act.items);
-      setTotalTickets(act.totalTickets);
+      setTotalTickets(ticketsCount);
+      setNowSec(Math.floor(Date.now() / 1000));
     } catch {
       // keep previous list on transient RPC hiccup
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+
+    // Defer secondary 5,000-block log scan so it never blocks primary offers render
+    fetchRecentActivity()
+      .then((act) => {
+        setActivity(act.items);
+        setTotalTickets(act.totalTickets);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     loadOffers();
   }, [loadOffers]);
 
-  const nowSec = Math.floor(Date.now() / 1000);
   const activeOffers = useMemo(
     () =>
       offers.filter((o) => o.status === 0 && o.availableBalance > 0n && o.expiry > nowSec),
@@ -192,27 +202,30 @@ export function TradePage({ onNavigate }: TradePageProps) {
 
     let cancelled = false;
     setQuoteLoading(true);
-    tranchePublicClient
-      .readContract({
-        address: ACTIVE_NETWORK.contracts.commitmentManager,
-        abi: COMMITMENT_MANAGER_ABI,
-        functionName: "quoteReservation",
-        args: [selected.offerId, parsedAmt, durationSec],
-      })
-      .then((res) => {
-        if (!cancelled) {
-          setQuote(decodeQuoteReservationResult(res));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setQuote(null);
-      })
-      .finally(() => {
-        if (!cancelled) setQuoteLoading(false);
-      });
+    const timer = setTimeout(() => {
+      tranchePublicClient
+        .readContract({
+          address: ACTIVE_NETWORK.contracts.commitmentManager,
+          abi: COMMITMENT_MANAGER_ABI,
+          functionName: "quoteReservation",
+          args: [selected.offerId, parsedAmt, durationSec],
+        })
+        .then((res) => {
+          if (!cancelled) {
+            setQuote(decodeQuoteReservationResult(res));
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setQuote(null);
+        })
+        .finally(() => {
+          if (!cancelled) setQuoteLoading(false);
+        });
+    }, 250);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [selected, amountInput, durationSec]);
 
@@ -475,7 +488,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
 
           {/* RIGHT 5 COLS (STICKY): Always-Ready Live Quote & Reserve Card */}
           <aside className="lg:sticky lg:top-24 lg:col-span-5">
-            <div className="rounded-[20px] border border-border bg-card p-6">
+            <div className="min-h-[380px] rounded-[20px] border border-border bg-card p-6">
               {selected && selectedInv && selectedPay ? (
                 txStep === "done" && txHash ? (
                   <div className="animate-rise flex flex-col items-center gap-4 py-6 text-center">
