@@ -504,46 +504,24 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
             </div>
           )}
 
-          {/* Editorial INV-1 Segregated Vault Hairline Strip */}
-          <section className="grid grid-cols-2 gap-y-5 border-b border-border/80 pb-7 lg:grid-cols-4 lg:divide-x lg:divide-border/80">
-            <div className="flex flex-col gap-1 pr-5">
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                01 · Solvency Invariant
-              </span>
-              <span className="font-display text-2xl font-bold tracking-[-0.03em] text-foreground">
-                INV-1 Segregated
-              </span>
-              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                5 isolated token buckets
-              </span>
-            </div>
-            <div className="flex flex-col gap-1 lg:px-6">
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                02 · Vault Free Assets
-              </span>
-              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+          {/* Clean 3-Card Vault Summary Row */}
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+              <span className="text-xs font-medium text-muted-foreground">Deposited Assets</span>
+              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
                 {vaultRows.filter((r) => r.freeBal > 0n).length}
               </span>
-              <span className="text-[11px] text-muted-foreground">Withdrawable anytime</span>
             </div>
-            <div className="flex flex-col gap-1 pr-5 lg:px-6">
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                03 · Claimable Proceeds
-              </span>
-              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-status-live">
+            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+              <span className="text-xs font-medium text-muted-foreground">Claimable Earnings</span>
+              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-status-live">
                 {vaultRows.filter((r) => r.pendingProceeds > 0n).length}
               </span>
-              <span className="text-[11px] text-muted-foreground">Upfront premiums + fills</span>
             </div>
-            <div className="flex flex-col gap-1 lg:pl-6">
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                04 · Active LP Offers
-              </span>
-              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+              <span className="text-xs font-medium text-muted-foreground">Active Offers</span>
+              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
                 {myOffers.filter((o) => o.status === 0 && o.availableBalance > 0n).length}
-              </span>
-              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                {myOffers.length} total created
               </span>
             </div>
           </section>

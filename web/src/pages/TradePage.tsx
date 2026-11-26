@@ -1,20 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Check,
-  Loader2,
-  X,
-} from "lucide-react";
+import { ArrowUpRight, Check, Loader2 } from "lucide-react";
 import { erc20Abi, parseUnits } from "viem";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppShell } from "@/components/AppShell";
 import { ACTIVE_NETWORK, explorerTxUrl } from "@/config/networks";
@@ -48,6 +35,14 @@ const DURATION_PRESETS = [
   { label: "1h", seconds: 3600 },
 ] as const;
 
+function tokenBadgeColor(symbol: string): string {
+  const s = symbol.toUpperCase();
+  if (s.includes("BTC")) return "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+  if (s.includes("ETH")) return "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400";
+  if (s.includes("HSK")) return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
+  return "bg-muted text-foreground";
+}
+
 export function TradePage({ onNavigate }: TradePageProps) {
   const { address, activeProvider, isConnected, isWrongNetwork } = useWallet();
   const [offers, setOffers] = useState<OnChainOffer[]>([]);
@@ -56,11 +51,8 @@ export function TradePage({ onNavigate }: TradePageProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pairFilter, setPairFilter] = useState<string>("ALL");
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(
-    () => localStorage.getItem("tranche-trader-tip-dismissed") !== "1",
-  );
 
-  // Selected offer & Reserve Sheet state
+  // Live Selected Offer & Inline Quote Ticket State
   const [selected, setSelected] = useState<OnChainOffer | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [durationSec, setDurationSec] = useState(600);
@@ -94,13 +86,10 @@ export function TradePage({ onNavigate }: TradePageProps) {
     loadOffers();
   }, [loadOffers]);
 
-  // Filter strictly ACTIVE & non-expired offers with remaining inventory > 0
   const nowSec = Math.floor(Date.now() / 1000);
   const activeOffers = useMemo(
     () =>
-      offers.filter(
-        (o) => o.status === 0 && o.availableBalance > 0n && o.expiry > nowSec,
-      ),
+      offers.filter((o) => o.status === 0 && o.availableBalance > 0n && o.expiry > nowSec),
     [offers, nowSec],
   );
 
@@ -136,8 +125,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
     return total;
   }, [activeOffers]);
 
-  // Open Reserve Sheet with clean defaults
-  function openReserveSheet(offer: OnChainOffer) {
+  const selectOffer = useCallback((offer: OnChainOffer) => {
     const inv = getTokenMeta(offer.inventoryToken);
     setSelected(offer);
     const defaultAmt =
@@ -150,7 +138,18 @@ export function TradePage({ onNavigate }: TradePageProps) {
     setTxStep("idle");
     setTxHash(null);
     setTxError(null);
-  }
+  }, []);
+
+  // Auto-select first offer so the live quote card is immediately interactive
+  useEffect(() => {
+    if (filteredOffers.length === 0) {
+      setSelected(null);
+      return;
+    }
+    if (!selected || !filteredOffers.some((o) => o.offerId === selected.offerId)) {
+      selectOffer(filteredOffers[0]);
+    }
+  }, [filteredOffers, selected, selectOffer]);
 
   // Live payment token balance for selected offer
   useEffect(() => {
@@ -285,81 +284,35 @@ export function TradePage({ onNavigate }: TradePageProps) {
       onRefresh={() => loadOffers(true)}
       refreshing={refreshing}
     >
-      <div className="flex flex-col gap-8">
-        {/* Contextual 3-step Trader Onboarding Strip (dismissible, first-time only) */}
-        {showOnboarding && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-border/80 bg-card/60 px-5 py-2.5 text-xs">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-muted-foreground">
-              <span className="font-medium text-foreground">Quick start:</span>
-              <span>
-                <strong className="tabular-nums-mono text-foreground">01</strong> Pick an offer strip
-              </span>
-              <span>
-                <strong className="tabular-nums-mono text-foreground">02</strong> Reserve &amp; mint
-                ERC-721 ticket
-              </span>
-              <span>
-                <strong className="tabular-nums-mono text-foreground">03</strong> Exercise in Tickets
-                before expiry
-              </span>
-            </div>
-            <button
-              type="button"
-              aria-label="Dismiss quick start"
-              onClick={() => {
-                localStorage.setItem("tranche-trader-tip-dismissed", "1");
-                setShowOnboarding(false);
-              }}
-              className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-
-        {/* Borderless Editorial Hairline Depth Strip */}
-        <section className="grid grid-cols-1 gap-y-5 border-b border-border/80 pb-7 sm:grid-cols-3 sm:divide-x sm:divide-border/80">
-          <div className="flex flex-col gap-1 sm:pr-6">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              01 · Fixed Offer Notional
-            </span>
-            <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+      <div className="flex flex-col gap-6">
+        {/* Clean 3-Card Summary Row (Vestra-grade breathing room, zero dev clutter) */}
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+            <span className="text-xs font-medium text-muted-foreground">Available Liquidity</span>
+            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
               {loading
                 ? "—"
                 : `$${totalNotionalUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
             </span>
-            {!loading && activeOffers.some((o) => o.priceMode === 1) && (
-              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                + {activeOffers.filter((o) => o.priceMode === 1).length} floating oracle offer(s)
-              </span>
-            )}
           </div>
-          <div className="flex flex-col gap-1 sm:px-6">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              02 · Open Offers
-            </span>
-            <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+          <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+            <span className="text-xs font-medium text-muted-foreground">Open Offers</span>
+            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
               {loading ? "—" : activeOffers.length}
             </span>
-            <span className="text-[11px] text-muted-foreground">Live segregated vault capacity</span>
           </div>
-          <div className="flex flex-col gap-1 sm:pl-6">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              03 · Tickets Minted
-            </span>
-            <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+          <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+            <span className="text-xs font-medium text-muted-foreground">Tickets Minted</span>
+            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
               {loading ? "—" : totalTickets}
-            </span>
-            <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-              Chain {ACTIVE_NETWORK.chainId} on-chain total
             </span>
           </div>
         </section>
 
-        {/* Asymmetric 8/4 Split: Perforated Offer Strips (Left) + Live Activity Tape (Right) */}
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-          <div className="flex flex-col gap-4 lg:col-span-8">
-            {/* Pair Filter Pills + Live Count */}
+        {/* Main Split Desk: Clean Offer Table (Left 7 cols) + Live Interactive Quote & Reserve Card (Right 5 cols) */}
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          {/* LEFT 7 COLS: Clean Offer Book */}
+          <div className="flex flex-col gap-4 lg:col-span-7">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-1.5">
                 {pairOptions.map((pair) => {
@@ -370,268 +323,230 @@ export function TradePage({ onNavigate }: TradePageProps) {
                       type="button"
                       onClick={() => setPairFilter(pair)}
                       className={cn(
-                        "h-8 rounded-full px-3.5 text-xs font-medium transition-colors duration-150 cursor-pointer",
+                        "h-8 rounded-full px-3.5 text-xs font-medium transition-colors cursor-pointer",
                         active
                           ? "bg-primary text-primary-foreground"
-                          : "border border-border bg-card/60 text-muted-foreground hover:border-foreground/25 hover:text-foreground",
+                          : "border border-border bg-card text-muted-foreground hover:text-foreground",
                       )}
                     >
-                      {pair === "ALL" ? "All Pairs" : pair}
+                      {pair === "ALL" ? "All" : pair}
                     </button>
                   );
                 })}
               </div>
-
-              <span className="tabular-nums-mono text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {loading
-                  ? "Syncing…"
-                  : `${filteredOffers.length} active offer${filteredOffers.length === 1 ? "" : "s"}`}
+                  ? "Loading…"
+                  : `${filteredOffers.length} offer${filteredOffers.length === 1 ? "" : "s"}`}
               </span>
             </div>
 
-            {/* Perforated Horizontal Offer Ticket Strips */}
-            {loading ? (
-              <div className="flex flex-col gap-3">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-[88px] w-full rounded-[18px]" />
-                ))}
+            {/* Clean Bordered Table Card (single column header, zero repeated labels) */}
+            <div className="overflow-hidden rounded-[18px] border border-border bg-card">
+              <div className="hidden grid-cols-12 items-center border-b border-border px-5 py-3 text-xs font-medium text-muted-foreground sm:grid">
+                <span className="col-span-4">Pair</span>
+                <span className="col-span-3 text-right">Available</span>
+                <span className="col-span-3 text-right">Strike</span>
+                <span className="col-span-2 text-right">Fee</span>
               </div>
-            ) : filteredOffers.length === 0 ? (
-              <div className="flex flex-col items-center gap-4 rounded-[22px] border border-dashed border-border px-6 py-20 text-center">
-                <div className="flex flex-col gap-1.5">
-                  <h2 className="font-display text-xl font-semibold text-foreground">
-                    {ACTIVE_NETWORK.isLive ? "No open offers right now" : "Mainnet deployment pending"}
-                  </h2>
-                  <p className="max-w-sm text-sm text-muted-foreground">
-                    {ACTIVE_NETWORK.isLive
-                      ? `All previous offers on ${ACTIVE_NETWORK.shortName} (Chain ${ACTIVE_NETWORK.chainId}) have been filled or cancelled. Create a fresh LP offer in Vault to test the full reservation flow.`
-                      : `Protocol contracts are not yet deployed on ${ACTIVE_NETWORK.name} (Chain ${ACTIVE_NETWORK.chainId}).`}
-                  </p>
+
+              {loading ? (
+                <div className="flex flex-col gap-2 p-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-14 w-full rounded-[12px]" />
+                  ))}
                 </div>
-                {ACTIVE_NETWORK.isLive && (
-                  <Button
-                    type="button"
-                    onClick={() => onNavigate("/vault")}
-                    className="h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
-                  >
-                    Open Vault to Create Offer
-                    <ArrowUpRight data-icon="inline-end" />
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {filteredOffers.map((offer) => {
-                  const inv = getTokenMeta(offer.inventoryToken);
-                  const pay = getTokenMeta(offer.paymentToken);
-                  const isFixed = offer.priceMode === 0;
-                  const priceLabel = isFixed
-                    ? `${formatPriceX36(offer.fixedPriceX36, inv.decimals, pay.decimals)} ${pay.symbol}`
-                    : `Oracle ${offer.spreadBps >= 0 ? "+" : ""}${offer.spreadBps} bps`;
-
-                  return (
-                    <div
-                      key={offer.offerId.toString()}
-                      onClick={() => openReserveSheet(offer)}
-                      className={cn(
-                        "group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[16px] border bg-card transition-all duration-150 hover:border-foreground/30 hover:bg-accent/35 sm:flex-row sm:items-center cursor-pointer",
-                        isFixed ? "border-border" : "border-border/80",
-                      )}
+              ) : filteredOffers.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                  <h2 className="text-base font-semibold text-foreground">
+                    {ACTIVE_NETWORK.isLive ? "No open offers" : "Mainnet deployment pending"}
+                  </h2>
+                  <p className="max-w-xs text-xs text-muted-foreground">
+                    {ACTIVE_NETWORK.isLive
+                      ? "Create an LP offer in Liquidity Vault to make inventory available here."
+                      : `Contracts are not yet live on ${ACTIVE_NETWORK.name}.`}
+                  </p>
+                  {ACTIVE_NETWORK.isLive && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => onNavigate("/vault")}
+                      className="mt-1 h-9 rounded-full px-5 text-xs cursor-pointer"
                     >
-                      {/* Tactile Left Stock Accent Bar */}
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "absolute inset-y-0 left-0 w-1",
-                          isFixed ? "bg-primary" : "bg-muted-foreground/30",
-                        )}
-                      />
+                      Open Vault
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1 p-2">
+                  {filteredOffers.map((offer) => {
+                    const inv = getTokenMeta(offer.inventoryToken);
+                    const pay = getTokenMeta(offer.paymentToken);
+                    const isFixed = offer.priceMode === 0;
+                    const isSelected = selected?.offerId === offer.offerId;
+                    const priceLabel = isFixed
+                      ? `${formatPriceX36(offer.fixedPriceX36, inv.decimals, pay.decimals)} ${pay.symbol}`
+                      : `Oracle ${offer.spreadBps >= 0 ? "+" : ""}${offer.spreadBps} bps`;
 
-                      <div className="grid flex-1 grid-cols-2 items-center gap-4 py-4 pl-6 pr-4 sm:grid-cols-12">
-                        <div className="col-span-2 flex flex-col sm:col-span-4">
-                          <span className="font-display text-base font-semibold tracking-[-0.02em] text-foreground">
-                            {inv.symbol} / {pay.symbol}
+                    return (
+                      <button
+                        key={offer.offerId.toString()}
+                        type="button"
+                        onClick={() => selectOffer(offer)}
+                        className={cn(
+                          "grid w-full grid-cols-2 items-center gap-2 rounded-[12px] px-3.5 py-3 text-left transition-all sm:grid-cols-12 cursor-pointer",
+                          isSelected
+                            ? "bg-accent text-foreground ring-1 ring-foreground/15"
+                            : "hover:bg-accent/55",
+                        )}
+                      >
+                        <div className="col-span-2 flex items-center gap-3 sm:col-span-4">
+                          <span
+                            className={cn(
+                              "flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+                              tokenBadgeColor(inv.symbol),
+                            )}
+                          >
+                            {inv.symbol.replace(/^t/, "").slice(0, 3)}
                           </span>
-                          <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                            #{offer.offerId.toString()} · {isFixed ? "FIXED" : "FLOATING"} · max{" "}
-                            {formatDuration(offer.maxDuration)}
-                          </span>
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate text-sm font-semibold text-foreground">
+                              {inv.symbol} / {pay.symbol}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {isFixed ? "Fixed" : "Floating"} · max {formatDuration(offer.maxDuration)}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex flex-col sm:col-span-3 sm:items-end">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            Available
-                          </span>
-                          <span className="tabular-nums-mono text-sm font-semibold text-foreground">
+                          <span className="text-[10px] text-muted-foreground sm:hidden">Available</span>
+                          <span className="tabular-nums-mono text-sm font-medium text-foreground">
                             {formatTokenAmount(offer.availableBalance, inv.decimals)} {inv.symbol}
                           </span>
                         </div>
 
                         <div className="flex flex-col sm:col-span-3 sm:items-end">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {isFixed ? "Locked Strike" : "Spread"}
-                          </span>
+                          <span className="text-[10px] text-muted-foreground sm:hidden">Strike</span>
                           <span className="tabular-nums-mono text-sm font-medium text-foreground">
                             {priceLabel}
                           </span>
                         </div>
 
-                        <div className="flex flex-col sm:col-span-2 sm:items-end">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            Hold Fee
-                          </span>
-                          <span className="tabular-nums-mono text-sm text-muted-foreground">
+                        <div className="hidden sm:col-span-2 sm:flex sm:justify-end">
+                          <span className="tabular-nums-mono rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                             {(offer.basePremiumBps / 100).toFixed(2)}%
                           </span>
                         </div>
-                      </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
-                      {/* Perforated Vertical Tear-Line + Reserve Stub */}
-                      <div className="flex items-center justify-end border-t border-dashed border-border/80 px-5 py-3 sm:border-t-0 sm:border-l sm:py-5">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openReserveSheet(offer);
-                          }}
-                          className="h-9 rounded-full px-4 text-xs font-medium cursor-pointer"
-                        >
-                          Reserve
-                          <ArrowRight data-icon="inline-end" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* Compact Activity Strip — ONLY shown when there are actual recent events */}
+            {activity.length > 0 && (
+              <div className="rounded-[16px] border border-border bg-card p-4">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground">Recent Activity</span>
+                  <span className="text-[11px] text-muted-foreground">{activity.length} latest</span>
+                </div>
+                <div className="divide-y divide-border/70">
+                  {activity.slice(0, 4).map((item) => (
+                    <a
+                      key={item.id}
+                      href={explorerTxUrl(item.txHash)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between gap-2 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <span className="truncate font-medium text-foreground">{item.label}</span>
+                      <span className="tabular-nums-mono inline-flex shrink-0 items-center gap-1 text-[11px]">
+                        #{item.blockNumber.toLocaleString()}
+                        <ArrowUpRight className="size-3" />
+                      </span>
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
-          {/* RIGHT 4 COLS (STICKY): Live On-Chain Activity Tape */}
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:col-span-4">
-            <div className="flex items-baseline justify-between border-b border-border pb-3">
-              <h2 className="font-display text-base font-semibold text-foreground">
-                On-Chain Activity Tape
-              </h2>
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                Chain {ACTIVE_NETWORK.chainId}
-              </span>
-            </div>
-
-            {activity.length > 0 ? (
-              <div className="divide-y divide-border/70">
-                {activity.map((item) => (
-                  <a
-                    key={item.id}
-                    href={explorerTxUrl(item.txHash)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group flex flex-col gap-1 py-3.5 text-xs transition-colors hover:bg-card/40"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-2 font-medium text-foreground">
-                        <span className="size-1.5 rounded-full bg-status-live" />
-                        {item.label}
-                      </span>
-                      <span className="tabular-nums-mono inline-flex items-center gap-1 text-[10px] text-muted-foreground group-hover:text-foreground">
-                        #{item.blockNumber.toLocaleString()}
-                        <ArrowUpRight className="size-3" />
-                      </span>
-                    </div>
-                    <span className="tabular-nums-mono pl-3.5 text-[11px] text-muted-foreground">
-                      {item.detail}
-                    </span>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-[16px] border border-dashed border-border p-5 text-center text-xs text-muted-foreground">
-                No recent events in the last 5,000 blocks.
-              </p>
-            )}
-          </aside>
-        </div>
-      </div>
-
-      {/* Apple Slide-Over Reserve Sheet (parent ledger remains visible behind scrim) */}
-      <Sheet open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-        <SheetContent className="flex w-full flex-col justify-between border-l border-border bg-card px-6 py-6 sm:max-w-[440px]">
-          {selected && selectedInv && selectedPay && (
-            <>
-              <div className="flex flex-col gap-6">
-                <SheetHeader className="p-0 text-left">
-                  <span className="tabular-nums-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                    Offer #{selected.offerId.toString()} ·{" "}
-                    {selected.priceMode === 0 ? "FIXED STRIKE" : "FLOATING ORACLE"}
-                  </span>
-                  <SheetTitle className="font-display text-2xl font-semibold">
-                    Reserve {selectedInv.symbol}
-                  </SheetTitle>
-                  <SheetDescription className="text-xs text-muted-foreground">
-                    Available: {formatTokenAmount(selected.availableBalance, selectedInv.decimals)}{" "}
-                    {selectedInv.symbol} · Min fill:{" "}
-                    {formatTokenAmount(selected.minFillAmount, selectedInv.decimals)}{" "}
-                    {selectedInv.symbol}
-                  </SheetDescription>
-                </SheetHeader>
-
-                {txStep === "done" && txHash ? (
-                  <div className="animate-rise flex flex-col items-center gap-4 rounded-[20px] border border-border bg-background p-7 text-center">
-                    <span className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
+          {/* RIGHT 5 COLS (STICKY): Always-Ready Live Quote & Reserve Card */}
+          <aside className="lg:sticky lg:top-24 lg:col-span-5">
+            <div className="rounded-[20px] border border-border bg-card p-6">
+              {selected && selectedInv && selectedPay ? (
+                txStep === "done" && txHash ? (
+                  <div className="animate-rise flex flex-col items-center gap-4 py-6 text-center">
+                    <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
                       <Check className="size-5" />
                     </span>
                     <div className="flex flex-col gap-1">
-                      <h3 className="font-display text-xl font-semibold">Execution Ticket Minted</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Ticket Minted</h3>
                       <p className="text-xs text-muted-foreground">
-                        Your {selectedInv.symbol} inventory is segregated and locked to your wallet.
+                        Your {selectedInv.symbol} inventory is locked and ready to exercise.
                       </p>
                     </div>
                     <a
                       href={explorerTxUrl(txHash)}
                       target="_blank"
                       rel="noreferrer"
-                      className="tabular-nums-mono inline-flex items-center gap-1 text-xs text-foreground underline underline-offset-4"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-foreground underline underline-offset-4"
                     >
-                      View on Blockscout
+                      View transaction
                       <ArrowUpRight className="size-3.5" />
                     </a>
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        setSelected(null);
-                        onNavigate("/tickets");
-                      }}
-                      className="mt-2 h-11 w-full rounded-full text-xs font-medium cursor-pointer"
-                    >
-                      Go to My Tickets
-                    </Button>
+                    <div className="mt-2 flex w-full gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setTxStep("idle");
+                          setTxHash(null);
+                        }}
+                        className="h-10 flex-1 rounded-full text-xs cursor-pointer"
+                      >
+                        New Quote
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => onNavigate("/tickets")}
+                        className="h-10 flex-1 rounded-full text-xs cursor-pointer"
+                      >
+                        View Ticket
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
-                    {/* Giant Terminal-Style Amount Entry */}
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <label
-                          htmlFor="reserve-amount"
-                          className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-                        >
-                          Reservation Size ({selectedInv.symbol})
-                        </label>
+                    {/* Card Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-base font-semibold text-foreground">
+                          Reserve {selectedInv.symbol}
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                          Offer #{selected.offerId.toString()} ·{" "}
+                          {selected.priceMode === 0 ? "Fixed strike" : "Floating oracle"}
+                        </p>
+                      </div>
+                      <span className="tabular-nums-mono rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                        {selected.priceMode === 0
+                          ? `${formatPriceX36(selected.fixedPriceX36, selectedInv.decimals, selectedPay.decimals)} ${selectedPay.symbol}`
+                          : `Oracle ${selected.spreadBps >= 0 ? "+" : ""}${selected.spreadBps} bps`}
+                      </span>
+                    </div>
+
+                    {/* Amount Input */}
+                    <div className="rounded-[14px] border border-border bg-background p-4">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <label htmlFor="reserve-amount">Amount</label>
                         <div className="flex items-center gap-1">
                           {[
-                            {
-                              label: "Min",
-                              val: selected.minFillAmount,
-                            },
-                            {
-                              label: "50%",
-                              val: selected.availableBalance / 2n,
-                            },
-                            {
-                              label: "Max",
-                              val: selected.availableBalance,
-                            },
+                            { label: "Min", val: selected.minFillAmount },
+                            { label: "50%", val: selected.availableBalance / 2n },
+                            { label: "Max", val: selected.availableBalance },
                           ].map((q) => (
                             <button
                               key={q.label}
@@ -644,14 +559,14 @@ export function TradePage({ onNavigate }: TradePageProps) {
                                   ),
                                 )
                               }
-                              className="tabular-nums-mono rounded-full border border-border px-2.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground cursor-pointer"
+                              className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground cursor-pointer"
                             >
                               {q.label}
                             </button>
                           ))}
                         </div>
                       </div>
-                      <div className="flex items-baseline justify-between gap-2 border-b border-border/90 pb-2 transition-colors focus-within:border-foreground">
+                      <div className="mt-2 flex items-baseline justify-between gap-2">
                         <input
                           id="reserve-amount"
                           type="text"
@@ -659,21 +574,18 @@ export function TradePage({ onNavigate }: TradePageProps) {
                           value={amountInput}
                           onChange={(e) => setAmountInput(e.target.value)}
                           placeholder="0.01"
-                          className="tabular-nums-mono w-full bg-transparent font-display text-3xl font-bold tracking-[-0.04em] text-foreground placeholder:text-muted-foreground/35 focus:outline-none"
+                          className="tabular-nums-mono w-full bg-transparent text-2xl font-semibold tracking-tight text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
                         />
-                        <span className="tabular-nums-mono shrink-0 text-sm font-medium text-muted-foreground">
+                        <span className="shrink-0 text-sm font-medium text-muted-foreground">
                           {selectedInv.symbol}
                         </span>
                       </div>
                     </div>
 
-                    {/* Lock Duration Pills */}
-                    <div className="flex flex-col gap-2">
-                      <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        Lock Window ({formatDuration(selected.minDuration)} –{" "}
-                        {formatDuration(selected.maxDuration)})
-                      </span>
-                      <div className="flex flex-wrap gap-2">
+                    {/* Lock Duration */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-muted-foreground">Lock window</span>
+                      <div className="flex items-center gap-1.5">
                         {DURATION_PRESETS.filter(
                           (d) =>
                             d.seconds >= selected.minDuration && d.seconds <= selected.maxDuration,
@@ -685,10 +597,10 @@ export function TradePage({ onNavigate }: TradePageProps) {
                               type="button"
                               onClick={() => setDurationSec(preset.seconds)}
                               className={cn(
-                                "tabular-nums-mono h-9 rounded-full px-4 text-xs font-medium transition-all cursor-pointer",
+                                "h-8 rounded-full px-3 text-xs font-medium transition-colors cursor-pointer",
                                 active
                                   ? "bg-primary text-primary-foreground"
-                                  : "border border-border bg-background/60 text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                                  : "border border-border bg-background text-muted-foreground hover:text-foreground",
                               )}
                             >
                               {preset.label}
@@ -698,114 +610,83 @@ export function TradePage({ onNavigate }: TradePageProps) {
                       </div>
                     </div>
 
-                    {/* Perforated Tear-Line into Live Quote Receipt */}
-                    <div className="border-t border-dashed border-border/90 pt-4">
-                      <div className="flex flex-col gap-2.5 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Upfront Hold Fee</span>
-                          <span className="tabular-nums-mono text-sm font-semibold text-foreground">
-                            {quoteLoading
-                              ? "Quoting…"
-                              : quote
-                                ? `${formatTokenAmount(quote.grossPremium, selectedPay.decimals, 6)} ${selectedPay.symbol}`
-                                : "—"}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">
-                            Your {selectedPay.symbol} Balance
-                          </span>
-                          <span className="tabular-nums-mono text-muted-foreground">
-                            {payBalance !== null
-                              ? `${formatTokenAmount(payBalance, selectedPay.decimals, 4)} ${selectedPay.symbol}`
+                    {/* Live Quote Summary */}
+                    <div className="flex flex-col gap-2 border-t border-border pt-4 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Hold fee</span>
+                        <span className="tabular-nums-mono font-semibold text-foreground">
+                          {quoteLoading
+                            ? "Quoting…"
+                            : quote
+                              ? `${formatTokenAmount(quote.grossPremium, selectedPay.decimals, 6)} ${selectedPay.symbol}`
                               : "—"}
-                          </span>
-                        </div>
-                        {quote && selected.priceMode === 0 && (
-                          <div className="mt-1 flex flex-col gap-1.5 rounded-[14px] border border-border/80 bg-background/70 p-3.5 text-[11px] leading-relaxed">
-                            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-foreground">
-                              Outcome · {formatDuration(durationSec)} window
-                            </span>
-                            <span className="text-muted-foreground">
-                              • Price rises above{" "}
-                              <strong className="tabular-nums-mono text-foreground">
-                                {formatPriceX36(selected.fixedPriceX36, selectedInv.decimals, selectedPay.decimals)}{" "}
-                                {selectedPay.symbol}
-                              </strong>{" "}
-                              → settle at locked strike, 0% slippage.
-                            </span>
-                            <span className="text-muted-foreground">
-                              • Price drops → walk away. Max cost is{" "}
-                              <strong className="tabular-nums-mono text-foreground">
-                                {formatTokenAmount(quote.grossPremium, selectedPay.decimals, 4)}{" "}
-                                {selectedPay.symbol}
-                              </strong>
-                              .
-                            </span>
-                          </div>
-                        )}
-                        <p className="text-[11px] leading-relaxed text-muted-foreground">
-                          Upfront hold fee is non-refundable if the ticket expires unexercised.
-                        </p>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Your balance</span>
+                        <span className="tabular-nums-mono text-muted-foreground">
+                          {payBalance !== null
+                            ? `${formatTokenAmount(payBalance, selectedPay.decimals, 4)} ${selectedPay.symbol}`
+                            : "—"}
+                        </span>
                       </div>
                     </div>
 
                     {txError && (
-                      <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-destructive/10 py-2.5 pl-4 pr-3.5 text-xs text-destructive">
-                        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
-                        <span>{txError}</span>
+                      <div className="rounded-[12px] border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
+                        {txError}
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
 
-              {/* Bottom CTA */}
-              {txStep !== "done" && (
-                <div className="pt-4">
-                  {!isConnected ? (
-                    <Button
-                      type="button"
-                      size="lg"
-                      onClick={() => onNavigate("/connect")}
-                      className="h-12 w-full rounded-full text-sm font-medium cursor-pointer"
-                    >
-                      Connect Wallet to Reserve
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      size="lg"
-                      disabled={
-                        isWrongNetwork ||
-                        !quote ||
-                        txStep === "approving" ||
-                        txStep === "reserving"
-                      }
-                      onClick={handleReserve}
-                      className="h-12 w-full rounded-full text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
-                    >
-                      {txStep === "approving" ? (
-                        <>
-                          <Loader2 className="animate-spin" data-icon="inline-start" />
-                          1/2 · Approving {selectedPay.symbol}…
-                        </>
-                      ) : txStep === "reserving" ? (
-                        <>
-                          <Loader2 className="animate-spin" data-icon="inline-start" />
-                          2/2 · Minting Ticket…
-                        </>
-                      ) : (
-                        `Approve & Reserve ${selectedInv.symbol}`
-                      )}
-                    </Button>
-                  )}
+                    {/* Primary CTA */}
+                    {!isConnected ? (
+                      <Button
+                        type="button"
+                        size="lg"
+                        onClick={() => onNavigate("/connect")}
+                        className="h-11 w-full rounded-full text-sm font-medium cursor-pointer"
+                      >
+                        Connect Wallet
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="lg"
+                        disabled={
+                          isWrongNetwork ||
+                          !quote ||
+                          txStep === "approving" ||
+                          txStep === "reserving"
+                        }
+                        onClick={handleReserve}
+                        className="h-11 w-full rounded-full text-sm font-medium active:scale-[0.985] transition-transform cursor-pointer"
+                      >
+                        {txStep === "approving" ? (
+                          <>
+                            <Loader2 className="animate-spin" data-icon="inline-start" />
+                            Approving {selectedPay.symbol}…
+                          </>
+                        ) : txStep === "reserving" ? (
+                          <>
+                            <Loader2 className="animate-spin" data-icon="inline-start" />
+                            Minting Ticket…
+                          </>
+                        ) : (
+                          `Reserve ${selectedInv.symbol}`
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                )
+              ) : (
+                <div className="py-12 text-center text-xs text-muted-foreground">
+                  Select an offer to see a live quote.
                 </div>
               )}
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+            </div>
+          </aside>
+        </div>
+      </div>
     </AppShell>
   );
 }

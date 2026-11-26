@@ -394,29 +394,23 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
         </div>
       ) : (
         <div className="flex flex-col gap-8">
-          {/* Editorial Hairline Ticket Summary Strip */}
-          <section className="grid grid-cols-3 gap-y-4 border-b border-border/80 pb-6 sm:divide-x sm:divide-border/80">
-            <div className="flex flex-col gap-1 pr-4">
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                01 · Owned Tickets
-              </span>
-              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+          {/* Clean 3-Card Ticket Summary Row */}
+          <section className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+              <span className="text-xs font-medium text-muted-foreground">Total Tickets</span>
+              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
                 {tickets.length}
               </span>
             </div>
-            <div className="flex flex-col gap-1 sm:px-6">
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                02 · Active
-              </span>
-              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+              <span className="text-xs font-medium text-muted-foreground">Active</span>
+              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
                 {tickets.filter((t) => t.expiresAt > nowSec).length}
               </span>
             </div>
-            <div className="flex flex-col gap-1 sm:pl-6">
-              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                03 · Expired
-              </span>
-              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-muted-foreground">
+            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
+              <span className="text-xs font-medium text-muted-foreground">Expired</span>
+              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-muted-foreground">
                 {tickets.filter((t) => t.expiresAt <= nowSec).length}
               </span>
             </div>
