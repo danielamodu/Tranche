@@ -14,7 +14,7 @@ export function TrancheLogo({ className, imgClassName }: TrancheLogoProps) {
       <img
         src="/brand/tranche-mark-dark.png"
         alt="tranche"
-        className={cn("block h-7 w-auto object-contain", imgClassName)}
+        className={cn("block h-7 w-auto object-contain invert dark:invert-0", imgClassName)}
         draggable={false}
       />
     </span>
