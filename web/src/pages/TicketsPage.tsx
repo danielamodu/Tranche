@@ -318,44 +318,58 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
     <AppShell
       activeRoute="/tickets"
       title="My Tickets"
-      subtitle="Your execution tickets"
+      subtitle="Your active price locks"
       onNavigate={onNavigate}
       onRefresh={() => loadTickets(true)}
       refreshing={refreshing}
+      headerActions={
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onNavigate("/trade")}
+          className="h-8 rounded-full px-3.5 text-xs cursor-pointer"
+        >
+          New Reservation
+          <ArrowRight className="ml-1 size-3.5" />
+        </Button>
+      }
     >
       {!isConnected ? (
-        <div className="mx-auto flex max-w-[460px] flex-col items-center py-12 text-center">
-          <div className="w-full rounded-t-[22px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              ERC-721 Vault · Wallet Required
-            </span>
-            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em]">
-              Connect wallet to inspect tickets
-            </h2>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Your active Execution Tickets appear here automatically as physical stubs once
-              connected.
-            </p>
-            <Button
-              type="button"
-              onClick={() => onNavigate("/connect")}
-              className="mt-6 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+        <div className="flex flex-col items-center justify-center lg:h-[calc(100svh-120px)]">
+          <div className="mx-auto flex w-full max-w-[460px] flex-col items-center text-center">
+            <div className="w-full rounded-t-[22px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                Wallet Required
+              </span>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em]">
+                Connect wallet to view your tickets
+              </h2>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Every price lock you reserve on the Trade Desk appears here as a ticket you can buy,
+                split, or send.
+              </p>
+              <Button
+                type="button"
+                onClick={() => onNavigate("/connect")}
+                className="mt-6 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+              >
+                Connect Wallet
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+            </div>
+            <svg
+              viewBox="0 0 440 24"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              className="block h-4 w-full opacity-20"
             >
-              Connect Wallet
-              <ArrowRight data-icon="inline-end" />
-            </Button>
+              <polygon
+                points="0,0 440,0 440,24 330,4 220,24 110,4 0,24"
+                style={{ fill: "#f8f7ee" }}
+              />
+            </svg>
           </div>
-          <svg
-            viewBox="0 0 440 24"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            className="block h-4 w-full opacity-20"
-          >
-            <polygon
-              points="0,0 440,0 440,24 330,4 220,24 110,4 0,24"
-              style={{ fill: "#f8f7ee" }}
-            />
-          </svg>
         </div>
       ) : loading ? (
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -364,65 +378,78 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
           ))}
         </div>
       ) : tickets.length === 0 ? (
-        <div className="mx-auto flex max-w-[460px] flex-col items-center py-12 text-center">
-          <div className="w-full rounded-t-[22px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              0 Active Stubs
-            </span>
-            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em] text-foreground">
-              No active execution tickets
-            </h2>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Reserve inventory from an open offer strip on the Trade Desk to mint your first
-              ERC-721 Execution Ticket.
-            </p>
-            <Button
-              type="button"
-              onClick={() => onNavigate("/trade")}
-              className="mt-6 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+        <div className="flex flex-col items-center justify-center lg:h-[calc(100svh-120px)]">
+          <div className="mx-auto flex w-full max-w-[460px] flex-col items-center text-center">
+            <div className="w-full rounded-t-[22px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                No Active Tickets
+              </span>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em] text-foreground">
+                You don&apos;t have any price locks yet
+              </h2>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Pick an offer on the Trade Desk to lock a guaranteed price for 10m–1h. Your ticket
+                will show up here right away.
+              </p>
+              <Button
+                type="button"
+                onClick={() => onNavigate("/trade")}
+                className="mt-6 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+              >
+                Browse Open Offers
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+            </div>
+            <svg
+              viewBox="0 0 440 24"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              className="block h-4 w-full opacity-20"
             >
-              Browse Open Offers
-              <ArrowRight data-icon="inline-end" />
-            </Button>
+              <polygon
+                points="0,0 440,0 440,24 330,4 220,24 110,4 0,24"
+                style={{ fill: "#f8f7ee" }}
+              />
+            </svg>
           </div>
-          <svg
-            viewBox="0 0 440 24"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            className="block h-4 w-full opacity-20"
-          >
-            <polygon
-              points="0,0 440,0 440,24 330,4 220,24 110,4 0,24"
-              style={{ fill: "#f8f7ee" }}
-            />
-          </svg>
         </div>
       ) : (
-        <div className="flex flex-col gap-8">
-          {/* Clean 3-Card Ticket Summary Row */}
-          <section className="grid grid-cols-3 gap-4">
-            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-              <span className="text-xs font-medium text-muted-foreground">Total Tickets</span>
-              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-                {tickets.length}
-              </span>
+        <div className="flex flex-col gap-5 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
+          {/* Clean Plain-English Header Strip */}
+          <section className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="font-display text-xl font-semibold tracking-[-0.02em] text-foreground">
+                Your locked price tickets
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Buy at your locked price before the timer runs out, split or transfer a ticket, or
+                let it expire to cap your loss at the hold fee.
+              </p>
             </div>
-            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-              <span className="text-xs font-medium text-muted-foreground">Active</span>
-              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-                {tickets.filter((t) => t.expiresAt > nowSec).length}
+            <div className="flex items-center gap-5 text-xs text-muted-foreground">
+              <span>
+                Active:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {tickets.filter((t) => t.expiresAt > nowSec).length}
+                </strong>
               </span>
-            </div>
-            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-              <span className="text-xs font-medium text-muted-foreground">Expired</span>
-              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-muted-foreground">
-                {tickets.filter((t) => t.expiresAt <= nowSec).length}
+              <span>
+                Expired:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {tickets.filter((t) => t.expiresAt <= nowSec).length}
+                </strong>
+              </span>
+              <span>
+                Total:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {tickets.length}
+                </strong>
               </span>
             </div>
           </section>
 
           {reclaimError && (
-            <div className="flex items-start justify-between gap-3 rounded-[14px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+            <div className="flex shrink-0 items-start justify-between gap-3 rounded-[14px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
               <div className="flex items-start gap-2">
                 <ShieldAlert className="mt-0.5 size-4 shrink-0" />
                 <span>Reclaim failed: {reclaimError}</span>
@@ -436,7 +463,8 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
               </button>
             </div>
           )}
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 gap-6 pb-4 md:grid-cols-2 lg:grid-cols-3">
           {tickets.map((t) => {
             const inv = getTokenMeta(t.inventoryToken);
             const pay = getTokenMeta(t.paymentToken);
@@ -554,7 +582,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
                           className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-transform active:scale-[0.985] cursor-pointer"
                           style={{ backgroundColor: fg, color: bg }}
                         >
-                          Exercise
+                          Buy Now
                           <ArrowRight className="size-3.5" />
                         </button>
 
@@ -606,6 +634,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
               </div>
             );
           })}
+        </div>
         </div>
         </div>
       )}

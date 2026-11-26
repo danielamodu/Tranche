@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  Activity,
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
@@ -7,6 +8,7 @@ import {
   Bot,
   Check,
   ChevronRight,
+  CreditCard,
   Droplets,
   Loader2,
   LogOut,
@@ -16,6 +18,7 @@ import {
   PanelLeftOpen,
   RefreshCw,
   ShieldAlert,
+  SlidersHorizontal,
   Sun,
   Ticket,
   Vault,
@@ -38,7 +41,14 @@ import { cn } from "@/lib/utils";
 import type { AppRoute } from "@/App";
 
 interface AppShellProps {
-  activeRoute: "/trade" | "/tickets" | "/vault" | "/agent";
+  activeRoute:
+    | "/trade"
+    | "/tickets"
+    | "/vault"
+    | "/agent"
+    | "/agent/activity"
+    | "/agent/policy"
+    | "/payments";
   title: string;
   subtitle?: string;
   onNavigate: (path: AppRoute) => void;
@@ -147,12 +157,17 @@ export function AppShell({
     };
   }, [address, activeRoute, refreshing]);
 
-  const agentNav = [{ path: "/agent" as const, label: "Tranche Agent", icon: Bot }];
+  const agentNav = [
+    { path: "/agent" as const, label: "Overview", icon: Bot },
+    { path: "/agent/activity" as const, label: "Activity", icon: Activity },
+    { path: "/agent/policy" as const, label: "Rules & Controls", icon: SlidersHorizontal },
+  ];
   const protocolNav = [
     { path: "/trade" as const, label: "Trade Desk", icon: ArrowLeftRight },
     { path: "/tickets" as const, label: "Tickets", icon: Ticket, badge: ticketCount },
     { path: "/vault" as const, label: "Liquidity Vault", icon: Vault },
   ];
+  const paymentsNav = [{ path: "/payments" as const, label: "HSP Payments", icon: CreditCard }];
 
   const sidebarWidth = collapsed ? "w-[72px]" : "w-[236px]";
   const mainPadding = collapsed ? "md:pl-[72px]" : "md:pl-[236px]";
@@ -256,6 +271,42 @@ export function AppShell({
                       {item.badge}
                     </span>
                   )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Group 3: Independent HSP Payments */}
+          <div className="flex flex-col gap-1">
+            {!collapsed && (
+              <span className="px-2.5 pb-1 text-[11px] font-medium text-muted-foreground">
+                Payments
+              </span>
+            )}
+            {paymentsNav.map((item) => {
+              const Icon = item.icon;
+              const active = activeRoute === item.path;
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  title={collapsed ? item.label : undefined}
+                  onClick={() => {
+                    setMobileOpen(false);
+                    onNavigate(item.path);
+                  }}
+                  className={cn(
+                    "flex h-9 w-full items-center rounded-[10px] text-[13px] font-medium transition-colors duration-150 cursor-pointer",
+                    collapsed ? "justify-center px-0" : "justify-between px-2.5",
+                    active
+                      ? "bg-sidebar-accent text-foreground shadow-[inset_0_0_0_1px_var(--border)]"
+                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                  )}
+                >
+                  <span className="inline-flex items-center gap-2.5">
+                    <Icon className="size-4 shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </span>
                 </button>
               );
             })}
@@ -489,7 +540,7 @@ export function AppShell({
         </header>
 
         {/* Mainnet Deployment Pending Banner */}
-        {!ACTIVE_NETWORK.isLive && activeRoute !== "/agent" && (
+        {!ACTIVE_NETWORK.isLive && !activeRoute.startsWith("/agent") && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-6 py-2.5 text-xs text-amber-700 dark:text-amber-200">
             <span>
               {ACTIVE_NETWORK.name} (Chain {ACTIVE_NETWORK.chainId}) protocol contracts are not yet
@@ -517,8 +568,8 @@ export function AppShell({
           </div>
         )}
 
-        {/* Page Content */}
-        <main className="mx-auto w-full max-w-[1240px] flex-1 px-5 py-6 sm:px-7">{children}</main>
+        {/* Page Content — Full-width flush with header & sidebar */}
+        <main className="w-full flex-1 px-6 py-6 lg:px-8">{children}</main>
       </div>
 
       {/* In-Dashboard Wallet Reconnect Dialog */}

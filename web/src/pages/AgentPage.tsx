@@ -11,9 +11,9 @@ import {
   Play,
   Settings2,
   ShieldAlert,
-  ShieldCheck,
   WifiOff,
 } from "lucide-react";
+import { AgentIntelligencePanel } from "@/components/AgentIntelligencePanel";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,12 +31,16 @@ import {
   isHostedHttpsToLocalApi,
   normalizeAgentApiUrl,
   type AgentDashboardSnapshot,
+  type AgentIntelligenceSnapshot,
   type StrategyType,
 } from "@/lib/agentApi";
 import { cn } from "@/lib/utils";
 import type { AppRoute } from "@/App";
 
+export type AgentView = "overview" | "activity" | "policy";
+
 interface AgentPageProps {
+  view?: AgentView;
   onNavigate: (path: AppRoute) => void;
 }
 
@@ -140,7 +144,7 @@ function humanDecisionSummary(d: AgentDashboardSnapshot["decisions"][number]): s
   return d.rationale;
 }
 
-export function AgentPage({ onNavigate }: AgentPageProps) {
+export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
   const [apiUrlInput, setApiUrlInput] = useState<string>(() => {
     const saved = sessionStorage.getItem(API_URL_STORAGE_KEY);
     return saved ? normalizeAgentApiUrl(saved) : normalizeAgentApiUrl(DEFAULT_AGENT_API_URL);
@@ -163,6 +167,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
   );
 
   const [snapshot, setSnapshot] = useState<AgentDashboardSnapshot | null>(null);
+  const [intelligence, setIntelligence] = useState<AgentIntelligenceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -203,9 +208,13 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
       const seq = ++requestSeqRef.current;
       if (isManual) setRefreshing(true);
       try {
-        const data = await client.fetchSnapshot();
+        const [data, intel] = await Promise.all([
+          client.fetchSnapshot(),
+          client.getIntelligence().catch(() => null),
+        ]);
         if (seq !== requestSeqRef.current) return;
         setSnapshot(data);
+        setIntelligence(intel);
         setDisconnected(false);
         setRateLimited(false);
         if (
@@ -375,20 +384,31 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
       ? pctBar(metrics.dailyRealizedLossPayment, config.riskLimits.maxDailyRealizedLossPayment)
       : 0;
 
-  return (
-    <AppShell
-      activeRoute="/agent"
-      onNavigate={onNavigate}
-      title="Tranche Agent"
-      subtitle={
-        disconnected
+  const routeForView =
+    view === "activity" ? "/agent/activity" : view === "policy" ? "/agent/policy" : "/agent";
+  const pageTitle =
+    view === "activity"
+      ? "Agent Activity"
+      : view === "policy"
+        ? "Rules & Controls"
+        : "Tranche Agent";
+  const pageSubtitle =
+    view === "activity"
+      ? "Live decisions, open positions & tickets"
+      : view === "policy"
+        ? "Strategy, safety limits & plain-English rules"
+        : disconnected
           ? "Connecting to Agent API…"
           : isReadOnly
-            ? `Safe Read-Only Mode · Watching Chain ${status?.chainId ?? 177} live`
-            : isDryRun
-              ? `Dry-Run Mode · Chain ${status?.chainId ?? 177}`
-              : `Live Execution · Chain ${status?.chainId ?? 177}`
-      }
+            ? `Safe Read-Only · Chain ${status?.chainId ?? 177}`
+            : `Chain ${status?.chainId ?? 177}`;
+
+  return (
+    <AppShell
+      activeRoute={routeForView}
+      onNavigate={onNavigate}
+      title={pageTitle}
+      subtitle={pageSubtitle}
       refreshing={refreshing}
       onRefresh={() => void loadSnapshot(true)}
       headerActions={
@@ -411,7 +431,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
             ) : isReadOnly ? (
               <>
                 <Eye className="size-3" />
-                Read-Only · Live Feed
+                Read-Only
               </>
             ) : isDryRun ? (
               <>
@@ -425,62 +445,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               </>
             )}
           </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setControlsOpen(true)}
-            className="h-8 rounded-full px-3 text-xs cursor-pointer"
-          >
-            <Settings2 className="mr-1.5 size-3.5" />
-            Controls
-          </Button>
-        </div>
-      }
-    >
-      {/* Fixed single-viewport cockpit on desktop (zero outer page scroll) */}
-      <div className="flex flex-col gap-4 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
-        {/* 1. Plain-English Live Story Banner */}
-        <section
-          className={cn(
-            "flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-[16px] border px-4 py-3",
-            disconnected
-              ? "border-amber-500/35 bg-amber-500/[0.08]"
-              : "border-border bg-card",
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className={cn(
-                "flex size-8 shrink-0 items-center justify-center rounded-full",
-                disconnected
-                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                  : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-              )}
-            >
-              {disconnected ? <WifiOff className="size-4" /> : <ShieldCheck className="size-4" />}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-foreground">
-                {disconnected
-                  ? hostedLocalMismatch
-                    ? "Agent API is pointed at localhost — open Controls to set a hosted API URL."
-                    : "Agent API is currently unreachable. Retrying automatically…"
-                  : isReadOnly
-                    ? `Watching live ${status?.market ?? "WHSK/USDT"} on HashKey Chain (Chain ${status?.chainId ?? 177}) — Safe Observation Mode`
-                    : `Autonomous Agent Active on ${status?.market ?? "WHSK/USDT"} (Chain ${status?.chainId ?? 177})`}
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {disconnected
-                  ? "No live quotes loaded yet. Verify your Agent URL in Controls."
-                  : isReadOnly
-                    ? `Comparing Tranche vs. HSKSwap every 15s using real mainnet prices. 0 funds spent · ${metrics?.totalCycles ?? 0} live checks completed · last check ${fmtTime(health?.lastSuccessfulCycleAt)}.`
-                    : `Comparing Tranche vs. HSKSwap under code-enforced risk limits. Last check ${fmtTime(health?.lastSuccessfulCycleAt)}.`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
+          {view === "policy" && (
             <Button
               type="button"
               size="sm"
@@ -488,619 +453,739 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               onClick={() => setControlsOpen(true)}
               className="h-8 rounded-full px-3 text-xs cursor-pointer"
             >
-              Configure Policy
+              <Settings2 className="mr-1.5 size-3.5" />
+              API Connection
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => onNavigate("/trade")}
-              className="h-8 rounded-full px-3.5 text-xs cursor-pointer"
-            >
-              Try Testnet Trade
-              <ArrowRight className="ml-1 size-3.5" />
-            </Button>
-          </div>
-        </section>
-
-        {/* 2. Compact Dual-Venue Comparison (Tranche vs HSKSwap) */}
-        <section className="shrink-0 overflow-hidden rounded-[18px] border border-border">
-          <div className="grid grid-cols-1 lg:grid-cols-12">
-            {/* Left: Tranche */}
-            <div
-              className="flex flex-col justify-between gap-2.5 p-4 lg:col-span-5"
-              style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold">Tranche Protocol</span>
-                  <span className="text-[11px] opacity-60">Price-locked reservation</span>
-                </div>
+          )}
+        </div>
+      }
+    >
+      {/* VIEW 1: AIRY OVERVIEW — One focal point, generous breathing room, zero scroll */}
+      {view === "overview" && (
+        <div className="flex w-full flex-col justify-between gap-8 py-2 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
+          {/* Calm Editorial Hero */}
+          <section className="flex flex-col justify-between gap-5 pt-2 sm:flex-row sm:items-end">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <span
-                  className="rounded-full px-2.5 py-0.5 text-[10px] font-medium"
-                  style={{
-                    backgroundColor: winningVenue === "TRANCHE" ? "#050505" : "rgba(5,5,5,0.08)",
-                    color: winningVenue === "TRANCHE" ? "#f8f7ee" : "#050505",
-                  }}
-                >
-                  {winningVenue === "TRANCHE"
-                    ? "Best Route"
-                    : (markets?.trancheOffersCount ?? 0) > 0
-                      ? "Available"
-                      : "No Mainnet Offers Yet"}
+                  className={cn(
+                    "size-2 rounded-full",
+                    disconnected ? "bg-amber-500" : "bg-emerald-500",
+                  )}
+                />
+                <span>
+                  {disconnected
+                    ? "Reconnecting to live feed…"
+                    : isReadOnly
+                      ? `Safe Read-Only Mode · HashKey Chain (${status?.chainId ?? 177})`
+                      : `Autonomous Mode · HashKey Chain (${status?.chainId ?? 177})`}
                 </span>
               </div>
+              <h1 className="font-display text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
+                {disconnected
+                  ? "Waiting for the agent feed."
+                  : `Watching ${status?.market ?? "WHSK/USDT"} live.`}
+              </h1>
+              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+                {disconnected
+                  ? hostedLocalMismatch
+                    ? "Your API URL is pointed at localhost. Open Rules & Controls to switch to a live server."
+                    : "Retrying connection automatically. No funds are at risk."
+                  : isReadOnly
+                    ? "Comparing Tranche price locks against HSKSwap every 15 seconds using real mainnet prices. Zero funds spent."
+                    : "Automatically routing between Tranche price locks and HSKSwap under code-enforced safety limits."}
+              </p>
+            </div>
 
-              {(markets?.trancheOffersCount ?? 0) > 0 && markets?.venueComparison ? (
-                <div>
-                  <span className="tabular-nums-mono text-xl font-semibold tracking-tight">
-                    {fmtPayment6(markets.venueComparison.tranche.acquisitionCostPayment, paymentSymbol)}
-                  </span>
-                  <p className="tabular-nums-mono text-[11px] opacity-65">
-                    Hold fee {fmtPayment6(markets.venueComparison.tranche.reservationPremiumPayment, paymentSymbol)} · Exercise{" "}
-                    {fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}
-                  </p>
-                </div>
-              ) : (
+            <div className="flex shrink-0 items-center gap-2.5">
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => onNavigate("/trade")}
+                className="h-11 rounded-full px-6 text-sm font-medium cursor-pointer"
+              >
+                Try Testnet Trade
+                <ArrowRight className="ml-1.5 size-4" />
+              </Button>
+            </div>
+          </section>
+
+          {/* The ONE Centerpiece: Clean, Spacious Venue Comparison */}
+          <section className="overflow-hidden rounded-[24px] border border-border">
+            <div className="grid grid-cols-1 lg:grid-cols-12">
+              {/* Left: Tranche */}
+              <div
+                className="flex flex-col justify-between gap-8 p-7 lg:col-span-5"
+                style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs leading-snug opacity-75">
-                    Mainnet contracts aren&apos;t deployed yet, so the agent sees 0 offers on Chain 177.
-                    Try live reservations on Chain 133 testnet.
-                  </p>
+                  <div>
+                    <span className="block text-sm font-semibold">Tranche Protocol</span>
+                    <span className="text-xs opacity-60">Price-locked reservation</span>
+                  </div>
+                  <span
+                    className="rounded-full px-3 py-1 text-[11px] font-medium"
+                    style={{
+                      backgroundColor: winningVenue === "TRANCHE" ? "#050505" : "rgba(5,5,5,0.08)",
+                      color: winningVenue === "TRANCHE" ? "#f8f7ee" : "#050505",
+                    }}
+                  >
+                    {winningVenue === "TRANCHE"
+                      ? "Best Route"
+                      : (markets?.trancheOffersCount ?? 0) > 0
+                        ? "Available"
+                        : "Testnet Only"}
+                  </span>
+                </div>
+
+                {(markets?.trancheOffersCount ?? 0) > 0 && markets?.venueComparison ? (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="tabular-nums-mono text-3xl font-semibold tracking-tight">
+                      {fmtPayment6(markets.venueComparison.tranche.acquisitionCostPayment, paymentSymbol)}
+                    </span>
+                    <span className="tabular-nums-mono text-xs opacity-65">
+                      Hold fee{" "}
+                      {fmtPayment6(
+                        markets.venueComparison.tranche.reservationPremiumPayment,
+                        paymentSymbol,
+                      )}{" "}
+                      · Exercise{" "}
+                      {fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xl font-semibold tracking-tight">
+                      No mainnet offers yet
+                    </span>
+                    <p className="text-xs leading-relaxed opacity-70">
+                      Mainnet contracts aren&apos;t live yet, so the agent sees 0 offers on Chain
+                      177. Try real price-locked reservations on Chain 133 testnet.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-black/10 pt-4 text-xs opacity-75">
+                  <span>Zero slippage · capped downside</span>
                   <button
                     type="button"
                     onClick={() => onNavigate("/trade")}
-                    className="shrink-0 rounded-full bg-black px-2.5 py-1 text-[11px] font-medium text-[#f8f7ee] hover:opacity-85 cursor-pointer"
+                    className="inline-flex items-center gap-1 font-medium underline underline-offset-4 hover:opacity-100 cursor-pointer"
                   >
-                    Open Trade Desk
+                    Trade Desk
+                    <ArrowRight className="size-3" />
                   </button>
                 </div>
-              )}
-
-              <div className="flex items-center justify-between border-t border-black/10 pt-2 text-[11px] opacity-70">
-                <span className="tabular-nums-mono">{markets?.trancheOffersCount ?? 0} active offers</span>
-                <span>Zero slippage · Capped downside</span>
               </div>
-            </div>
 
-            {/* Center: Plain-English Verdict */}
-            <div className="flex flex-row items-center justify-between gap-3 border-y border-border bg-muted/50 px-4 py-3 lg:col-span-2 lg:flex-col lg:justify-center lg:border-x lg:border-y-0 lg:text-center">
-              <div>
-                <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Agent Pick
-                </span>
-                <span className="text-base font-semibold text-foreground">
-                  {winningVenue === "NONE" ? "Wait" : winningVenue === "TRANCHE" ? "Tranche" : "HSKSwap"}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-[11px] lg:flex-col lg:gap-1">
-                <span className="rounded-full border border-border bg-background px-2 py-0.5 font-medium text-foreground">
+              {/* Center: Quiet Verdict */}
+              <div className="flex flex-row items-center justify-between gap-4 border-y border-border bg-muted/40 px-6 py-5 lg:col-span-2 lg:flex-col lg:justify-center lg:border-x lg:border-y-0 lg:text-center">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Best Now
+                  </span>
+                  <span className="text-xl font-semibold text-foreground">
+                    {winningVenue === "NONE"
+                      ? "Wait"
+                      : winningVenue === "TRANCHE"
+                        ? "Tranche"
+                        : "HSKSwap"}
+                  </span>
+                </div>
+                <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground">
                   {humanRegime(markets?.marketRegime)}
                 </span>
-                <span className="tabular-nums-mono text-muted-foreground">
-                  Oracle {markets?.oracleAgeSec ?? "—"}s · Vol{" "}
-                  {markets?.realizedVolatilityBps !== undefined
-                    ? `${(markets.realizedVolatilityBps / 100).toFixed(2)}%`
-                    : "—"}
-                </span>
-              </div>
-            </div>
-
-            {/* Right: HSKSwap */}
-            <div className="flex flex-col justify-between gap-2.5 bg-card p-4 text-card-foreground lg:col-span-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold">HSKSwap V3</span>
-                  <span className="text-[11px] text-muted-foreground">Instant AMM swap</span>
-                </div>
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[10px] font-medium",
-                    winningVenue === "HSKSWAP"
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-border text-muted-foreground",
-                  )}
-                >
-                  {winningVenue === "HSKSWAP"
-                    ? isReadOnly
-                      ? "Best Route (Simulated)"
-                      : "Best Route"
-                    : "Available"}
-                </span>
               </div>
 
-              <div>
-                <span className="tabular-nums-mono text-xl font-semibold tracking-tight">
-                  {markets?.venueComparison
-                    ? fmtPayment6(markets.venueComparison.hskswap.acquisitionCostPayment, paymentSymbol)
-                    : "—"}
-                </span>
-                <p className="tabular-nums-mono text-[11px] text-muted-foreground">
-                  {markets?.venueComparison
-                    ? `For 100 WHSK · Pool fee & impact: ${((markets.venueComparison.hskswap.priceImpactBps ?? 0) / 100).toFixed(2)}%`
-                    : "Waiting for live Chain 177 quote…"}
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between border-t border-border pt-2 text-[11px] text-muted-foreground">
-                <span className="tabular-nums-mono">
-                  Instant sell value:{" "}
-                  {markets?.dexSellQuote
-                    ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol)
-                    : "—"}
-                </span>
-                <span>Live Chain 177 quote</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 3. Main Split Cockpit — Fills remaining viewport height cleanly */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-12">
-          {/* LEFT 7 COLS: Internal-scroll Live Feed / Positions / Tickets */}
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-[18px] border border-border bg-card lg:col-span-7">
-            <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
-              <div className="flex items-center gap-1 rounded-full border border-border bg-background p-0.5 text-xs">
-                {(
-                  [
-                    { id: "decisions", label: `Live Activity (${snapshot?.decisions.length ?? 0})` },
-                    { id: "positions", label: `Positions (${snapshot?.positions.open.length ?? 0})` },
-                    { id: "tickets", label: `Tickets (${snapshot?.tickets.active.length ?? 0})` },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setActiveTab(t.id)}
+              {/* Right: HSKSwap */}
+              <div className="flex flex-col justify-between gap-8 bg-card p-7 text-card-foreground lg:col-span-5">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="block text-sm font-semibold">HSKSwap V3</span>
+                    <span className="text-xs text-muted-foreground">Instant market swap</span>
+                  </div>
+                  <span
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer",
-                      activeTab === t.id
+                      "rounded-full px-3 py-1 text-[11px] font-medium",
+                      winningVenue === "HSKSWAP"
                         ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground",
+                        : "border border-border text-muted-foreground",
                     )}
                   >
-                    {t.label}
-                  </button>
-                ))}
+                    {winningVenue === "HSKSWAP"
+                      ? isReadOnly
+                        ? "Simulated Pick"
+                        : "Best Route"
+                      : "Available"}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="tabular-nums-mono text-3xl font-semibold tracking-tight">
+                    {markets?.venueComparison
+                      ? fmtPayment6(
+                          markets.venueComparison.hskswap.acquisitionCostPayment,
+                          paymentSymbol,
+                        )
+                      : "—"}
+                  </span>
+                  <span className="tabular-nums-mono text-xs text-muted-foreground">
+                    {markets?.venueComparison
+                      ? `For 100 WHSK · Pool fee & impact ${((markets.venueComparison.hskswap.priceImpactBps ?? 0) / 100).toFixed(2)}%`
+                      : "Waiting for live Chain 177 quote…"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
+                  <span className="tabular-nums-mono">
+                    Instant sell:{" "}
+                    {markets?.dexSellQuote
+                      ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol)
+                      : "—"}
+                  </span>
+                  <span>Updated {fmtTime(health?.lastSuccessfulCycleAt)}</span>
+                </div>
               </div>
-              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                Updated {fmtTime(health?.lastSuccessfulCycleAt)}
+            </div>
+          </section>
+
+          <AgentIntelligencePanel intelligence={intelligence} />
+
+          {/* Quiet Bottom Strip — Clean inline stats & clear next-page links */}
+          <footer className="flex flex-col justify-between gap-4 border-t border-border pt-5 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+              <span>
+                Status:{" "}
+                <strong className="font-semibold text-foreground">
+                  {disconnected
+                    ? "Offline"
+                    : status?.killSwitch
+                      ? "Stopped"
+                      : status?.paused
+                        ? "Paused"
+                        : "Running Safely"}
+                </strong>
+              </span>
+              <span>
+                Checks:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {metrics?.totalCycles ?? 0}
+                </strong>
+              </span>
+              <span>
+                Exposure:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"} /{" "}
+                  {config ? fmtPayment6(config.riskLimits.maxTotalExposurePayment, "USDT") : "$50.00"}
+                </strong>
+              </span>
+              <span>
+                Tx sent:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {metrics?.liveExecutionsCount ?? 0}
+                </strong>
               </span>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
-              {activeTab === "decisions" &&
-                (snapshot && snapshot.decisions.length > 0 ? (
-                  <div className="divide-y divide-border/70">
-                    {snapshot.decisions.map((d) => {
-                      const act = humanAction(d.selectedAction);
-                      return (
-                        <article
-                          key={`${d.cycleId}-${d.decisionKey}`}
-                          className="flex flex-col gap-1 py-2.5"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="tabular-nums-mono text-[11px] font-semibold text-muted-foreground">
-                                #{d.cycleId}
-                              </span>
-                              <span
-                                className={cn(
-                                  "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                                  act.tone === "good"
-                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                                    : act.tone === "warn"
-                                      ? "bg-destructive/15 text-destructive"
-                                      : "bg-accent text-foreground",
-                                )}
-                              >
-                                {act.label}
-                              </span>
-                              <span
-                                className={cn(
-                                  "text-[11px] font-medium",
-                                  d.riskAllowed
-                                    ? "text-emerald-600 dark:text-emerald-400"
-                                    : "text-destructive",
-                                )}
-                              >
-                                {d.riskAllowed ? "Safety OK" : "Blocked"}
-                              </span>
-                            </div>
-                            <span className="tabular-nums-mono shrink-0 text-[11px] text-muted-foreground">
-                              {fmtTime(d.timestamp)}
+            <div className="flex items-center gap-5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => onNavigate("/agent/activity")}
+                className="inline-flex items-center gap-1 text-foreground transition-opacity hover:opacity-70 cursor-pointer"
+              >
+                View Activity ({snapshot?.decisions.length ?? 0})
+                <ArrowRight className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate("/agent/policy")}
+                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
+              >
+                Rules &amp; Controls
+                <ArrowRight className="size-3.5" />
+              </button>
+            </div>
+          </footer>
+        </div>
+      )}
+
+      {/* VIEW 2: DEDICATED ACTIVITY PAGE — Full breathing room for decisions, positions & tickets */}
+      {view === "activity" && (
+        <div className="flex w-full flex-col gap-5 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1 rounded-full border border-border bg-card p-1 text-xs">
+              {(
+                [
+                  { id: "decisions", label: `Decisions (${snapshot?.decisions.length ?? 0})` },
+                  { id: "positions", label: `Positions (${snapshot?.positions.open.length ?? 0})` },
+                  { id: "tickets", label: `Tickets (${snapshot?.tickets.active.length ?? 0})` },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveTab(t.id)}
+                  className={cn(
+                    "rounded-full px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+                    activeTab === t.id
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="tabular-nums-mono">
+                Last check {fmtTime(health?.lastSuccessfulCycleAt)}
+              </span>
+              <a
+                href={`${normalizedApiUrl}/agent/soak`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4 hover:opacity-75"
+              >
+                24h Soak Proof
+                <ArrowUpRight className="size-3.5" />
+              </a>
+            </div>
+          </div>
+
+          <section className="min-h-0 flex-1 overflow-y-auto rounded-[20px] border border-border bg-card">
+            {activeTab === "decisions" &&
+              (snapshot && snapshot.decisions.length > 0 ? (
+                <div className="divide-y divide-border/70">
+                  {snapshot.decisions.map((d) => {
+                    const act = humanAction(d.selectedAction);
+                    return (
+                      <article
+                        key={`${d.cycleId}-${d.decisionKey}`}
+                        className="flex flex-col gap-1.5 px-6 py-4"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <span className="tabular-nums-mono text-xs font-semibold text-muted-foreground">
+                              #{d.cycleId}
+                            </span>
+                            <span
+                              className={cn(
+                                "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                                act.tone === "good"
+                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                  : act.tone === "warn"
+                                    ? "bg-destructive/15 text-destructive"
+                                    : "bg-accent text-foreground",
+                              )}
+                            >
+                              {act.label}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-xs font-medium",
+                                d.riskAllowed
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-destructive",
+                              )}
+                            >
+                              {d.riskAllowed ? "Safety OK" : "Blocked by safety"}
                             </span>
                           </div>
-                          <p className="text-xs leading-relaxed text-muted-foreground">
-                            {humanDecisionSummary(d)}
-                          </p>
-                          {d.txHashes.length > 0 && (
-                            <div className="flex gap-3">
-                              {d.txHashes.map((hash) => (
-                                <a
-                                  key={hash}
-                                  href={explorerTxUrl(hash)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="tabular-nums-mono inline-flex items-center gap-0.5 text-[11px] text-foreground underline underline-offset-4"
-                                >
-                                  Tx {shortHash(hash)}
-                                  <ArrowUpRight className="size-3" />
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </article>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex h-full items-center justify-center py-8 text-center text-xs text-muted-foreground">
-                    {loading
-                      ? "Loading live Chain 177 decisions…"
-                      : "No agent checks recorded yet."}
-                  </div>
-                ))}
-
-              {activeTab === "positions" &&
-                (snapshot && snapshot.positions.all.length > 0 ? (
-                  <div className="divide-y divide-border/70">
-                    {snapshot.positions.all.map((p) => (
-                      <div key={p.positionId} className="flex items-center justify-between py-2.5 text-xs">
-                        <div>
-                          <span className="font-medium text-foreground">{p.venue}</span>
-                          <span className="ml-2 text-muted-foreground">{p.status}</span>
+                          <span className="tabular-nums-mono shrink-0 text-xs text-muted-foreground">
+                            {fmtTime(d.timestamp)}
+                          </span>
                         </div>
-                        <span className="tabular-nums-mono text-muted-foreground">
-                          Cost {fmtPayment6(p.entryCostPayment, paymentSymbol)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-1 py-8 text-center text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">No open positions</span>
-                    <span>In Read-Only Mode, the agent evaluates trades without spending funds.</span>
-                  </div>
-                ))}
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          {humanDecisionSummary(d)}
+                        </p>
+                        {d.txHashes.length > 0 && (
+                          <div className="flex gap-3 pt-1">
+                            {d.txHashes.map((hash) => (
+                              <a
+                                key={hash}
+                                href={explorerTxUrl(hash)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="tabular-nums-mono inline-flex items-center gap-1 text-xs text-foreground underline underline-offset-4"
+                              >
+                                Tx {shortHash(hash)}
+                                <ArrowUpRight className="size-3.5" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
+                  <p className="text-sm font-medium text-foreground">
+                    {loading ? "Loading live decisions…" : "No decisions recorded yet"}
+                  </p>
+                  <p className="max-w-sm text-xs text-muted-foreground">
+                    The agent checks prices every 15 seconds and logs each decision here in plain
+                    English.
+                  </p>
+                </div>
+              ))}
 
-              {activeTab === "tickets" &&
-                (snapshot && snapshot.tickets.all.length > 0 ? (
-                  <div className="divide-y divide-border/70">
-                    {snapshot.tickets.all.map((t) => (
-                      <div key={t.ticketId} className="flex items-center justify-between py-2.5 text-xs">
-                        <span className="font-medium text-foreground">
-                          Ticket #{t.ticketId} ({t.status})
-                        </span>
-                        <span className="tabular-nums-mono text-muted-foreground">
-                          Premium {fmtPayment6(t.premiumPaidPayment, paymentSymbol)}
-                        </span>
+            {activeTab === "positions" &&
+              (snapshot && snapshot.positions.all.length > 0 ? (
+                <div className="divide-y divide-border/70">
+                  {snapshot.positions.all.map((p) => (
+                    <div
+                      key={p.positionId}
+                      className="flex items-center justify-between px-6 py-4 text-sm"
+                    >
+                      <div>
+                        <span className="font-medium text-foreground">{p.venue}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{p.status}</span>
                       </div>
-                    ))}
+                      <span className="tabular-nums-mono text-muted-foreground">
+                        Cost {fmtPayment6(p.entryCostPayment, paymentSymbol)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
+                  <p className="text-sm font-medium text-foreground">No open positions</p>
+                  <p className="max-w-sm text-xs text-muted-foreground">
+                    In Safe Read-Only Mode, the agent evaluates trades without spending any funds.
+                  </p>
+                </div>
+              ))}
+
+            {activeTab === "tickets" &&
+              (snapshot && snapshot.tickets.all.length > 0 ? (
+                <div className="divide-y divide-border/70">
+                  {snapshot.tickets.all.map((t) => (
+                    <div
+                      key={t.ticketId}
+                      className="flex items-center justify-between px-6 py-4 text-sm"
+                    >
+                      <span className="font-medium text-foreground">
+                        Ticket #{t.ticketId} · {t.status}
+                      </span>
+                      <span className="tabular-nums-mono text-muted-foreground">
+                        Hold fee {fmtPayment6(t.premiumPaidPayment, paymentSymbol)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center">
+                  <p className="text-sm font-medium text-foreground">No agent tickets yet</p>
+                  <p className="max-w-sm text-xs text-muted-foreground">
+                    Want to mint a real price-locked reservation ticket yourself on Chain 133
+                    testnet?
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => onNavigate("/trade")}
+                    className="mt-1 h-9 rounded-full px-5 text-xs cursor-pointer"
+                  >
+                    Open Trade Desk
+                    <ArrowRight className="ml-1.5 size-3.5" />
+                  </Button>
+                </div>
+              ))}
+          </section>
+        </div>
+      )}
+
+      {/* VIEW 3: DEDICATED RULES & CONTROLS PAGE — Clean 2-column spacious layout */}
+      {view === "policy" && (
+        <div className="flex w-full flex-col gap-6 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
+          {actionFeedback && (
+            <div
+              className={cn(
+                "flex shrink-0 items-center gap-2 rounded-[14px] border px-4 py-2.5 text-xs",
+                actionFeedback.kind === "ok"
+                  ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-destructive/35 bg-destructive/10 text-destructive",
+              )}
+            >
+              {actionFeedback.kind === "ok" ? (
+                <CheckCircle2 className="size-4 shrink-0" />
+              ) : (
+                <ShieldAlert className="size-4 shrink-0" />
+              )}
+              <span>{actionFeedback.text}</span>
+            </div>
+          )}
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
+            {/* Left 5 cols: Runtime Controls & Safety Caps */}
+            <section
+              className="flex flex-col justify-between gap-6 rounded-[22px] border border-border p-6 lg:col-span-5"
+              style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
+            >
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-semibold">Safety &amp; Runtime</h2>
+                    <p className="text-xs opacity-65">Code-enforced caps · Policy v{policyVersion}</p>
                   </div>
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 py-8 text-center text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">No reserved tickets yet</span>
-                    <span>Want to mint a real Tranche reservation ticket on Chain 133 testnet?</span>
+                  <span className="rounded-full bg-black/10 px-2.5 py-1 text-[11px] font-medium">
+                    {disconnected
+                      ? "Offline"
+                      : status?.killSwitch
+                        ? "Stopped"
+                        : status?.paused
+                          ? "Paused"
+                          : "Active"}
+                  </span>
+                </div>
+
+                {/* Progress Bars */}
+                <div className="flex flex-col gap-3 rounded-[16px] border border-black/10 bg-white/70 p-4 text-xs">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="opacity-70">Max Exposure Cap</span>
+                      <span className="tabular-nums-mono font-semibold">
+                        {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"}{" "}
+                        /{" "}
+                        {config
+                          ? fmtPayment6(config.riskLimits.maxTotalExposurePayment, "USDT")
+                          : "$50.00"}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
+                      <div className="h-full rounded-full bg-black" style={{ width: `${exposurePct}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="opacity-70">Daily Loss Limit</span>
+                      <span className="tabular-nums-mono font-semibold">
+                        {metrics ? fmtPayment6(metrics.dailyRealizedLossPayment, "USDT") : "$0.00"} /{" "}
+                        {config
+                          ? fmtPayment6(config.riskLimits.maxDailyRealizedLossPayment, "USDT")
+                          : "$5.00"}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
+                      <div className="h-full rounded-full bg-black" style={{ width: `${lossPct}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5 border-t border-black/10 pt-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={disconnected || actionBusy || status?.killSwitch}
+                    onClick={() => void runControl("Start", () => client.start())}
+                    className="h-9 flex-1 rounded-full bg-black text-xs text-[#f8f7ee] hover:bg-black/85 cursor-pointer"
+                  >
+                    <Play className="mr-1.5 size-3.5" /> Start
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={disconnected || actionBusy}
+                    onClick={() =>
+                      void runControl(
+                        status?.paused ? "Resume" : "Pause",
+                        () => (status?.paused ? client.resume() : client.pause()),
+                      )
+                    }
+                    className="h-9 flex-1 rounded-full border-black/20 bg-white/80 text-xs text-black hover:bg-white cursor-pointer"
+                  >
+                    <Pause className="mr-1.5 size-3.5" /> {status?.paused ? "Resume" : "Pause"}
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={disconnected || actionBusy}
+                  onClick={() => setKillDialogOpen(true)}
+                  className="h-9 w-full rounded-full text-xs cursor-pointer"
+                >
+                  <OctagonAlert className="mr-1.5 size-3.5" /> Emergency Stop
+                </Button>
+              </div>
+            </section>
+
+            {/* Right 7 cols: Strategy & Plain-English Rule Editor */}
+            <section className="flex min-h-0 flex-col justify-between gap-5 overflow-y-auto rounded-[22px] border border-border bg-card p-6 lg:col-span-7">
+              {/* Plain-English Rule Input */}
+              <div className="flex flex-col gap-2.5">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    Update Rules in Plain English
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Describe what you want to change. Rules are bounded by hard safety limits.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={nlInstruction}
+                    onChange={(e) => setNlInstruction(e.target.value)}
+                    placeholder='e.g. "Switch to momentum, take profit 4%, max slippage 0.8%"'
+                    className="h-10 flex-1 rounded-full border border-border bg-background px-4 text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                  />
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => onNavigate("/trade")}
-                      className="mt-1 h-7 rounded-full px-3 text-xs cursor-pointer"
+                      disabled={disconnected || actionBusy || !nlInstruction.trim()}
+                      onClick={() => void handleProposePolicy()}
+                      className="h-10 rounded-full px-4 text-xs cursor-pointer"
                     >
-                      Go to Trade Desk
+                      Preview
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={disconnected || actionBusy || !nlInstruction.trim()}
+                      onClick={() => void handleApplyPolicy()}
+                      className="h-10 rounded-full px-4 text-xs cursor-pointer"
+                    >
+                      Apply
                     </Button>
                   </div>
-                ))}
-            </div>
-          </section>
+                </div>
+                {nlProposal && (
+                  <pre className="overflow-x-auto rounded-[12px] border border-border bg-muted/40 p-3 text-[11px]">
+                    {JSON.stringify(nlProposal.proposedPatch, null, 2)}
+                  </pre>
+                )}
+              </div>
 
-          {/* RIGHT 5 COLS: Plain-English Overview, Safety Guardrails & Next Steps */}
-          <aside
-            className="flex min-h-0 flex-col justify-between gap-3 overflow-hidden rounded-[18px] border border-border p-4 lg:col-span-5"
-            style={{ backgroundColor: "#f8f7ee", color: "#050505" }}
-          >
-            {/* Compact Live Metrics */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
-                <span className="block text-[10px] uppercase tracking-wider opacity-60">Status</span>
-                <span className="text-sm font-semibold">
-                  {disconnected
-                    ? "Offline"
-                    : status?.killSwitch
-                      ? "Emergency Stop"
-                      : status?.paused
-                        ? "Paused"
-                        : "Running Safely"}
-                </span>
-              </div>
-              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
-                <span className="block text-[10px] uppercase tracking-wider opacity-60">Strategy</span>
-                <span className="truncate block text-sm font-semibold">
-                  {humanStrategy(status?.activeStrategy)}
-                </span>
-              </div>
-              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
-                <span className="block text-[10px] uppercase tracking-wider opacity-60">
-                  Live Checks
-                </span>
-                <span className="tabular-nums-mono text-sm font-semibold">
-                  {metrics?.totalCycles ?? 0} cycles
-                </span>
-              </div>
-              <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
-                <span className="block text-[10px] uppercase tracking-wider opacity-60">
-                  Broadcast Txs
-                </span>
-                <span className="tabular-nums-mono text-sm font-semibold">
-                  {metrics?.liveExecutionsCount ?? 0} sent
-                </span>
-              </div>
-            </div>
-
-            {/* Compact Safety Guardrails */}
-            <div className="flex flex-col gap-2 rounded-[12px] border border-black/10 bg-white/60 p-3">
-              <div className="flex items-center justify-between text-[11px] font-semibold">
-                <span>Safety Guardrails (Code-Enforced)</span>
-                <span className="tabular-nums-mono opacity-65">Policy v{policyVersion}</span>
-              </div>
-              <div className="flex flex-col gap-1.5 text-[11px]">
+              {/* Strategy Presets & Numbers */}
+              <div className="flex flex-col gap-3 border-t border-border pt-5">
                 <div className="flex items-center justify-between">
-                  <span className="opacity-70">Exposure Cap</span>
-                  <span className="tabular-nums-mono font-medium">
-                    {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"} /{" "}
-                    {config ? fmtPayment6(config.riskLimits.maxTotalExposurePayment, "USDT") : "$50.00"}
+                  <span className="text-sm font-semibold text-foreground">Strategy Parameters</span>
+                  <span className="text-xs text-muted-foreground">
+                    {humanStrategy(status?.activeStrategy)}
                   </span>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
-                  <div className="h-full rounded-full bg-black" style={{ width: `${exposurePct}%` }} />
-                </div>
-                <div className="flex items-center justify-between pt-0.5">
-                  <span className="opacity-70">Daily Loss Limit</span>
-                  <span className="tabular-nums-mono font-medium">
-                    {metrics ? fmtPayment6(metrics.dailyRealizedLossPayment, "USDT") : "$0.00"} /{" "}
-                    {config ? fmtPayment6(config.riskLimits.maxDailyRealizedLossPayment, "USDT") : "$5.00"}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
-                  <div className="h-full rounded-full bg-black" style={{ width: `${lossPct}%` }} />
-                </div>
-              </div>
-            </div>
 
-            {/* Clear "What You Can Do Next" Actions */}
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-60">
-                What You Can Do Next
-              </span>
-              <div className="grid grid-cols-1 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onNavigate("/trade")}
-                  className="flex items-center justify-between rounded-[11px] bg-black px-3.5 py-2 text-left text-xs font-medium text-[#f8f7ee] transition-opacity hover:opacity-90 cursor-pointer"
-                >
-                  <span>1. Reserve a real Tranche ticket on Chain 133 testnet</span>
-                  <ArrowRight className="size-3.5 shrink-0" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setControlsOpen(true)}
-                  className="flex items-center justify-between rounded-[11px] border border-black/15 bg-white/80 px-3.5 py-2 text-left text-xs font-medium text-black transition-colors hover:bg-white cursor-pointer"
-                >
-                  <span>2. Edit strategy rules or give plain-English instructions</span>
-                  <Settings2 className="size-3.5 shrink-0 opacity-70" />
-                </button>
-                <a
-                  href={`${normalizedApiUrl}/agent/soak`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-between rounded-[11px] border border-black/15 bg-white/80 px-3.5 py-2 text-left text-xs font-medium text-black transition-colors hover:bg-white"
-                >
-                  <span>3. Inspect live 24-hour Chain 177 soak proof (JSON)</span>
-                  <ArrowUpRight className="size-3.5 shrink-0 opacity-70" />
-                </a>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <label className="col-span-2 flex flex-col gap-1">
+                    <span className="text-muted-foreground">Strategy Mode</span>
+                    <select
+                      value={strategyType}
+                      onChange={(e) => setStrategyType(e.target.value as StrategyType)}
+                      className="h-10 rounded-[12px] border border-border bg-background px-3 text-xs"
+                    >
+                      <option value="price_threshold">Buy Below Target Price</option>
+                      <option value="momentum">Trend Following</option>
+                      <option value="volatility_aware">Volatility-Protected</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Take-Profit (bps)</span>
+                    <input
+                      type="number"
+                      value={tpInput}
+                      onChange={(e) => setTpInput(e.target.value)}
+                      className="h-9 rounded-[12px] border border-border bg-background px-3 text-xs"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Stop-Loss (bps)</span>
+                    <input
+                      type="number"
+                      value={slInput}
+                      onChange={(e) => setSlInput(e.target.value)}
+                      className="h-9 rounded-[12px] border border-border bg-background px-3 text-xs"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Max Slippage (bps)</span>
+                    <input
+                      type="number"
+                      value={slipInput}
+                      onChange={(e) => setSlipInput(e.target.value)}
+                      className="h-9 rounded-[12px] border border-border bg-background px-3 text-xs"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Max Position (raw wei)</span>
+                    <input
+                      type="text"
+                      value={maxPosInput}
+                      onChange={(e) => setMaxPosInput(e.target.value)}
+                      className="h-9 rounded-[12px] border border-border bg-background px-3 text-xs"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={disconnected || actionBusy}
+                    onClick={() => void handleStrategySave()}
+                    className="h-9 rounded-full px-5 text-xs cursor-pointer"
+                  >
+                    Save Parameters
+                  </Button>
+                </div>
               </div>
-            </div>
-          </aside>
+            </section>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Operator Controls & Policy Modal (keeps main page uncluttered & non-scrollable) */}
+      {/* Clean Small API Connection Dialog */}
       <Dialog open={controlsOpen} onOpenChange={setControlsOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-[20px] border-border bg-card sm:max-w-[520px]">
+        <DialogContent className="rounded-[20px] border-border bg-card sm:max-w-[440px]">
           <DialogHeader>
-            <DialogTitle className="text-base font-semibold">Agent Controls &amp; Policy</DialogTitle>
+            <DialogTitle className="text-base font-semibold">Agent API Connection</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Read-only telemetry works without a token. Paste your Bearer token to pause, tune
-              strategy limits, or apply natural-language policy rules.
+              Read-only viewing works without a token. Add your operator Bearer token to apply
+              policy or runtime changes.
             </DialogDescription>
           </DialogHeader>
-
-          <div className="flex flex-col gap-4 pt-2 text-xs">
-            {/* Connection */}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Agent API URL</span>
-                <input
-                  type="url"
-                  value={apiUrlInput}
-                  onChange={(e) => handleSaveApiUrl(e.target.value)}
-                  placeholder="https://api.tranche.space"
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">
-                  Operator Token (for POST controls)
-                </span>
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={(e) => handleSaveToken(e.target.value)}
-                  placeholder="Bearer token"
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
-                />
-              </label>
-            </div>
-
-            {/* Runtime Controls */}
-            <div className="flex flex-wrap items-center gap-2 border-y border-border py-3">
-              <Button
-                type="button"
-                size="sm"
-                disabled={disconnected || actionBusy || status?.killSwitch}
-                onClick={() => void runControl("Start", () => client.start())}
-                className="h-8 rounded-full text-xs cursor-pointer"
-              >
-                <Play className="mr-1 size-3" /> Start
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={disconnected || actionBusy}
-                onClick={() =>
-                  void runControl(
-                    status?.paused ? "Resume" : "Pause",
-                    () => (status?.paused ? client.resume() : client.pause()),
-                  )
-                }
-                className="h-8 rounded-full text-xs cursor-pointer"
-              >
-                <Pause className="mr-1 size-3" /> {status?.paused ? "Resume" : "Pause"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                disabled={disconnected || actionBusy}
-                onClick={() => setKillDialogOpen(true)}
-                className="ml-auto h-8 rounded-full text-xs cursor-pointer"
-              >
-                <OctagonAlert className="mr-1 size-3" /> Emergency Kill
-              </Button>
-            </div>
-
-            {/* Natural-Language Policy */}
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-semibold text-foreground">
-                Plain-English Policy Update (Bounded)
-              </span>
+          <div className="flex flex-col gap-3 pt-2 text-xs">
+            <label className="flex flex-col gap-1">
+              <span className="text-muted-foreground">Agent API URL</span>
               <input
-                type="text"
-                value={nlInstruction}
-                onChange={(e) => setNlInstruction(e.target.value)}
-                placeholder='e.g. "Switch to momentum, take profit 4%, max slippage 0.8%"'
-                className="rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                type="url"
+                value={apiUrlInput}
+                onChange={(e) => handleSaveApiUrl(e.target.value)}
+                placeholder="https://api.tranche.space"
+                className="h-10 rounded-[12px] border border-border bg-background px-3 text-xs"
               />
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={disconnected || actionBusy || !nlInstruction.trim()}
-                  onClick={() => void handleProposePolicy()}
-                  className="h-8 rounded-full text-xs cursor-pointer"
-                >
-                  Preview Changes
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={disconnected || actionBusy || !nlInstruction.trim()}
-                  onClick={() => void handleApplyPolicy()}
-                  className="h-8 rounded-full text-xs cursor-pointer"
-                >
-                  Apply Policy
-                </Button>
-              </div>
-              {nlProposal && (
-                <pre className="overflow-x-auto rounded-lg border border-border bg-muted/50 p-2.5 text-[11px]">
-                  {JSON.stringify(nlProposal.proposedPatch, null, 2)}
-                </pre>
-              )}
-            </div>
-
-            {/* Strategy Parameters */}
-            <div className="grid grid-cols-2 gap-2.5 border-t border-border pt-3">
-              <label className="col-span-2 flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Strategy Mode</span>
-                <select
-                  value={strategyType}
-                  onChange={(e) => setStrategyType(e.target.value as StrategyType)}
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
-                >
-                  <option value="price_threshold">Buy Below Target Price (price_threshold)</option>
-                  <option value="momentum">Trend Following (momentum)</option>
-                  <option value="volatility_aware">Volatility-Protected (volatility_aware)</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Take-Profit (bps)</span>
-                <input
-                  type="number"
-                  value={tpInput}
-                  onChange={(e) => setTpInput(e.target.value)}
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Stop-Loss (bps)</span>
-                <input
-                  type="number"
-                  value={slInput}
-                  onChange={(e) => setSlInput(e.target.value)}
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Max Slippage (bps)</span>
-                <input
-                  type="number"
-                  value={slipInput}
-                  onChange={(e) => setSlipInput(e.target.value)}
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Max Size (raw wei)</span>
-                <input
-                  type="text"
-                  value={maxPosInput}
-                  onChange={(e) => setMaxPosInput(e.target.value)}
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
-                />
-              </label>
-              <div className="col-span-2 flex justify-end pt-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={disconnected || actionBusy}
-                  onClick={() => void handleStrategySave()}
-                  className="h-8 rounded-full px-4 text-xs cursor-pointer"
-                >
-                  Save Strategy Limits
-                </Button>
-              </div>
-            </div>
-
-            {actionFeedback && (
-              <div
-                className={cn(
-                  "flex items-start gap-2 rounded-lg border px-3 py-2 text-xs",
-                  actionFeedback.kind === "ok"
-                    ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                    : "border-destructive/35 bg-destructive/10 text-destructive",
-                )}
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-muted-foreground">Operator Bearer Token</span>
+              <input
+                type="password"
+                value={tokenInput}
+                onChange={(e) => handleSaveToken(e.target.value)}
+                placeholder="Paste token (session only)"
+                className="h-10 rounded-[12px] border border-border bg-background px-3 text-xs"
+              />
+            </label>
+            <div className="flex justify-end pt-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setControlsOpen(false);
+                  void loadSnapshot(true);
+                }}
+                className="h-9 rounded-full px-5 text-xs cursor-pointer"
               >
-                {actionFeedback.kind === "ok" ? (
-                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
-                ) : (
-                  <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
-                )}
-                <span>{actionFeedback.text}</span>
-              </div>
-            )}
+                Save &amp; Refresh
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1110,11 +1195,11 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         <DialogContent className="rounded-[20px] border-border bg-card sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-destructive">
-              Activate Emergency Kill Switch?
+              Activate Emergency Stop?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              This immediately halts the agent runtime and blocks all entries, exercises, and exits.
-              It cannot be cleared via Resume.
+              This immediately halts the agent and blocks all new trades and exercises. It cannot be
+              cleared via Resume.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 pt-3">
@@ -1136,7 +1221,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               }}
               className="rounded-full text-xs cursor-pointer"
             >
-              Confirm Kill Switch
+              Confirm Stop
             </Button>
           </div>
         </DialogContent>

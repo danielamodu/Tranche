@@ -16,6 +16,9 @@ const TicketsPage = lazy(() =>
 );
 const VaultPage = lazy(() => import("@/pages/VaultPage").then((m) => ({ default: m.VaultPage })));
 const AgentPage = lazy(() => import("@/pages/AgentPage").then((m) => ({ default: m.AgentPage })));
+const HspPaymentsPage = lazy(() =>
+  import("@/pages/HspPaymentsPage").then((m) => ({ default: m.HspPaymentsPage })),
+);
 const DocsPage = lazy(() => import("@/pages/DocsPage").then((m) => ({ default: m.DocsPage })));
 const PrivacyPage = lazy(() =>
   import("@/pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })),
@@ -32,11 +35,24 @@ export type AppRoute =
   | "/trade"
   | "/tickets"
   | "/vault"
-  | "/agent";
+  | "/agent"
+  | "/agent/activity"
+  | "/agent/policy"
+  | "/payments";
 
 const MARKETING_HOSTS = new Set(["tranche.space", "www.tranche.space"]);
 const APP_HOST = "app.tranche.space";
-const APP_ROUTES = new Set<AppRoute>(["/connect", "/start", "/trade", "/tickets", "/vault", "/agent"]);
+const APP_ROUTES = new Set<AppRoute>([
+  "/connect",
+  "/start",
+  "/trade",
+  "/tickets",
+  "/vault",
+  "/agent",
+  "/agent/activity",
+  "/agent/policy",
+  "/payments",
+]);
 
 function getHostKind(): "marketing" | "app" | "local" {
   if (typeof window === "undefined") return "local";
@@ -56,6 +72,9 @@ function resolveRoute(pathname: string, hostKind: "marketing" | "app" | "local")
   if (pathname === "/tickets") return "/tickets";
   if (pathname === "/vault") return "/vault";
   if (pathname === "/agent") return "/agent";
+  if (pathname === "/agent/activity") return "/agent/activity";
+  if (pathname === "/agent/policy") return "/agent/policy";
+  if (pathname === "/payments") return "/payments";
   return hostKind === "app" ? "/connect" : "/";
 }
 
@@ -105,7 +124,10 @@ function AppRouter() {
   else if (route === "/trade") page = <TradePage onNavigate={navigate} />;
   else if (route === "/tickets") page = <TicketsPage onNavigate={navigate} />;
   else if (route === "/vault") page = <VaultPage onNavigate={navigate} />;
-  else if (route === "/agent") page = <AgentPage onNavigate={navigate} />;
+  else if (route === "/agent") page = <AgentPage view="overview" onNavigate={navigate} />;
+  else if (route === "/agent/activity") page = <AgentPage view="activity" onNavigate={navigate} />;
+  else if (route === "/agent/policy") page = <AgentPage view="policy" onNavigate={navigate} />;
+  else if (route === "/payments") page = <HspPaymentsPage onNavigate={navigate} />;
   else if (route === "/docs") page = <DocsPage onNavigate={navigate} />;
   else if (route === "/privacy") page = <PrivacyPage onNavigate={navigate} />;
   else if (route === "/terms") page = <TermsPage onNavigate={navigate} />;

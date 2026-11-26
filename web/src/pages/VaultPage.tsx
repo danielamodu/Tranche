@@ -7,7 +7,6 @@ import {
   Loader2,
   Plus,
   ShieldAlert,
-  X,
 } from "lucide-react";
 import { erc20Abi, parseUnits, zeroAddress } from "viem";
 import { Button } from "@/components/ui/button";
@@ -74,9 +73,6 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
   const [myOffers, setMyOffers] = useState<OnChainOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(
-    () => localStorage.getItem("tranche-lp-tip-dismissed") !== "1",
-  );
 
   // Deposit / Withdraw Sheet
   const [transferSheet, setTransferSheet] = useState<{
@@ -178,15 +174,6 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
   useEffect(() => {
     loadVaultData();
   }, [loadVaultData]);
-
-  const hasDeposited = useMemo(
-    () => vaultRows.some((r) => r.freeBal > 0n) || myOffers.length > 0,
-    [vaultRows, myOffers],
-  );
-  const hasActiveOffer = useMemo(
-    () => myOffers.some((o) => o.status === 0 && o.availableBalance > 0n),
-    [myOffers],
-  );
 
   const selectedInvVaultRow = useMemo(
     () => vaultRows.find((r) => r.token.address.toLowerCase() === invToken.address.toLowerCase()),
@@ -397,7 +384,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
     <AppShell
       activeRoute="/vault"
       title="Liquidity Vault"
-      subtitle="Deposits, offers & earnings"
+      subtitle="Deposit tokens & earn hold fees"
       onNavigate={onNavigate}
       onRefresh={() => loadVaultData(true)}
       refreshing={refreshing}
@@ -420,45 +407,33 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
       }
     >
       {!isConnected ? (
-        <div className="mx-auto flex max-w-[540px] flex-col gap-6 py-12 text-center">
-          <div className="rounded-[24px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
-            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              INV-1 Segregated Vault · Wallet Required
-            </span>
-            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em]">
-              Connect wallet to manage liquidity
-            </h2>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Deposit ERC-20 inventory into isolated buckets, publish fixed or oracle-bounded
-              offers, and claim upfront hold fees.
-            </p>
-            <div className="mt-6 grid grid-cols-3 gap-2 border-t border-dashed border-border/80 pt-5 text-left text-[11px]">
-              <div>
-                <span className="tabular-nums-mono text-[10px] text-muted-foreground">01</span>
-                <p className="font-medium text-foreground">Deposit Free</p>
-              </div>
-              <div>
-                <span className="tabular-nums-mono text-[10px] text-muted-foreground">02</span>
-                <p className="font-medium text-foreground">Quote Offers</p>
-              </div>
-              <div>
-                <span className="tabular-nums-mono text-[10px] text-muted-foreground">03</span>
-                <p className="font-medium text-foreground">Claim Proceeds</p>
-              </div>
+        <div className="flex flex-col items-center justify-center lg:h-[calc(100svh-120px)]">
+          <div className="mx-auto flex w-full max-w-[500px] flex-col gap-6 text-center">
+            <div className="rounded-[24px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                Wallet Required
+              </span>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em]">
+                Connect wallet to earn fees
+              </h2>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Deposit tokens into your vault, post an offer at your chosen price, and collect
+                upfront hold fees from traders. Withdraw anytime.
+              </p>
+              <Button
+                type="button"
+                onClick={() => onNavigate("/connect")}
+                className="mt-7 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+              >
+                Connect Wallet
+              </Button>
             </div>
-            <Button
-              type="button"
-              onClick={() => onNavigate("/connect")}
-              className="mt-7 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
-            >
-              Connect Wallet
-            </Button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-5 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
           {vaultActionError && (
-            <div className="flex items-start justify-between gap-3 rounded-[14px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+            <div className="flex shrink-0 items-start justify-between gap-3 rounded-[14px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
               <div className="flex items-start gap-2">
                 <ShieldAlert className="mt-0.5 size-4 shrink-0" />
                 <span>{vaultActionError}</span>
@@ -473,180 +448,161 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
             </div>
           )}
 
-          {/* Contextual 3-step LP Onboarding Strip (auto-ticks live) */}
-          {showOnboarding && (
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-border/80 bg-card/60 px-5 py-2.5 text-xs">
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-muted-foreground">
-                <span className="font-medium text-foreground">LP flow:</span>
-                <span className={cn(hasDeposited && "text-foreground")}>
-                  <strong className="tabular-nums-mono">01</strong> Deposit inventory{" "}
-                  {hasDeposited && <Check className="inline size-3 text-status-live" />}
-                </span>
-                <span className={cn(hasActiveOffer && "text-foreground")}>
-                  <strong className="tabular-nums-mono">02</strong> Create an offer{" "}
-                  {hasActiveOffer && <Check className="inline size-3 text-status-live" />}
-                </span>
-                <span>
-                  <strong className="tabular-nums-mono">03</strong> Claim premiums &amp; proceeds
-                </span>
-              </div>
-              <button
-                type="button"
-                aria-label="Dismiss LP flow"
-                onClick={() => {
-                  localStorage.setItem("tranche-lp-tip-dismissed", "1");
-                  setShowOnboarding(false);
-                }}
-                className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
-              >
-                <X className="size-3.5" />
-              </button>
+          {/* Clean Plain-English Header Strip */}
+          <section className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="font-display text-xl font-semibold tracking-[-0.02em] text-foreground">
+                Earn hold fees from your tokens
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                1. Deposit tokens &rarr; 2. Click Create Offer to set your price &rarr; 3. Claim
+                fees anytime. Free balances are always withdrawable.
+              </p>
             </div>
-          )}
-
-          {/* Clean 3-Card Vault Summary Row */}
-          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-              <span className="text-xs font-medium text-muted-foreground">Deposited Assets</span>
-              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-                {vaultRows.filter((r) => r.freeBal > 0n).length}
+            <div className="flex items-center gap-5 text-xs text-muted-foreground">
+              <span>
+                Deposited:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {vaultRows.filter((r) => r.freeBal > 0n).length}
+                </strong>
               </span>
-            </div>
-            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-              <span className="text-xs font-medium text-muted-foreground">Claimable Earnings</span>
-              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-status-live">
-                {vaultRows.filter((r) => r.pendingProceeds > 0n).length}
+              <span>
+                Claimable:{" "}
+                <strong className="tabular-nums-mono font-semibold text-status-live">
+                  {vaultRows.filter((r) => r.pendingProceeds > 0n).length}
+                </strong>
               </span>
-            </div>
-            <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-              <span className="text-xs font-medium text-muted-foreground">Active Offers</span>
-              <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-                {myOffers.filter((o) => o.status === 0 && o.availableBalance > 0n).length}
+              <span>
+                Active offers:{" "}
+                <strong className="tabular-nums-mono font-semibold text-foreground">
+                  {myOffers.filter((o) => o.status === 0 && o.availableBalance > 0n).length}
+                </strong>
               </span>
             </div>
           </section>
 
-          {/* Asymmetric 7/5 Split: Hairline Asset Ledger (Left) + Serrated LP Offer Stubs (Right) */}
-          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-            {/* Section 1: Clean Hairline Asset Ledger */}
-            <section className="flex flex-col gap-4 lg:col-span-7">
-              <div className="flex items-baseline justify-between border-b border-border pb-3">
-                <h2 className="font-display text-xl font-semibold tracking-[-0.03em] text-foreground">
-                  Vault Balances
-                </h2>
-                <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                  Multicall3 live state
-                </span>
+          {/* Clean 7/5 Split with internal scroll */}
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 lg:grid-cols-12">
+            {/* Section 1: Asset Balances */}
+            <section className="flex min-h-0 flex-col gap-3 lg:col-span-7">
+              <div className="flex shrink-0 items-baseline justify-between">
+                <h3 className="font-display text-base font-semibold tracking-[-0.02em] text-foreground">
+                  Your Balances
+                </h3>
+                <span className="text-xs text-muted-foreground">Live on-chain state</span>
               </div>
 
-              {loading ? (
-                <div className="flex flex-col divide-y divide-border">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="flex items-center justify-between py-4">
-                      <Skeleton className="h-5 w-28" />
-                      <Skeleton className="h-8 w-40 rounded-full" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="divide-y divide-border/80">
-                  {vaultRows.map((row) => (
-                    <div
-                      key={row.token.address}
-                      className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-display text-base font-semibold text-foreground">
-                          {row.token.symbol}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">{row.token.name}</span>
+              <div className="min-h-0 flex-1 overflow-y-auto rounded-[20px] border border-border bg-card px-5">
+                {loading ? (
+                  <div className="flex flex-col divide-y divide-border">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="flex items-center justify-between py-4">
+                        <Skeleton className="h-5 w-28" />
+                        <Skeleton className="h-8 w-40 rounded-full" />
                       </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/80">
+                    {vaultRows.map((row) => (
+                      <div
+                        key={row.token.address}
+                        className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-display text-base font-semibold text-foreground">
+                            {row.token.symbol}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">{row.token.name}</span>
+                        </div>
 
-                      <div className="grid grid-cols-3 gap-5 text-xs sm:text-right">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            Wallet
-                          </span>
-                          <span className="tabular-nums-mono font-medium text-muted-foreground">
-                            {formatTokenAmount(row.walletBal, row.token.decimals)}
-                          </span>
+                        <div className="grid grid-cols-3 gap-5 text-xs sm:text-right">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              In Wallet
+                            </span>
+                            <span className="tabular-nums-mono font-medium text-muted-foreground">
+                              {formatTokenAmount(row.walletBal, row.token.decimals)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              In Vault
+                            </span>
+                            <span className="tabular-nums-mono font-semibold text-foreground">
+                              {formatTokenAmount(row.freeBal, row.token.decimals)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Fees Earned
+                            </span>
+                            <span className="tabular-nums-mono font-semibold text-status-live">
+                              {formatTokenAmount(row.pendingProceeds, row.token.decimals)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            Vault Free
-                          </span>
-                          <span className="tabular-nums-mono font-semibold text-foreground">
-                            {formatTokenAmount(row.freeBal, row.token.decimals)}
-                          </span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            Proceeds
-                          </span>
-                          <span className="tabular-nums-mono font-semibold text-status-live">
-                            {formatTokenAmount(row.pendingProceeds, row.token.decimals)}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                        <button
-                          type="button"
-                          onClick={() => openTransfer("deposit", row.token)}
-                          className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:border-foreground/30 cursor-pointer"
-                        >
-                          <ArrowDownToLine className="size-3" />
-                          Deposit
-                        </button>
-                        {row.freeBal > 0n && (
+                        <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                           <button
                             type="button"
-                            onClick={() => openTransfer("withdraw", row.token)}
-                            className="inline-flex h-8 items-center gap-1 rounded-full border border-border px-3 text-xs text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
+                            onClick={() => openTransfer("deposit", row.token)}
+                            className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:border-foreground/30 cursor-pointer"
                           >
-                            <ArrowUpFromLine className="size-3" />
-                            Withdraw
+                            <ArrowDownToLine className="size-3" />
+                            Deposit
                           </button>
-                        )}
-                        {row.pendingProceeds > 0n && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={isWrongNetwork || claimingToken === row.token.address}
-                            onClick={() => handleClaimProceeds(row.token)}
-                            className="h-8 rounded-full px-3 text-xs font-medium cursor-pointer"
-                          >
-                            {claimingToken === row.token.address ? "Claiming…" : "Claim"}
-                          </Button>
-                        )}
+                          {row.freeBal > 0n && (
+                            <button
+                              type="button"
+                              onClick={() => openTransfer("withdraw", row.token)}
+                              className="inline-flex h-8 items-center gap-1 rounded-full border border-border px-3 text-xs text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
+                            >
+                              <ArrowUpFromLine className="size-3" />
+                              Withdraw
+                            </button>
+                          )}
+                          {row.pendingProceeds > 0n && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isWrongNetwork || claimingToken === row.token.address}
+                              onClick={() => handleClaimProceeds(row.token)}
+                              className="h-8 rounded-full px-3 text-xs font-medium cursor-pointer"
+                            >
+                              {claimingToken === row.token.address ? "Claiming…" : "Claim"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
 
-            {/* Section 2: Mini Serrated LP Offer Stubs */}
-            <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:col-span-5">
-              <div className="flex items-baseline justify-between border-b border-border pb-3">
-                <h2 className="font-display text-xl font-semibold tracking-[-0.03em] text-foreground">
-                  Your LP Offers
-                </h2>
+            {/* Section 2: Your Posted Offers */}
+            <aside className="flex min-h-0 flex-col gap-3 lg:col-span-5">
+              <div className="flex shrink-0 items-baseline justify-between">
+                <h3 className="font-display text-base font-semibold tracking-[-0.02em] text-foreground">
+                  Your Offers
+                </h3>
                 <span className="tabular-nums-mono text-xs text-muted-foreground">
                   {myOffers.length} total
                 </span>
               </div>
 
-              {myOffers.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-[20px] border border-dashed border-border px-6 py-14 text-center">
-                  <p className="text-sm font-medium text-foreground">No LP offers created yet</p>
-                  <p className="max-w-xs text-xs text-muted-foreground">
-                    Deposit inventory on the left, then click Create Offer to publish live
-                    liquidity on the Trade Desk.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4">
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {myOffers.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 rounded-[20px] border border-dashed border-border px-6 py-14 text-center">
+                    <p className="text-sm font-medium text-foreground">No offers posted yet</p>
+                    <p className="max-w-xs text-xs text-muted-foreground">
+                      Deposit tokens on the left, then click Create Offer in the top-right to start
+                      earning hold fees.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 pb-2">
                   {myOffers.map((o) => {
                     const inv = getTokenMeta(o.inventoryToken);
                     const pay = getTokenMeta(o.paymentToken);
@@ -728,6 +684,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                   })}
                 </div>
               )}
+              </div>
             </aside>
           </div>
         </div>

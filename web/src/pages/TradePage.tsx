@@ -292,41 +292,60 @@ export function TradePage({ onNavigate }: TradePageProps) {
     <AppShell
       activeRoute="/trade"
       title="Trade Desk"
-      subtitle="Live offers"
+      subtitle="Lock a fixed token price before you buy"
       onNavigate={onNavigate}
       onRefresh={() => loadOffers(true)}
       refreshing={refreshing}
     >
-      <div className="flex flex-col gap-6">
-        {/* Clean 3-Card Summary Row (Vestra-grade breathing room, zero dev clutter) */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-            <span className="text-xs font-medium text-muted-foreground">Available Liquidity</span>
-            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-              {loading
-                ? "—"
-                : `$${totalNotionalUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-            </span>
+      <div className="flex flex-col gap-5 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
+        {/* Clean Plain-English Header Strip (no heavy KPI box clutter) */}
+        <section className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-display text-xl font-semibold tracking-[-0.02em] text-foreground">
+              Reserve tokens at a guaranteed price
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              1. Pick an offer below &rarr; 2. Pay a small hold fee to lock the price &rarr; 3. Buy
+              anytime before expiry in{" "}
+              <button
+                type="button"
+                onClick={() => onNavigate("/tickets")}
+                className="font-medium text-foreground underline underline-offset-4 cursor-pointer"
+              >
+                Tickets
+              </button>
+              .
+            </p>
           </div>
-          <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-            <span className="text-xs font-medium text-muted-foreground">Open Offers</span>
-            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-              {loading ? "—" : activeOffers.length}
+          <div className="flex items-center gap-5 text-xs text-muted-foreground">
+            <span>
+              Available:{" "}
+              <strong className="tabular-nums-mono font-semibold text-foreground">
+                {loading
+                  ? "—"
+                  : `$${totalNotionalUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+              </strong>
             </span>
-          </div>
-          <div className="flex flex-col gap-1 rounded-[16px] border border-border bg-card px-5 py-4">
-            <span className="text-xs font-medium text-muted-foreground">Tickets Minted</span>
-            <span className="tabular-nums-mono text-2xl font-semibold tracking-tight text-foreground">
-              {loading ? "—" : totalTickets}
+            <span>
+              Open offers:{" "}
+              <strong className="tabular-nums-mono font-semibold text-foreground">
+                {loading ? "—" : activeOffers.length}
+              </strong>
+            </span>
+            <span>
+              Tickets minted:{" "}
+              <strong className="tabular-nums-mono font-semibold text-foreground">
+                {loading ? "—" : totalTickets}
+              </strong>
             </span>
           </div>
         </section>
 
-        {/* Main Split Desk: Clean Offer Table (Left 7 cols) + Live Interactive Quote & Reserve Card (Right 5 cols) */}
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* Main Split Desk: Offer List (Left 7 cols, internal scroll) + Reserve Card (Right 5 cols) */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
           {/* LEFT 7 COLS: Clean Offer Book */}
-          <div className="flex flex-col gap-4 lg:col-span-7">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-h-0 flex-col gap-3 lg:col-span-7">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-1.5">
                 {pairOptions.map((pair) => {
                   const active = pairFilter === pair;
@@ -342,7 +361,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
                           : "border border-border bg-card text-muted-foreground hover:text-foreground",
                       )}
                     >
-                      {pair === "ALL" ? "All" : pair}
+                      {pair === "ALL" ? "All pairs" : pair}
                     </button>
                   );
                 })}
@@ -354,141 +373,139 @@ export function TradePage({ onNavigate }: TradePageProps) {
               </span>
             </div>
 
-            {/* Clean Bordered Table Card (single column header, zero repeated labels) */}
-            <div className="overflow-hidden rounded-[18px] border border-border bg-card">
-              <div className="hidden grid-cols-12 items-center border-b border-border px-5 py-3 text-xs font-medium text-muted-foreground sm:grid">
-                <span className="col-span-4">Pair</span>
+            {/* Clean Bordered Table Card with internal scroll */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-border bg-card">
+              <div className="hidden shrink-0 grid-cols-12 items-center border-b border-border px-5 py-3 text-xs font-medium text-muted-foreground sm:grid">
+                <span className="col-span-4">Token Pair</span>
                 <span className="col-span-3 text-right">Available</span>
-                <span className="col-span-3 text-right">Strike</span>
-                <span className="col-span-2 text-right">Fee</span>
+                <span className="col-span-3 text-right">Locked Price</span>
+                <span className="col-span-2 text-right">Hold Fee</span>
               </div>
 
-              {loading ? (
-                <div className="flex flex-col gap-2 p-4">
-                  {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-14 w-full rounded-[12px]" />
-                  ))}
-                </div>
-              ) : filteredOffers.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-                  <h2 className="text-base font-semibold text-foreground">
-                    {ACTIVE_NETWORK.isLive ? "No open offers" : "Mainnet deployment pending"}
-                  </h2>
-                  <p className="max-w-xs text-xs text-muted-foreground">
-                    {ACTIVE_NETWORK.isLive
-                      ? "Create an LP offer in Liquidity Vault to make inventory available here."
-                      : `Contracts are not yet live on ${ACTIVE_NETWORK.name}.`}
-                  </p>
-                  {ACTIVE_NETWORK.isLive && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => onNavigate("/vault")}
-                      className="mt-1 h-9 rounded-full px-5 text-xs cursor-pointer"
-                    >
-                      Open Vault
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-1 p-2">
-                  {filteredOffers.map((offer) => {
-                    const inv = getTokenMeta(offer.inventoryToken);
-                    const pay = getTokenMeta(offer.paymentToken);
-                    const isFixed = offer.priceMode === 0;
-                    const isSelected = selected?.offerId === offer.offerId;
-                    const priceLabel = isFixed
-                      ? `${formatPriceX36(offer.fixedPriceX36, inv.decimals, pay.decimals)} ${pay.symbol}`
-                      : `Oracle ${offer.spreadBps >= 0 ? "+" : ""}${offer.spreadBps} bps`;
-
-                    return (
-                      <button
-                        key={offer.offerId.toString()}
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {loading ? (
+                  <div className="flex flex-col gap-2 p-4">
+                    {[1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} className="h-14 w-full rounded-[12px]" />
+                    ))}
+                  </div>
+                ) : filteredOffers.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+                    <h2 className="text-base font-semibold text-foreground">
+                      {ACTIVE_NETWORK.isLive ? "No open offers yet" : "Mainnet contracts pending"}
+                    </h2>
+                    <p className="max-w-xs text-xs text-muted-foreground">
+                      {ACTIVE_NETWORK.isLive
+                        ? "Deposit tokens and post an offer in Liquidity Vault to make inventory available here."
+                        : `Contracts are not yet live on ${ACTIVE_NETWORK.name}.`}
+                    </p>
+                    {ACTIVE_NETWORK.isLive && (
+                      <Button
                         type="button"
-                        onClick={() => selectOffer(offer)}
-                        className={cn(
-                          "grid w-full grid-cols-2 items-center gap-2 rounded-[12px] px-3.5 py-3 text-left transition-all sm:grid-cols-12 cursor-pointer",
-                          isSelected
-                            ? "bg-accent text-foreground ring-1 ring-foreground/15"
-                            : "hover:bg-accent/55",
-                        )}
+                        size="sm"
+                        onClick={() => onNavigate("/vault")}
+                        className="mt-1 h-9 rounded-full px-5 text-xs cursor-pointer"
                       >
-                        <div className="col-span-2 flex items-center gap-3 sm:col-span-4">
-                          <span
-                            className={cn(
-                              "flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-                              tokenBadgeColor(inv.symbol),
-                            )}
-                          >
-                            {inv.symbol.replace(/^t/, "").slice(0, 3)}
-                          </span>
-                          <div className="flex min-w-0 flex-col">
-                            <span className="truncate text-sm font-semibold text-foreground">
-                              {inv.symbol} / {pay.symbol}
+                        Open Liquidity Vault
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1 p-2">
+                    {filteredOffers.map((offer) => {
+                      const inv = getTokenMeta(offer.inventoryToken);
+                      const pay = getTokenMeta(offer.paymentToken);
+                      const isFixed = offer.priceMode === 0;
+                      const isSelected = selected?.offerId === offer.offerId;
+                      const priceLabel = isFixed
+                        ? `${formatPriceX36(offer.fixedPriceX36, inv.decimals, pay.decimals)} ${pay.symbol}`
+                        : `Oracle ${offer.spreadBps >= 0 ? "+" : ""}${offer.spreadBps} bps`;
+
+                      return (
+                        <button
+                          key={offer.offerId.toString()}
+                          type="button"
+                          onClick={() => selectOffer(offer)}
+                          className={cn(
+                            "grid w-full grid-cols-2 items-center gap-2 rounded-[14px] px-3.5 py-3.5 text-left transition-all sm:grid-cols-12 cursor-pointer",
+                            isSelected
+                              ? "bg-accent text-foreground ring-1 ring-foreground/15"
+                              : "hover:bg-accent/55",
+                          )}
+                        >
+                          <div className="col-span-2 flex items-center gap-3 sm:col-span-4">
+                            <span
+                              className={cn(
+                                "flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+                                tokenBadgeColor(inv.symbol),
+                              )}
+                            >
+                              {inv.symbol.replace(/^t/, "").slice(0, 3)}
                             </span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {isFixed ? "Fixed" : "Floating"} · max {formatDuration(offer.maxDuration)}
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate text-sm font-semibold text-foreground">
+                                {inv.symbol} / {pay.symbol}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {isFixed ? "Fixed price" : "Market-linked"} · up to{" "}
+                                {formatDuration(offer.maxDuration)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:col-span-3 sm:items-end">
+                            <span className="text-[10px] text-muted-foreground sm:hidden">
+                              Available
+                            </span>
+                            <span className="tabular-nums-mono text-sm font-medium text-foreground">
+                              {formatTokenAmount(offer.availableBalance, inv.decimals)} {inv.symbol}
                             </span>
                           </div>
-                        </div>
 
-                        <div className="flex flex-col sm:col-span-3 sm:items-end">
-                          <span className="text-[10px] text-muted-foreground sm:hidden">Available</span>
-                          <span className="tabular-nums-mono text-sm font-medium text-foreground">
-                            {formatTokenAmount(offer.availableBalance, inv.decimals)} {inv.symbol}
-                          </span>
-                        </div>
+                          <div className="flex flex-col sm:col-span-3 sm:items-end">
+                            <span className="text-[10px] text-muted-foreground sm:hidden">
+                              Locked Price
+                            </span>
+                            <span className="tabular-nums-mono text-sm font-medium text-foreground">
+                              {priceLabel}
+                            </span>
+                          </div>
 
-                        <div className="flex flex-col sm:col-span-3 sm:items-end">
-                          <span className="text-[10px] text-muted-foreground sm:hidden">Strike</span>
-                          <span className="tabular-nums-mono text-sm font-medium text-foreground">
-                            {priceLabel}
-                          </span>
-                        </div>
-
-                        <div className="hidden sm:col-span-2 sm:flex sm:justify-end">
-                          <span className="tabular-nums-mono rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                            {(offer.basePremiumBps / 100).toFixed(2)}%
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                          <div className="hidden sm:col-span-2 sm:flex sm:justify-end">
+                            <span className="tabular-nums-mono rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                              {(offer.basePremiumBps / 100).toFixed(2)}%
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Compact Activity Strip — ONLY shown when there are actual recent events */}
             {activity.length > 0 && (
-              <div className="rounded-[16px] border border-border bg-card p-4">
-                <div className="mb-2.5 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-foreground">Recent Activity</span>
-                  <span className="text-[11px] text-muted-foreground">{activity.length} latest</span>
-                </div>
-                <div className="divide-y divide-border/70">
-                  {activity.slice(0, 4).map((item) => (
-                    <a
-                      key={item.id}
-                      href={explorerTxUrl(item.txHash)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between gap-2 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <span className="truncate font-medium text-foreground">{item.label}</span>
-                      <span className="tabular-nums-mono inline-flex shrink-0 items-center gap-1 text-[11px]">
-                        #{item.blockNumber.toLocaleString()}
-                        <ArrowUpRight className="size-3" />
-                      </span>
-                    </a>
-                  ))}
-                </div>
+              <div className="hidden shrink-0 items-center justify-between gap-3 rounded-[14px] border border-border bg-card px-4 py-2.5 text-xs sm:flex">
+                <span className="font-medium text-muted-foreground">Latest on-chain event</span>
+                <a
+                  href={explorerTxUrl(activity[0]!.txHash)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1.5 font-medium text-foreground hover:underline underline-offset-4"
+                >
+                  <span className="truncate">{activity[0]!.label}</span>
+                  <span className="tabular-nums-mono shrink-0 text-[11px] text-muted-foreground">
+                    #{activity[0]!.blockNumber.toLocaleString()}
+                  </span>
+                  <ArrowUpRight className="size-3 shrink-0" />
+                </a>
               </div>
             )}
           </div>
 
-          {/* RIGHT 5 COLS (STICKY): Always-Ready Live Quote & Reserve Card */}
-          <aside className="lg:sticky lg:top-24 lg:col-span-5">
-            <div className="min-h-[380px] rounded-[20px] border border-border bg-card p-6">
+          {/* RIGHT 5 COLS: Live Quote & Reserve Card */}
+          <aside className="flex min-h-0 flex-col lg:col-span-5">
+            <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto rounded-[20px] border border-border bg-card p-6">
               {selected && selectedInv && selectedPay ? (
                 txStep === "done" && txHash ? (
                   <div className="animate-rise flex flex-col items-center gap-4 py-6 text-center">
