@@ -103,25 +103,25 @@ function humanRegime(regime: string | undefined): string {
 function humanAction(action: string): { label: string; tone: "neutral" | "good" | "warn" } {
   switch (action) {
     case "READ_ONLY_SWAP_HSKSWAP":
-      return { label: "Would buy on HSKSwap (no tx sent)", tone: "good" };
+      return { label: "Best price on HSKSwap", tone: "good" };
     case "READ_ONLY_RESERVE_TRANCHE":
-      return { label: "Would reserve on Tranche (no tx sent)", tone: "good" };
+      return { label: "Best price on Tranche", tone: "good" };
     case "DRY_RUN_SWAP_HSKSWAP":
       return { label: "Simulated HSKSwap buy", tone: "good" };
     case "DRY_RUN_RESERVE_TRANCHE":
-      return { label: "Simulated Tranche reservation", tone: "good" };
+      return { label: "Simulated Tranche lock", tone: "good" };
     case "SWAP_HSKSWAP":
       return { label: "Bought on HSKSwap", tone: "good" };
     case "RESERVE_TRANCHE":
-      return { label: "Reserved on Tranche", tone: "good" };
+      return { label: "Locked price on Tranche", tone: "good" };
     case "SKIPPED_DUPLICATE":
-      return { label: "Cooldown active (skipped repeat)", tone: "neutral" };
+      return { label: "Skipped (checked recently)", tone: "neutral" };
     case "WAIT":
-      return { label: "Waiting for better conditions", tone: "neutral" };
+      return { label: "Waiting for a better price", tone: "neutral" };
     case "BLOCKED_RISK":
-      return { label: "Blocked by safety limit", tone: "warn" };
+      return { label: "Stopped by spending limit", tone: "warn" };
     case "EXECUTION_FAILED":
-      return { label: "Execution failed safely", tone: "warn" };
+      return { label: "Trade did not go through", tone: "warn" };
     default:
       return { label: action.replace(/_/g, " ").toLowerCase(), tone: "neutral" };
   }
@@ -129,17 +129,17 @@ function humanAction(action: string): { label: string; tone: "neutral" | "good" 
 
 function humanDecisionSummary(d: AgentDashboardSnapshot["decisions"][number]): string {
   if (d.selectedAction === "SKIPPED_DUPLICATE") {
-    return "Already evaluated this 60-second window — deduplication prevented a repeat order.";
+    return "Checked this price a moment ago — skipped to avoid placing a repeat order.";
   }
   if (d.selectedAction === "READ_ONLY_SWAP_HSKSWAP") {
-    return `Price met target. Selected HSKSwap (${fmtPayment6(d.hskswap.acquisitionCostPayment)}) because no mainnet Tranche offers are posted yet. Read-Only Mode blocked transaction broadcast.`;
+    return `Price hit your target. HSKSwap (${fmtPayment6(d.hskswap.acquisitionCostPayment)}) is the best option right now because no Tranche offers are posted for this pair yet. Preview mode is on, so no trade was sent.`;
   }
   if (d.selectedAction === "READ_ONLY_RESERVE_TRANCHE") {
-    return `Price met target. Selected Tranche (${fmtPayment6(d.tranche.acquisitionCostPayment)}) as the cheaper venue. Read-Only Mode blocked transaction broadcast.`;
+    return `Price hit your target. Tranche (${fmtPayment6(d.tranche.acquisitionCostPayment)}) is the cheaper option right now. Preview mode is on, so no trade was sent.`;
   }
   if (d.selectedAction === "BLOCKED_RISK") {
     const failed = d.failedRiskChecks.map((c) => c.name.replace(/_/g, " ")).join(", ");
-    return `Safety guardrails blocked this trade (${failed || "risk limit reached"}).`;
+    return `Your spending limits stopped this trade (${failed || "limit reached"}).`;
   }
   return d.rationale;
 }
@@ -394,14 +394,14 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
         : "Tranche Agent";
   const pageSubtitle =
     view === "activity"
-      ? "Live decisions, open positions & tickets"
+      ? "Recent price checks, positions & tickets"
       : view === "policy"
-        ? "Strategy, safety limits & plain-English rules"
+        ? "Strategy, spending limits & rules"
         : disconnected
-          ? "Connecting to Agent API…"
+          ? "Connecting…"
           : isReadOnly
-            ? `Safe Read-Only · Chain ${status?.chainId ?? 177}`
-            : `Chain ${status?.chainId ?? 177}`;
+            ? "Watching live prices"
+            : "Active";
 
   return (
     <AppShell
@@ -431,12 +431,12 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
             ) : isReadOnly ? (
               <>
                 <Eye className="size-3" />
-                Read-Only
+                Preview
               </>
             ) : isDryRun ? (
               <>
                 <Bot className="size-3" />
-                Dry-Run
+                Practice
               </>
             ) : (
               <>
@@ -454,7 +454,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               className="h-8 rounded-full px-3 text-xs cursor-pointer"
             >
               <Settings2 className="mr-1.5 size-3.5" />
-              API Connection
+              Connection
             </Button>
           )}
         </div>
@@ -475,25 +475,25 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 />
                 <span>
                   {disconnected
-                    ? "Reconnecting to live feed…"
+                    ? "Reconnecting to live prices…"
                     : isReadOnly
-                      ? `Safe Read-Only Mode · HashKey Chain (${status?.chainId ?? 177})`
-                      : `Autonomous Mode · HashKey Chain (${status?.chainId ?? 177})`}
+                      ? "HashKey Chain · Watching live prices"
+                      : "HashKey Chain · Auto-trading active"}
                 </span>
               </div>
               <h1 className="font-display text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
                 {disconnected
-                  ? "Waiting for the agent feed."
+                  ? "Connecting to live prices."
                   : `Watching ${status?.market ?? "WHSK/USDT"} live.`}
               </h1>
               <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
                 {disconnected
                   ? hostedLocalMismatch
-                    ? "Your API URL is pointed at localhost. Open Rules & Controls to switch to a live server."
-                    : "Retrying connection automatically. No funds are at risk."
+                    ? "Your connection URL is pointed at your local computer. Open Rules & Controls to update it."
+                    : "Retrying automatically. No funds are at risk."
                   : isReadOnly
-                    ? "Comparing Tranche price locks against HSKSwap every 15 seconds using real mainnet prices. Zero funds spent."
-                    : "Automatically routing between Tranche price locks and HSKSwap under code-enforced safety limits."}
+                    ? "Checking whether Tranche or HSKSwap gives you a better deal every 15 seconds. No money is spent in preview mode."
+                    : "Automatically picking the better deal between Tranche and HSKSwap within your spending limits."}
               </p>
             </div>
 
@@ -504,7 +504,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 onClick={() => onNavigate("/trade")}
                 className="h-11 rounded-full px-6 text-sm font-medium cursor-pointer"
               >
-                Try Testnet Trade
+                Make a Trade
                 <ArrowRight className="ml-1.5 size-4" />
               </Button>
             </div>
@@ -520,8 +520,8 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <span className="block text-sm font-semibold">Tranche Protocol</span>
-                    <span className="text-xs opacity-60">Price-locked reservation</span>
+                    <span className="block text-sm font-semibold">Tranche</span>
+                    <span className="text-xs opacity-60">Lock your price first</span>
                   </div>
                   <span
                     className="rounded-full px-3 py-1 text-[11px] font-medium"
@@ -531,10 +531,10 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     }}
                   >
                     {winningVenue === "TRANCHE"
-                      ? "Best Route"
+                      ? "Best Option"
                       : (markets?.trancheOffersCount ?? 0) > 0
                         ? "Available"
-                        : "Testnet Only"}
+                        : "No Offers Yet"}
                   </span>
                 </div>
 
@@ -549,24 +549,24 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                         markets.venueComparison.tranche.reservationPremiumPayment,
                         paymentSymbol,
                       )}{" "}
-                      · Exercise{" "}
+                      · Buy price{" "}
                       {fmtPayment6(markets.venueComparison.tranche.exercisePayment, paymentSymbol)}
                     </span>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
                     <span className="text-xl font-semibold tracking-tight">
-                      No mainnet offers yet
+                      No offers on this pair yet
                     </span>
                     <p className="text-xs leading-relaxed opacity-70">
-                      Mainnet contracts aren&apos;t live yet, so the agent sees 0 offers on Chain
-                      177. Try real price-locked reservations on Chain 133 testnet.
+                      No sellers have posted a locked price for WHSK yet. You can try locking a
+                      price on other pairs in the Trade Desk.
                     </p>
                   </div>
                 )}
 
                 <div className="flex items-center justify-between border-t border-black/10 pt-4 text-xs opacity-75">
-                  <span>Zero slippage · capped downside</span>
+                  <span>Fixed price · no surprises</span>
                   <button
                     type="button"
                     onClick={() => onNavigate("/trade")}
@@ -601,8 +601,8 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               <div className="flex flex-col justify-between gap-8 bg-card p-7 text-card-foreground lg:col-span-5">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <span className="block text-sm font-semibold">HSKSwap V3</span>
-                    <span className="text-xs text-muted-foreground">Instant market swap</span>
+                    <span className="block text-sm font-semibold">HSKSwap</span>
+                    <span className="text-xs text-muted-foreground">Buy right away</span>
                   </div>
                   <span
                     className={cn(
@@ -612,11 +612,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                         : "border border-border text-muted-foreground",
                     )}
                   >
-                    {winningVenue === "HSKSWAP"
-                      ? isReadOnly
-                        ? "Simulated Pick"
-                        : "Best Route"
-                      : "Available"}
+                    {winningVenue === "HSKSWAP" ? "Best Option" : "Available"}
                   </span>
                 </div>
 
@@ -631,14 +627,14 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                   </span>
                   <span className="tabular-nums-mono text-xs text-muted-foreground">
                     {markets?.venueComparison
-                      ? `For 100 WHSK · Pool fee & impact ${((markets.venueComparison.hskswap.priceImpactBps ?? 0) / 100).toFixed(2)}%`
-                      : "Waiting for live Chain 177 quote…"}
+                      ? `For 100 WHSK · ${((markets.venueComparison.hskswap.priceImpactBps ?? 0) / 100).toFixed(2)}% fee`
+                      : "Loading live price…"}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
                   <span className="tabular-nums-mono">
-                    Instant sell:{" "}
+                    Sell price:{" "}
                     {markets?.dexSellQuote
                       ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol)
                       : "—"}
@@ -663,24 +659,24 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                       ? "Stopped"
                       : status?.paused
                         ? "Paused"
-                        : "Running Safely"}
+                        : "Active"}
                 </strong>
               </span>
               <span>
-                Checks:{" "}
+                Price checks:{" "}
                 <strong className="tabular-nums-mono font-semibold text-foreground">
                   {metrics?.totalCycles ?? 0}
                 </strong>
               </span>
               <span>
-                Exposure:{" "}
+                Spent:{" "}
                 <strong className="tabular-nums-mono font-semibold text-foreground">
                   {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"} /{" "}
                   {config ? fmtPayment6(config.riskLimits.maxTotalExposurePayment, "USDT") : "$50.00"}
                 </strong>
               </span>
               <span>
-                Tx sent:{" "}
+                Trades made:{" "}
                 <strong className="tabular-nums-mono font-semibold text-foreground">
                   {metrics?.liveExecutionsCount ?? 0}
                 </strong>
@@ -747,7 +743,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4 hover:opacity-75"
               >
-                24h Soak Proof
+                Raw Log
                 <ArrowUpRight className="size-3.5" />
               </a>
             </div>
@@ -789,7 +785,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                                   : "text-destructive",
                               )}
                             >
-                              {d.riskAllowed ? "Safety OK" : "Blocked by safety"}
+                              {d.riskAllowed ? "Within limits" : "Stopped by limit"}
                             </span>
                           </div>
                           <span className="tabular-nums-mono shrink-0 text-xs text-muted-foreground">
@@ -853,7 +849,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
                   <p className="text-sm font-medium text-foreground">No open positions</p>
                   <p className="max-w-sm text-xs text-muted-foreground">
-                    In Safe Read-Only Mode, the agent evaluates trades without spending any funds.
+                    Preview mode is on — the agent watches prices without spending your money.
                   </p>
                 </div>
               ))}
@@ -927,8 +923,8 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-semibold">Safety &amp; Runtime</h2>
-                    <p className="text-xs opacity-65">Code-enforced caps · Policy v{policyVersion}</p>
+                    <h2 className="text-base font-semibold">Spending Limits</h2>
+                    <p className="text-xs opacity-65">Automatic caps · Rule v{policyVersion}</p>
                   </div>
                   <span className="rounded-full bg-black/10 px-2.5 py-1 text-[11px] font-medium">
                     {disconnected
@@ -945,7 +941,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                 <div className="flex flex-col gap-3 rounded-[16px] border border-black/10 bg-white/70 p-4 text-xs">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="opacity-70">Max Exposure Cap</span>
+                      <span className="opacity-70">Spending Limit</span>
                       <span className="tabular-nums-mono font-semibold">
                         {metrics ? fmtPayment6(metrics.currentTotalExposurePayment, "USDT") : "$0.00"}{" "}
                         /{" "}
@@ -1088,7 +1084,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     </select>
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">Take-Profit (bps)</span>
+                    <span className="text-muted-foreground">Take Profit</span>
                     <input
                       type="number"
                       value={tpInput}
@@ -1097,7 +1093,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">Stop-Loss (bps)</span>
+                    <span className="text-muted-foreground">Stop Loss</span>
                     <input
                       type="number"
                       value={slInput}
@@ -1106,7 +1102,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">Max Slippage (bps)</span>
+                    <span className="text-muted-foreground">Max Price Shift</span>
                     <input
                       type="number"
                       value={slipInput}
@@ -1115,7 +1111,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">Max Position (raw wei)</span>
+                    <span className="text-muted-foreground">Max Trade Size</span>
                     <input
                       type="text"
                       value={maxPosInput}
