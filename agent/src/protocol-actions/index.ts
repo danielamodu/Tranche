@@ -6,11 +6,13 @@ export type {
   TicketSummary,
 } from "./layer.js";
 export {
+  ALLOWED_TRADING_AGENT_WRITE_OPS,
   FORBIDDEN_TRADING_AGENT_OPS,
   ProtocolApprovalManager,
   ProtocolPermissionError,
   assertOperationAllowedForTradingAgent,
   computeProposalBindingHash,
+  validateProposalParameters,
 } from "./permissions.js";
 export type {
   ProtocolActionProposal,

@@ -47,6 +47,8 @@ export interface ProtocolProposalParameters {
   offerId?: bigint;
   ticketId?: bigint;
   durationSec?: number;
+  /** Optional on-chain ticket expiry timestamp (seconds) for contract-semantic validation. */
+  ticketExpiresAtSec?: number;
   recipient: Address;
 }
 
@@ -102,6 +104,13 @@ export class ProtocolPermissionError extends Error {
   }
 }
 
+export const ALLOWED_TRADING_AGENT_WRITE_OPS: ReadonlySet<ProtocolApprovalRequiredOp> =
+  new Set<ProtocolApprovalRequiredOp>([
+    "RESERVE_INVENTORY",
+    "EXERCISE_TICKET",
+    "RECLAIM_EXPIRED_TICKET",
+  ]);
+
 export const FORBIDDEN_TRADING_AGENT_OPS: ReadonlySet<string> = new Set<ProtocolForbiddenOp>([
   "LP_DEPOSIT",
   "LP_WITHDRAW",
@@ -110,12 +119,122 @@ export const FORBIDDEN_TRADING_AGENT_OPS: ReadonlySet<string> = new Set<Protocol
   "ADMIN_UPDATE",
 ]);
 
-export function assertOperationAllowedForTradingAgent(op: string): void {
-  if (FORBIDDEN_TRADING_AGENT_OPS.has(op)) {
+const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/**
+ * Strict allowlist enforcement: ONLY RESERVE_INVENTORY, EXERCISE_TICKET, and
+ * RECLAIM_EXPIRED_TICKET are permitted trading-agent write operations.
+ * Every LP, admin, case-variant, malformed, or unknown operation fails closed.
+ */
+export function assertOperationAllowedForTradingAgent(op: unknown): asserts op is ProtocolApprovalRequiredOp {
+  if (typeof op !== "string" || !ALLOWED_TRADING_AGENT_WRITE_OPS.has(op as ProtocolApprovalRequiredOp)) {
     throw new ProtocolPermissionError(
       "PERMISSION_DENIED_OUT_OF_SCOPE",
-      `Operation ${op} is outside autonomous trading agent permissions (LP/admin restricted)`,
+      `Operation "${String(op)}" is not in the trading-agent write allowlist (RESERVE_INVENTORY, EXERCISE_TICKET, RECLAIM_EXPIRED_TICKET)`,
     );
+  }
+}
+
+/**
+ * Validates action-specific parameters against actual CommitmentManager contract semantics.
+ */
+export function validateProposalParameters(
+  params: ProtocolProposalParameters,
+  nowSec: number,
+): void {
+  if (!params || typeof params !== "object") {
+    throw new ProtocolPermissionError("INVALID_ACTION_PARAMETERS", "Proposal parameters object is required");
+  }
+  assertOperationAllowedForTradingAgent(params.action);
+
+  if (!Number.isInteger(params.chainId) || params.chainId <= 0) {
+    throw new ProtocolPermissionError("INVALID_ACTION_PARAMETERS", `Invalid chainId: ${String(params.chainId)}`);
+  }
+  for (const [field, addr, allowZero] of [
+    ["wallet", params.wallet, false],
+    ["contractAddress", params.contractAddress, false],
+    ["token", params.token, true],
+    ["recipient", params.recipient, false],
+  ] as const) {
+    if (typeof addr !== "string" || !EVM_ADDRESS_RE.test(addr)) {
+      throw new ProtocolPermissionError("INVALID_ACTION_PARAMETERS", `Invalid EVM address for ${field}`);
+    }
+    if (!allowZero && addr.toLowerCase() === ZERO_ADDRESS) {
+      throw new ProtocolPermissionError("INVALID_ACTION_PARAMETERS", `Zero address not allowed for ${field}`);
+    }
+  }
+  if (typeof params.amount !== "bigint" || params.amount < 0n) {
+    throw new ProtocolPermissionError("INVALID_ACTION_PARAMETERS", "amount must be a non-negative bigint");
+  }
+  if (typeof params.maxPaymentOrPremium !== "bigint" || params.maxPaymentOrPremium < 0n) {
+    throw new ProtocolPermissionError(
+      "INVALID_ACTION_PARAMETERS",
+      "maxPaymentOrPremium must be a non-negative bigint",
+    );
+  }
+
+  if (params.action === "RESERVE_INVENTORY") {
+    if (params.offerId === undefined || typeof params.offerId !== "bigint" || params.offerId < 0n) {
+      throw new ProtocolPermissionError(
+        "INVALID_ACTION_PARAMETERS",
+        "RESERVE_INVENTORY requires a valid non-negative offerId",
+      );
+    }
+    if (params.amount <= 0n) {
+      throw new ProtocolPermissionError(
+        "INVALID_ACTION_PARAMETERS",
+        "RESERVE_INVENTORY requires amount > 0",
+      );
+    }
+    if (
+      params.durationSec === undefined ||
+      !Number.isInteger(params.durationSec) ||
+      params.durationSec <= 0
+    ) {
+      throw new ProtocolPermissionError(
+        "INVALID_ACTION_PARAMETERS",
+        "RESERVE_INVENTORY requires a positive integer durationSec",
+      );
+    }
+    if (params.ticketId !== undefined) {
+      throw new ProtocolPermissionError(
+        "INVALID_ACTION_PARAMETERS",
+        "RESERVE_INVENTORY must not specify ticketId",
+      );
+    }
+  } else if (params.action === "EXERCISE_TICKET") {
+    if (params.ticketId === undefined || typeof params.ticketId !== "bigint" || params.ticketId < 0n) {
+      throw new ProtocolPermissionError(
+        "INVALID_ACTION_PARAMETERS",
+        "EXERCISE_TICKET requires a valid non-negative ticketId",
+      );
+    }
+    if (params.amount <= 0n) {
+      throw new ProtocolPermissionError(
+        "INVALID_ACTION_PARAMETERS",
+        "EXERCISE_TICKET requires fill amount > 0",
+      );
+    }
+    if (params.ticketExpiresAtSec !== undefined && nowSec >= params.ticketExpiresAtSec) {
+      throw new ProtocolPermissionError(
+        "TICKET_EXPIRED_CANNOT_EXERCISE",
+        `Ticket ${params.ticketId} expired at ${params.ticketExpiresAtSec} and cannot be exercised`,
+      );
+    }
+  } else if (params.action === "RECLAIM_EXPIRED_TICKET") {
+    if (params.ticketId === undefined || typeof params.ticketId !== "bigint" || params.ticketId < 0n) {
+      throw new ProtocolPermissionError(
+        "INVALID_ACTION_PARAMETERS",
+        "RECLAIM_EXPIRED_TICKET requires a valid non-negative ticketId",
+      );
+    }
+    if (params.ticketExpiresAtSec !== undefined && nowSec < params.ticketExpiresAtSec) {
+      throw new ProtocolPermissionError(
+        "TICKET_NOT_EXPIRED_CANNOT_RECLAIM",
+        `Ticket ${params.ticketId} is still active until ${params.ticketExpiresAtSec} and cannot be reclaimed early`,
+      );
+    }
   }
 }
 
@@ -134,6 +253,7 @@ export function computeProposalBindingHash(
     offerId: params.offerId?.toString() ?? null,
     ticketId: params.ticketId?.toString() ?? null,
     durationSec: params.durationSec ?? null,
+    ticketExpiresAtSec: params.ticketExpiresAtSec ?? null,
     recipient: params.recipient.toLowerCase(),
     expiresAt,
   });
@@ -239,7 +359,9 @@ export class ProtocolApprovalManager {
     ttlSec?: number;
     killSwitchActive?: boolean;
   }): ProtocolActionProposal {
-    assertOperationAllowedForTradingAgent(input.parameters.action);
+    const now = this.nowSec();
+    assertOperationAllowedForTradingAgent(input.parameters?.action);
+    validateProposalParameters(input.parameters, now);
     if (input.killSwitchActive) {
       throw new ProtocolPermissionError(
         "KILL_SWITCH_ACTIVE",
@@ -272,7 +394,6 @@ export class ProtocolApprovalManager {
       );
     }
 
-    const now = this.nowSec();
     const expiresAt = now + (input.ttlSec ?? this.policy.defaultProposalTtlSec);
     const bindingHash = computeProposalBindingHash(input.parameters, expiresAt);
 
@@ -317,6 +438,17 @@ export class ProtocolApprovalManager {
     }
 
     const now = this.nowSec();
+    // Independently re-validate allowlisted action, contract semantics, and canonical binding at approval time
+    assertOperationAllowedForTradingAgent(p.parameters?.action);
+    validateProposalParameters(p.parameters, now);
+    const canonicalHash = computeProposalBindingHash(p.parameters, p.expiresAt);
+    if (canonicalHash !== p.bindingHash) {
+      throw new ProtocolPermissionError(
+        "APPROVAL_PARAMETER_MISMATCH",
+        "Stored proposal parameters were modified and no longer match canonical binding hash",
+      );
+    }
+
     if (now >= p.expiresAt) {
       p.status = "EXPIRED";
       p.history.push({ timestamp: now, status: "EXPIRED", detail: "Proposal expired before approval" });
@@ -409,6 +541,17 @@ export class ProtocolApprovalManager {
     }
 
     const now = this.nowSec();
+    // Independently re-validate stored proposal action, contract semantics, and binding hash at submission time
+    assertOperationAllowedForTradingAgent(p.parameters?.action);
+    validateProposalParameters(p.parameters, now);
+    const storedCanonicalHash = computeProposalBindingHash(p.parameters, p.expiresAt);
+    if (storedCanonicalHash !== p.bindingHash) {
+      throw new ProtocolPermissionError(
+        "APPROVAL_PARAMETER_MISMATCH",
+        "Approved proposal parameters were tampered with prior to submission",
+      );
+    }
+
     if (now >= p.expiresAt) {
       p.status = "EXPIRED";
       p.history.push({ timestamp: now, status: "EXPIRED", detail: "Approval expired before submission" });
@@ -417,6 +560,8 @@ export class ProtocolApprovalManager {
     }
 
     if (input.submittedParameters) {
+      assertOperationAllowedForTradingAgent(input.submittedParameters?.action);
+      validateProposalParameters(input.submittedParameters, now);
       const checkHash = computeProposalBindingHash(input.submittedParameters, p.expiresAt);
       if (checkHash !== p.bindingHash) {
         throw new ProtocolPermissionError(

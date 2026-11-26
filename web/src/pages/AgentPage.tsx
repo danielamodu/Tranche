@@ -337,11 +337,18 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
     async (isManual = false, forceFormSync = false) => {
       const seq = ++requestSeqRef.current;
       if (isManual) setRefreshing(true);
+      const hasOperatorToken = tokenInput.trim().length > 0;
       try {
         const [data, intel, protoAct] = await Promise.all([
           client.fetchSnapshot(),
-          client.getIntelligence().catch(() => null),
-          client.getProtocolActivity().catch(() => null),
+          (hasOperatorToken
+            ? client.getIntelligence()
+            : client.getPublicIntelligence()
+          ).catch(() => null),
+          (hasOperatorToken
+            ? client.getProtocolActivity()
+            : client.getPublicProtocolActivity()
+          ).catch(() => null),
         ]);
         if (seq !== requestSeqRef.current) return;
         setSnapshot(data);
@@ -803,16 +810,36 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                       ? "Agent stopped"
                       : effectivePaused
                         ? "Your agent is paused"
-                        : `Active · Watching ${status?.market ?? "WHSK/USDT"} (Chain ${agentChainId})`}
+                        : `Active · Watching ${status?.market ?? "WHSK/USDT"}`}
+                </span>
+                <span className="tabular-nums-mono rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-semibold text-foreground">
+                  Market Data:{" "}
+                  {agentChainId === 177
+                    ? "Chain 177 — Mainnet (Read-Only)"
+                    : agentChainId === 133
+                      ? "Chain 133 — Testnet"
+                      : `Chain ${agentChainId}`}
                 </span>
                 <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-semibold text-foreground">
                   {dataProvenance} DATA
                 </span>
-                {chainMismatch && (
-                  <span className="rounded-full border border-amber-500/35 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                    Wallet: Chain {walletChainId} · Agent: Chain {agentChainId}
-                  </span>
-                )}
+                <span
+                  className={cn(
+                    "tabular-nums-mono rounded-full border px-2.5 py-0.5 text-[10px] font-medium",
+                    chainMismatch
+                      ? "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                      : "border-border bg-card text-muted-foreground",
+                  )}
+                >
+                  Wallet:{" "}
+                  {walletChainId === 133
+                    ? "Chain 133 — Testnet"
+                    : walletChainId === 177
+                      ? "Chain 177 — Mainnet"
+                      : walletChainId
+                        ? `Chain ${walletChainId}`
+                        : "Not connected"}
+                </span>
               </div>
               <h1 className="font-display text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
                 Tell your agent what to achieve.
@@ -1374,19 +1401,27 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
 
                 <ProtocolActivityPanel
                   activity={protocolActivity}
-                  onApprove={async (proposalId, bindingHash) => {
-                    await client.approveProtocolProposal(proposalId, {
-                      approvedBy: "operator",
-                      expectedBindingHash: bindingHash,
-                    });
-                    await loadSnapshot(true);
-                  }}
-                  onReject={async (proposalId) => {
-                    await client.rejectProtocolProposal(proposalId, {
-                      reason: "Rejected by user",
-                    });
-                    await loadSnapshot(true);
-                  }}
+                  onApprove={
+                    isOperator && !protocolActivity?.readOnlyPublicView
+                      ? async (proposalId, bindingHash) => {
+                          await client.approveProtocolProposal(proposalId, {
+                            approvedBy: "operator",
+                            expectedBindingHash: bindingHash,
+                          });
+                          await loadSnapshot(true);
+                        }
+                      : undefined
+                  }
+                  onReject={
+                    isOperator && !protocolActivity?.readOnlyPublicView
+                      ? async (proposalId) => {
+                          await client.rejectProtocolProposal(proposalId, {
+                            reason: "Rejected by user",
+                          });
+                          await loadSnapshot(true);
+                        }
+                      : undefined
+                  }
                 />
               </div>
             )}

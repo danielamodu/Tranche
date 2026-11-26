@@ -858,6 +858,102 @@ export class AgentApiServer {
         });
       }
 
+      // Sanitized public read-only intelligence endpoint (explicitly restricted schema; zero secrets or operator metadata)
+      if (method === "GET" && pathname === "/agent/public/intelligence") {
+        const evalEngine = this.cfg.agent.getEvaluationEngine();
+        const traces = this.cfg.agent.getTraces();
+        const latest = traces.length > 0 ? traces[traces.length - 1] : null;
+        const metrics = evalEngine.computeMetrics();
+        const integrity = this.cfg.agent.getLatestIntegrityReport();
+        const portfolio = this.cfg.agent.getLatestPortfolioSnapshot();
+        return sendJson(res, 200, {
+          readOnlyPublicView: true,
+          chainId: this.cfg.chainId ?? 0,
+          executionMode: this.cfg.agent.getExecutionMode(),
+          dataProvenance: evalEngine.getProvenance(),
+          marketRegime: latest?.snapshot.marketRegime ?? null,
+          adaptiveStrategy: this.cfg.agent.getLatestAdaptiveStrategy(),
+          latestVenueEvidence: latest?.venueSelection.evidence ?? null,
+          positionIntegrity: integrity
+            ? {
+                healthy: integrity.healthy,
+                pendingTxBlocking: integrity.pendingTxBlocking,
+                issues: integrity.issues.map((i) => ({
+                  severity: i.severity,
+                  code: i.code,
+                  entityId: i.entityId,
+                  detail: i.detail,
+                })),
+              }
+            : null,
+          portfolio: portfolio
+            ? {
+                availableBalancePayment: portfolio.availableBalancePayment,
+                totalEquityPayment: portfolio.totalEquityPayment,
+                totalCommittedCapitalPayment: portfolio.totalCommittedCapitalPayment,
+                availableCapitalForAllocationPayment:
+                  portfolio.availableCapitalForAllocationPayment,
+                totalRealizedPnlPayment: portfolio.totalRealizedPnlPayment,
+                totalUnrealizedPnlPayment: portfolio.totalUnrealizedPnlPayment,
+                assetExposures: portfolio.assetExposures,
+              }
+            : null,
+          evaluation: metrics,
+        });
+      }
+
+      // Sanitized public read-only protocol activity endpoint (zero operator tokens, zero secrets, zero write capability)
+      if (method === "GET" && pathname === "/agent/public/protocol/activity") {
+        const evalEngine = this.cfg.agent.getEvaluationEngine();
+        const traces = this.cfg.agent.getTraces();
+        const latest = traces.length > 0 ? traces[traces.length - 1] : null;
+        const approvals = this.cfg.protocolApprovalManager;
+        const offers = this.cfg.protocolActionLayer
+          ? await this.cfg.protocolActionLayer.discoverActiveOffers().catch(() => [])
+          : [];
+        const tickets = this.cfg.protocolActionLayer
+          ? await this.cfg.protocolActionLayer.inspectTickets().catch(() => [])
+          : [];
+        const sanitizedProposals = (approvals ? approvals.listProposals() : []).map((p) => ({
+          proposalId: p.proposalId,
+          status: p.status,
+          bindingHash: p.bindingHash.slice(0, 16),
+          dataProvenance: p.dataProvenance,
+          rationale: p.rationale,
+          parameters: {
+            action: p.parameters.action,
+            chainId: p.parameters.chainId,
+            amount: p.parameters.amount,
+            maxPaymentOrPremium: p.parameters.maxPaymentOrPremium,
+            offerId: p.parameters.offerId,
+            ticketId: p.parameters.ticketId,
+            durationSec: p.parameters.durationSec,
+            expiresAt: p.expiresAt,
+          },
+          createdAt: p.createdAt,
+          updatedAt: p.confirmedAt ?? p.submittedAt ?? p.approvedAt ?? p.rejectedAt ?? p.createdAt,
+          txHash: p.txHash,
+          blockNumber: p.confirmedBlockNumber,
+        }));
+        return sendJson(res, 200, {
+          readOnlyPublicView: true,
+          dataProvenance: evalEngine.getProvenance(),
+          chainId: this.cfg.chainId ?? 0,
+          executionMode: this.cfg.agent.getExecutionMode(),
+          autonomousMainnetSigningEnabled: false,
+          offers,
+          tickets,
+          latestVenueDecision: latest
+            ? {
+                selectedVenue: latest.venueSelection.selectedVenue,
+                reason: latest.venueSelection.rationale,
+                timestamp: latest.timestamp,
+              }
+            : null,
+          proposals: sanitizedProposals,
+        });
+      }
+
       if (method === "GET" && pathname === "/agent/intelligence") {
         if (!this.isAuthorized(req)) {
           return sendJson(res, 401, {
@@ -958,6 +1054,16 @@ export class AgentApiServer {
           if (method === "POST" && pathname === "/agent/protocol/propose") {
             const body = await readJsonBody(req);
             const limits = this.cfg.agent.getRiskLimits();
+            const parseBigIntField = (val: unknown, fallback: string, field: string): bigint => {
+              try {
+                return BigInt(String(val ?? fallback));
+              } catch {
+                throw new ProtocolPermissionError(
+                  "INVALID_ACTION_PARAMETERS",
+                  `Invalid integer value for ${field}`,
+                );
+              }
+            };
             const proposal = approvals.createProposal({
               idempotencyKey: String(body.idempotencyKey ?? ""),
               dataProvenance: this.cfg.agent.getEvaluationEngine().getProvenance(),
@@ -968,17 +1074,31 @@ export class AgentApiServer {
                   ? body.venueEvidenceSummary
                   : undefined,
               parameters: {
-                action: String(body.action ?? "") as never,
+                action: body.action as never,
                 wallet: String(body.wallet ?? "") as `0x${string}`,
                 chainId: Number(body.chainId ?? this.cfg.chainId ?? 0),
                 contractAddress: String(body.contractAddress ?? "") as `0x${string}`,
                 token: String(body.token ?? "") as `0x${string}`,
-                amount: BigInt(String(body.amount ?? "0")),
-                maxPaymentOrPremium: BigInt(String(body.maxPaymentOrPremium ?? "0")),
-                offerId: body.offerId !== undefined ? BigInt(String(body.offerId)) : undefined,
-                ticketId: body.ticketId !== undefined ? BigInt(String(body.ticketId)) : undefined,
+                amount: parseBigIntField(body.amount, "0", "amount"),
+                maxPaymentOrPremium: parseBigIntField(
+                  body.maxPaymentOrPremium,
+                  "0",
+                  "maxPaymentOrPremium",
+                ),
+                offerId:
+                  body.offerId !== undefined
+                    ? parseBigIntField(body.offerId, "0", "offerId")
+                    : undefined,
+                ticketId:
+                  body.ticketId !== undefined
+                    ? parseBigIntField(body.ticketId, "0", "ticketId")
+                    : undefined,
                 durationSec:
                   body.durationSec !== undefined ? Number(body.durationSec) : undefined,
+                ticketExpiresAtSec:
+                  body.ticketExpiresAtSec !== undefined
+                    ? Number(body.ticketExpiresAtSec)
+                    : undefined,
                 recipient: String(body.recipient ?? "") as `0x${string}`,
               },
             });
@@ -1015,9 +1135,42 @@ export class AgentApiServer {
               return sendJson(res, 200, { ok: true, proposal });
             }
             if (action === "submit") {
+              const rawSubmitted =
+                body.submittedParameters && typeof body.submittedParameters === "object"
+                  ? (body.submittedParameters as Record<string, unknown>)
+                  : undefined;
+              const submittedParameters = rawSubmitted
+                ? {
+                    action: rawSubmitted.action as never,
+                    wallet: String(rawSubmitted.wallet ?? "") as `0x${string}`,
+                    chainId: Number(rawSubmitted.chainId ?? 0),
+                    contractAddress: String(rawSubmitted.contractAddress ?? "") as `0x${string}`,
+                    token: String(rawSubmitted.token ?? "") as `0x${string}`,
+                    amount: BigInt(String(rawSubmitted.amount ?? "0")),
+                    maxPaymentOrPremium: BigInt(String(rawSubmitted.maxPaymentOrPremium ?? "0")),
+                    offerId:
+                      rawSubmitted.offerId !== undefined
+                        ? BigInt(String(rawSubmitted.offerId))
+                        : undefined,
+                    ticketId:
+                      rawSubmitted.ticketId !== undefined
+                        ? BigInt(String(rawSubmitted.ticketId))
+                        : undefined,
+                    durationSec:
+                      rawSubmitted.durationSec !== undefined
+                        ? Number(rawSubmitted.durationSec)
+                        : undefined,
+                    ticketExpiresAtSec:
+                      rawSubmitted.ticketExpiresAtSec !== undefined
+                        ? Number(rawSubmitted.ticketExpiresAtSec)
+                        : undefined,
+                    recipient: String(rawSubmitted.recipient ?? "") as `0x${string}`,
+                  }
+                : undefined;
               const proposal = approvals.recordSubmission({
                 proposalId,
                 txHash: String(body.txHash ?? "") as `0x${string}`,
+                submittedParameters,
                 killSwitchActive: limits.killSwitch,
                 readOnlyMode: this.cfg.agent.getExecutionMode() === "read_only",
                 externalPendingTxCount: this.cfg.agent.getPositionStore().getPendingTxs().length,
@@ -1044,6 +1197,13 @@ export class AgentApiServer {
             const codeMap: Record<string, number> = {
               PROPOSAL_NOT_FOUND: 404,
               PERMISSION_DENIED_OUT_OF_SCOPE: 403,
+              INVALID_ACTION_PARAMETERS: 400,
+              TICKET_EXPIRED_CANNOT_EXERCISE: 409,
+              TICKET_NOT_EXPIRED_CANNOT_RECLAIM: 409,
+              SPENDING_LIMIT_EXCEEDED: 403,
+              DAILY_SPENDING_LIMIT_EXCEEDED: 403,
+              EXPLICIT_APPROVAL_REQUIRED: 403,
+              INVALID_PROPOSAL_STATE: 409,
               KILL_SWITCH_ACTIVE: 423,
               READ_ONLY_MODE_BLOCKED: 403,
               REPLAY_OR_DUPLICATE_BLOCKED: 409,

@@ -519,8 +519,16 @@ export class AgentApiClient {
     return this.request<AgentIntelligenceSnapshot>("GET", "/agent/intelligence");
   }
 
+  getPublicIntelligence(): Promise<AgentIntelligenceSnapshot> {
+    return this.request<AgentIntelligenceSnapshot>("GET", "/agent/public/intelligence");
+  }
+
   getProtocolActivity(): Promise<ProtocolActivitySnapshot> {
     return this.request<ProtocolActivitySnapshot>("GET", "/agent/protocol/activity");
+  }
+
+  getPublicProtocolActivity(): Promise<ProtocolActivitySnapshot> {
+    return this.request<ProtocolActivitySnapshot>("GET", "/agent/public/protocol/activity");
   }
 
   approveProtocolProposal(
@@ -801,17 +809,17 @@ export interface ProtocolActionProposalItem {
   dataProvenance: DataProvenance;
   rationale: string;
   parameters: {
-    action: "RESERVE" | "EXERCISE" | "RECLAIM_EXPIRED";
-    wallet: string;
+    action: "RESERVE_INVENTORY" | "EXERCISE_TICKET" | "RECLAIM_EXPIRED_TICKET";
+    wallet?: string;
     chainId: number;
-    contractAddress: string;
-    token: string;
+    contractAddress?: string;
+    token?: string;
     amount: string;
     maxPaymentOrPremium: string;
     offerId?: string;
     ticketId?: string;
     durationSec?: number;
-    recipient: string;
+    recipient?: string;
     expiresAt: number;
   };
   createdAt: number;
@@ -824,6 +832,8 @@ export interface ProtocolActionProposalItem {
 }
 
 export interface ProtocolActivitySnapshot {
+  readOnlyPublicView?: boolean;
+  executionMode?: string;
   dataProvenance: DataProvenance;
   chainId: number;
   autonomousMainnetSigningEnabled: boolean;

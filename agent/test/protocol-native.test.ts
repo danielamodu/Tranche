@@ -10,12 +10,19 @@ import type { MarketSnapshot } from "../src/market.js";
 import { PortfolioIntelligenceEngine, type PortfolioConstraints } from "../src/portfolio.js";
 import { PositionStore } from "../src/positions.js";
 import {
+  ALLOWED_TRADING_AGENT_WRITE_OPS,
   ProtocolApprovalManager,
   ProtocolPermissionError,
   TrancheProtocolActionLayer,
+  assertOperationAllowedForTradingAgent,
   type ProtocolPermissionPolicy,
 } from "../src/protocol-actions/index.js";
 import { TransactionReconciler } from "../src/reconciler.js";
+import { AgentRuntime, TrancheAutonomousAgent } from "../src/runtime.js";
+import { AgentApiServer } from "../src/server.js";
+import { TrancheExecutionAgent } from "../src/agent.js";
+import { MarketIntelligence } from "../src/market.js";
+import type { RiskLimits } from "../src/risk.js";
 import type { StrategyConfig } from "../src/strategy.js";
 import { VenueSelector, type VenueSelectionConstraints } from "../src/venue.js";
 
@@ -504,5 +511,413 @@ describe("Tranche Protocol-Native Execution, Permissions & 10 Validation Scenari
     });
     assert.equal(confirmed.status, "CONFIRMED");
     assert.equal(confirmed.resultingTicketId, 9n);
+  });
+
+  it("Adversarial 11: Strict allowlist rejects CANCEL_OFFER, LP/admin ops, case variants, unknown & malformed actions", () => {
+    assert.deepEqual(Array.from(ALLOWED_TRADING_AGENT_WRITE_OPS).sort(), [
+      "EXERCISE_TICKET",
+      "RECLAIM_EXPIRED_TICKET",
+      "RESERVE_INVENTORY",
+    ]);
+
+    const mgr = new ProtocolApprovalManager({ policy: POLICY });
+    const rejectedActions: unknown[] = [
+      "CANCEL_OFFER",
+      "LP_CANCEL_OFFER",
+      "LP_DEPOSIT",
+      "LP_WITHDRAW",
+      "LP_CREATE_OFFER",
+      "ADMIN_UPDATE",
+      "TRANSFER_FUNDS",
+      "SWEEP_VAULT",
+      "__proto__",
+      "reserve_inventory",
+      "Reserve_Inventory",
+      " RESERVE_INVENTORY ",
+      "exercise_ticket",
+      "reclaim_expired_ticket",
+      "",
+      null,
+      undefined,
+      123,
+      { action: "RESERVE_INVENTORY" },
+    ];
+
+    for (let i = 0; i < rejectedActions.length; i += 1) {
+      const badAction = rejectedActions[i];
+      assert.throws(
+        () => assertOperationAllowedForTradingAgent(badAction),
+        (e: unknown) => e instanceof ProtocolPermissionError && e.code === "PERMISSION_DENIED_OUT_OF_SCOPE",
+      );
+      assert.throws(
+        () =>
+          mgr.createProposal({
+            idempotencyKey: `adv-bad-op-${i}`,
+            dataProvenance: "LIVE",
+            rationale: "Adversarial action test",
+            parameters: {
+              action: badAction as never,
+              wallet: WALLET,
+              chainId: 133,
+              contractAddress: MANAGER,
+              token: USDT,
+              amount: 100n,
+              maxPaymentOrPremium: 1_000n,
+              offerId: 1n,
+              durationSec: 600,
+              recipient: WALLET,
+            },
+          }),
+        (e: unknown) => e instanceof ProtocolPermissionError && e.code === "PERMISSION_DENIED_OUT_OF_SCOPE",
+      );
+    }
+  });
+
+  it("Adversarial 12: Contract-semantic validation blocks expired exercise, active reclaim, invalid params & post-approval action mutation", () => {
+    const now = 1_750_000_000;
+    const mgr = new ProtocolApprovalManager({ policy: POLICY, nowSec: () => now });
+
+    // Expired ticket cannot be exercised
+    assert.throws(
+      () =>
+        mgr.createProposal({
+          idempotencyKey: "adv-exp-ex",
+          dataProvenance: "LIVE",
+          rationale: "Exercise expired ticket",
+          parameters: {
+            action: "EXERCISE_TICKET",
+            wallet: WALLET,
+            chainId: 133,
+            contractAddress: MANAGER,
+            token: USDT,
+            amount: 10n * 10n ** 18n,
+            maxPaymentOrPremium: 100_000n,
+            ticketId: 5n,
+            ticketExpiresAtSec: now - 1,
+            recipient: WALLET,
+          },
+        }),
+      (e: unknown) => e instanceof ProtocolPermissionError && e.code === "TICKET_EXPIRED_CANNOT_EXERCISE",
+    );
+
+    // Active ticket cannot be reclaimed early
+    assert.throws(
+      () =>
+        mgr.createProposal({
+          idempotencyKey: "adv-act-rec",
+          dataProvenance: "LIVE",
+          rationale: "Reclaim active ticket",
+          parameters: {
+            action: "RECLAIM_EXPIRED_TICKET",
+            wallet: WALLET,
+            chainId: 133,
+            contractAddress: MANAGER,
+            token: USDT,
+            amount: 0n,
+            maxPaymentOrPremium: 0n,
+            ticketId: 5n,
+            ticketExpiresAtSec: now + 600,
+            recipient: WALLET,
+          },
+        }),
+      (e: unknown) => e instanceof ProtocolPermissionError && e.code === "TICKET_NOT_EXPIRED_CANNOT_RECLAIM",
+    );
+
+    // RESERVE_INVENTORY missing offerId / durationSec fails closed
+    assert.throws(
+      () =>
+        mgr.createProposal({
+          idempotencyKey: "adv-missing-offer",
+          dataProvenance: "LIVE",
+          rationale: "Missing offerId",
+          parameters: {
+            action: "RESERVE_INVENTORY",
+            wallet: WALLET,
+            chainId: 133,
+            contractAddress: MANAGER,
+            token: USDT,
+            amount: 10n,
+            maxPaymentOrPremium: 100n,
+            recipient: WALLET,
+          },
+        }),
+      (e: unknown) => e instanceof ProtocolPermissionError && e.code === "INVALID_ACTION_PARAMETERS",
+    );
+
+    // Modified action after approval is rejected at submission time
+    const valid = mgr.createProposal({
+      idempotencyKey: "adv-mutate-after-approve",
+      dataProvenance: "LIVE",
+      rationale: "Legit reserve",
+      parameters: {
+        action: "RESERVE_INVENTORY",
+        wallet: WALLET,
+        chainId: 133,
+        contractAddress: MANAGER,
+        token: USDT,
+        amount: 50n * 10n ** 18n,
+        maxPaymentOrPremium: 45_000n,
+        offerId: 2n,
+        durationSec: 1800,
+        recipient: WALLET,
+      },
+    });
+    mgr.approveProposal({
+      proposalId: valid.proposalId,
+      approvedBy: WALLET,
+      expectedBindingHash: valid.bindingHash,
+    });
+
+    // Attempt to swap action to LP_CANCEL_OFFER on submission
+    assert.throws(
+      () =>
+        mgr.recordSubmission({
+          proposalId: valid.proposalId,
+          txHash: `0x${"f".repeat(64)}`,
+          submittedParameters: {
+            ...valid.parameters,
+            action: "LP_CANCEL_OFFER" as never,
+          },
+        }),
+      (e: unknown) => e instanceof ProtocolPermissionError && e.code === "PERMISSION_DENIED_OUT_OF_SCOPE",
+    );
+
+    // Attempt to swap action to EXERCISE_TICKET on submission (allowlisted but mismatched binding)
+    assert.throws(
+      () =>
+        mgr.recordSubmission({
+          proposalId: valid.proposalId,
+          txHash: `0x${"f".repeat(64)}`,
+          submittedParameters: {
+            ...valid.parameters,
+            action: "EXERCISE_TICKET",
+            offerId: undefined,
+            durationSec: undefined,
+            ticketId: 9n,
+          },
+        }),
+      (e: unknown) => e instanceof ProtocolPermissionError && e.code === "APPROVAL_PARAMETER_MISMATCH",
+    );
+  });
+
+  it("Adversarial 13: Direct HTTP API rejects unauthorized/bypass attempts and exposes sanitized public read-only endpoints", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tranche-api-sec-"));
+    const store = new PositionStore(path.join(dir, "state.json"));
+    const approvals = new ProtocolApprovalManager({
+      policy: POLICY,
+      filePath: path.join(dir, "approvals.json"),
+    });
+    const fakeClient = {
+      discoverOffers: async () => [],
+      publicClient: { getBlock: async () => ({ timestamp: BigInt(Math.floor(Date.now() / 1000)) }) },
+    } as unknown as TrancheClient;
+    const trancheAgent = new TrancheExecutionAgent(fakeClient);
+    const dexVenue = {
+      name: "MockDex",
+      getPoolState: async () => ({
+        venue: "MockDex",
+        poolAddress: MANAGER,
+        token0: WHSK,
+        token1: USDT,
+        fee: 3000,
+        liquidity: 1_000_000n,
+        sqrtPriceX96: 1n << 96n,
+        tick: 0,
+        observationCardinality: 10,
+        spotPriceX36: 81n * 10n ** 21n,
+        twapPriceX36: 81n * 10n ** 21n,
+        timestamp: Math.floor(Date.now() / 1000),
+      }),
+      quoteBuyInventory: async () => ({
+        venue: "MockDex",
+        inventoryToken: WHSK,
+        paymentToken: USDT,
+        inventoryAmountOut: 100n * 10n ** 18n,
+        paymentAmountIn: 8_200_000n,
+        effectiveUnitPriceX36: 82n * 10n ** 21n,
+        priceImpactBps: 30,
+        gasEstimate: 80_000n,
+      }),
+      quoteSellInventory: async () => ({
+        venue: "MockDex",
+        inventoryToken: WHSK,
+        paymentToken: USDT,
+        inventoryAmountIn: 100n * 10n ** 18n,
+        paymentAmountOut: 8_050_000n,
+        effectiveUnitPriceX36: 80n * 10n ** 21n,
+        priceImpactBps: 30,
+        gasEstimate: 80_000n,
+      }),
+      executeSwapExactInput: async () => {
+        throw new Error("Blocked");
+      },
+    };
+    const riskLimits: RiskLimits = {
+      maxPositionSizeInventory: 200n * 10n ** 18n,
+      maxTotalExposurePayment: 50_000_000n,
+      maxDailyPremiumBudgetPayment: 500_000n,
+      maxDailyRealizedLossPayment: 5_000_000n,
+      maxConcurrentPositions: 3,
+      maxConcurrentTickets: 3,
+      maxSlippageBps: 100,
+      minPoolLiquidity: 100_000_000_000n,
+      maxOracleAgeSec: 60,
+      maxOracleDeviationBps: 300,
+      paused: false,
+      killSwitch: false,
+    };
+    const market = new MarketIntelligence({
+      dexVenue,
+      trancheAgent,
+      oracleReader: {
+        getPriceX36: async () => ({
+          priceX36: 81n * 10n ** 21n,
+          updatedAt: Math.floor(Date.now() / 1000),
+          isValid: true,
+        }),
+      },
+      poolAddress: MANAGER,
+      poolFee: 3000,
+      minPoolLiquidity: riskLimits.minPoolLiquidity,
+      maxOracleAgeSec: riskLimits.maxOracleAgeSec,
+      maxOracleDeviationBps: riskLimits.maxOracleDeviationBps,
+    });
+    const autonomous = new TrancheAutonomousAgent({
+      market,
+      trancheAgent,
+      dexVenue,
+      positions: store,
+      recipient: WALLET,
+      poolFee: 3000,
+      executionMode: "read_only",
+      intent: {
+        inventoryToken: WHSK,
+        paymentToken: USDT,
+        targetAmount: 100n * 10n ** 18n,
+        desiredDuration: 3600,
+        maxAllInCostX36: 95n * 10n ** 21n,
+      },
+      strategyConfig: STRATEGY,
+      riskLimits,
+      venueConstraints: {
+        maxAllInCostX36: 95n * 10n ** 21n,
+        maxSlippageBps: 100,
+        minExpectedNetProfitPayment: 100_000n,
+        maxOptionOverheadBps: 100,
+      },
+    });
+    const runtime = new AgentRuntime({ agent: autonomous, pollIntervalMs: 60_000 });
+    const apiToken = "test-secret-operator-token-123456";
+    const server = new AgentApiServer({
+      agent: autonomous,
+      runtime,
+      policyBounds: {
+        hardMaxPositionSizeInventory: 500n * 10n ** 18n,
+        hardMaxSlippageBps: 150,
+        minStopLossBps: 50,
+        maxStopLossBps: 1000,
+        minTakeProfitBps: 50,
+        maxTakeProfitBps: 5000,
+      },
+      apiToken,
+      host: "127.0.0.1",
+      port: 0,
+      chainId: 177,
+      dataSource: "chain177_read_only",
+      protocolApprovalManager: approvals,
+    });
+    const { url } = await server.start();
+    try {
+      // 1. Existing operator endpoints remain strictly 401 without Bearer token
+      for (const ep of ["/agent/intelligence", "/agent/protocol/activity"]) {
+        const r = await fetch(`${url}${ep}`);
+        assert.equal(r.status, 401, `${ep} must remain 401 unauthenticated`);
+      }
+
+      // 2. Direct API bypass attempts for forbidden/unknown/case-variant actions fail closed (403)
+      for (const badAction of [
+        "CANCEL_OFFER",
+        "LP_CANCEL_OFFER",
+        "LP_DEPOSIT",
+        "LP_WITHDRAW",
+        "ADMIN_UPDATE",
+        "reserve_inventory",
+        "UNKNOWN_OP",
+      ]) {
+        const r = await fetch(`${url}/agent/protocol/propose`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            idempotencyKey: `api-bypass-${badAction}`,
+            action: badAction,
+            wallet: WALLET,
+            chainId: 133,
+            contractAddress: MANAGER,
+            token: USDT,
+            amount: "100",
+            maxPaymentOrPremium: "1000",
+            offerId: "1",
+            durationSec: 600,
+            recipient: WALLET,
+          }),
+        });
+        assert.equal(r.status, 403, `Expected 403 for ${badAction}`);
+        const body = (await r.json()) as { error: string };
+        assert.equal(body.error, "PERMISSION_DENIED_OUT_OF_SCOPE");
+      }
+
+      // 3. Create one valid proposal (authenticated), then verify public read-only endpoints sanitize it
+      const createRes = await fetch(`${url}/agent/protocol/propose`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idempotencyKey: "api-valid-reserve-1",
+          action: "RESERVE_INVENTORY",
+          wallet: WALLET,
+          chainId: 133,
+          contractAddress: MANAGER,
+          token: USDT,
+          amount: "100",
+          maxPaymentOrPremium: "1000",
+          offerId: "2",
+          durationSec: 1800,
+          recipient: WALLET,
+          rationale: "Valid sanitized public test",
+        }),
+      });
+      assert.equal(createRes.status, 201);
+
+      const pubIntel = await fetch(`${url}/agent/public/intelligence`);
+      assert.equal(pubIntel.status, 200);
+      const intelJson = (await pubIntel.json()) as Record<string, unknown>;
+      assert.equal(intelJson.readOnlyPublicView, true);
+      assert.equal(intelJson.chainId, 177);
+
+      const pubProto = await fetch(`${url}/agent/public/protocol/activity`);
+      assert.equal(pubProto.status, 200);
+      const protoJson = (await pubProto.json()) as {
+        readOnlyPublicView: boolean;
+        autonomousMainnetSigningEnabled: boolean;
+        proposals: Array<Record<string, unknown>>;
+      };
+      assert.equal(protoJson.readOnlyPublicView, true);
+      assert.equal(protoJson.autonomousMainnetSigningEnabled, false);
+      assert.equal(protoJson.proposals.length, 1);
+      const p0 = protoJson.proposals[0]!;
+      assert.equal("approvedBy" in p0, false);
+      assert.equal("idempotencyKey" in p0, false);
+      const params0 = p0.parameters as Record<string, unknown>;
+      assert.equal("wallet" in params0, false);
+      assert.equal("recipient" in params0, false);
+    } finally {
+      await server.stop();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

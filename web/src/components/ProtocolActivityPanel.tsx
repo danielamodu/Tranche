@@ -41,10 +41,17 @@ export function ProtocolActivityPanel({
             required before any on-chain reservation, exercise, or reclaim.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="tabular-nums-mono rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {activity.chainId === 133
+              ? "Chain 133 — Testnet"
+              : activity.chainId === 177
+                ? "Chain 177 — Mainnet (Read-Only)"
+                : `Chain ${activity.chainId}`}
+          </span>
           <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             <ShieldCheck className="size-3 text-emerald-500" />
-            Approval-Gated Signing
+            {activity.readOnlyPublicView ? "Read-Only Public View" : "Approval-Gated Signing"}
           </span>
           <span className="tabular-nums-mono rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-foreground">
             {activity.dataProvenance}

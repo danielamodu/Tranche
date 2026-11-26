@@ -480,7 +480,11 @@ export function AppShell({
                   ACTIVE_NETWORK.isLive ? "bg-status-live" : "bg-amber-400",
                 )}
               />
-              Chain {ACTIVE_NETWORK.chainId}
+              {ACTIVE_NETWORK.chainId === 133
+                ? "Chain 133 — Testnet"
+                : ACTIVE_NETWORK.chainId === 177
+                  ? "Chain 177 — Mainnet (Read-Only)"
+                  : `Chain ${ACTIVE_NETWORK.chainId}`}
             </span>
 
             {isConnected && address ? (
