@@ -8,6 +8,10 @@ import {
   type LlmProvider,
   type PolicyValidationBounds,
 } from "./llm.js";
+import {
+  HspPaymentError,
+  type HspPaymentOrchestrator,
+} from "./hsp-payments/index.js";
 import type { AgentDataSourceMode } from "./protocol-config.js";
 import type { AgentRuntime, AutonomousDecisionTrace, TrancheAutonomousAgent } from "./runtime.js";
 import type { SoakStatusProvider } from "./soak-evidence.js";
@@ -26,6 +30,8 @@ export interface AgentApiServerConfig {
   llmProvider?: LlmProvider;
   maxRequestsPerMinute?: number;
   soakProvider?: SoakStatusProvider;
+  /** Isolated HSP payment orchestrator (completely separate from trading runtime). */
+  hspPaymentOrchestrator?: HspPaymentOrchestrator;
 }
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -775,6 +781,212 @@ export class AgentApiServer {
             remainingPendingTxs: this.cfg.agent.getPositionStore().getPendingTxs().length,
           });
         }
+      }
+
+      // Intelligence & Evaluation authenticated endpoints (no new unauthenticated endpoints; zero secrets)
+      if (method === "GET" && pathname === "/agent/portfolio") {
+        if (!this.isAuthorized(req)) {
+          return sendJson(res, 401, {
+            error: "UNAUTHORIZED",
+            message: "Valid Authorization: Bearer <token> or X-Agent-Token header required",
+          });
+        }
+        const snap = this.cfg.agent.getLatestPortfolioSnapshot();
+        const provenance = this.cfg.agent.getEvaluationEngine().getProvenance();
+        return sendJson(res, 200, {
+          dataProvenance: provenance,
+          portfolio: snap,
+        });
+      }
+
+      if (method === "GET" && pathname === "/agent/evaluation") {
+        if (!this.isAuthorized(req)) {
+          return sendJson(res, 401, {
+            error: "UNAUTHORIZED",
+            message: "Valid Authorization: Bearer <token> or X-Agent-Token header required",
+          });
+        }
+        const evalEngine = this.cfg.agent.getEvaluationEngine();
+        const metrics = evalEngine.computeMetrics();
+        const interpretation = this.llmProvider.interpretEvaluation
+          ? await this.llmProvider.interpretEvaluation(metrics)
+          : null;
+        return sendJson(res, 200, {
+          dataProvenance: evalEngine.getProvenance(),
+          metrics,
+          interpretation,
+          recentRecords: evalEngine.getRecords().slice(-25).reverse(),
+        });
+      }
+
+      if (method === "GET" && pathname === "/agent/intelligence") {
+        if (!this.isAuthorized(req)) {
+          return sendJson(res, 401, {
+            error: "UNAUTHORIZED",
+            message: "Valid Authorization: Bearer <token> or X-Agent-Token header required",
+          });
+        }
+        const evalEngine = this.cfg.agent.getEvaluationEngine();
+        const traces = this.cfg.agent.getTraces();
+        const latest = traces.length > 0 ? traces[traces.length - 1] : null;
+        const metrics = evalEngine.computeMetrics();
+        return sendJson(res, 200, {
+          dataProvenance: evalEngine.getProvenance(),
+          marketRegime: latest?.snapshot.marketRegime ?? null,
+          adaptiveStrategy: this.cfg.agent.getLatestAdaptiveStrategy(),
+          latestVenueEvidence: latest?.venueSelection.evidence ?? null,
+          positionIntegrity: this.cfg.agent.getLatestIntegrityReport(),
+          venueFailureStats: this.cfg.agent.getVenueFailureStats(),
+          portfolio: this.cfg.agent.getLatestPortfolioSnapshot(),
+          evaluation: metrics,
+        });
+      }
+
+      if (method === "POST" && pathname === "/agent/policy/recommend") {
+        if (!this.isAuthorized(req)) {
+          return sendJson(res, 401, {
+            error: "UNAUTHORIZED",
+            message: "Valid Authorization: Bearer <token> or X-Agent-Token header required",
+          });
+        }
+        const metrics = this.cfg.agent.getEvaluationEngine().computeMetrics();
+        const recommendation = this.llmProvider.proposeBoundedAdjustments
+          ? await this.llmProvider.proposeBoundedAdjustments({
+              evaluation: metrics,
+              currentStrategy: this.cfg.agent.getStrategyConfig(),
+              currentLimits: this.cfg.agent.getRiskLimits(),
+              bounds: this.cfg.policyBounds,
+            })
+          : {
+              requiresExplicitApproval: true,
+              autoApplied: false,
+              rationale: "Provider does not implement bounded recommendations",
+              proposedPatch: {},
+              validation: { valid: true, sanitizedPatch: {}, rejectedFields: [] },
+            };
+        return sendJson(res, 200, {
+          ok: true,
+          dataProvenance: this.cfg.agent.getEvaluationEngine().getProvenance(),
+          recommendation,
+        });
+      }
+
+      // Isolated HSP Payments API (strictly authenticated for ALL reads and writes; zero secrets exposed)
+      if (pathname === "/hsp/payments" || pathname.startsWith("/hsp/payments/")) {
+        if (!this.isAuthorized(req)) {
+          return sendJson(res, 401, {
+            error: "UNAUTHORIZED",
+            message: "Valid Authorization: Bearer <token> or X-Agent-Token header required",
+          });
+        }
+        const hsp = this.cfg.hspPaymentOrchestrator;
+        if (!hsp) {
+          return sendJson(res, 503, {
+            error: "HSP_PAYMENTS_UNAVAILABLE",
+            message: "Isolated HSP payment orchestrator is not enabled on this server",
+          });
+        }
+
+        try {
+          if (method === "GET" && pathname === "/hsp/payments/status") {
+            return sendJson(res, 200, hsp.getStatusSummary());
+          }
+          if (method === "GET" && pathname === "/hsp/payments") {
+            return sendJson(res, 200, {
+              summary: hsp.getStatusSummary(),
+              payments: hsp.listPayments(),
+            });
+          }
+          if (method === "POST" && pathname === "/hsp/payments") {
+            const body = await readJsonBody(req);
+            const payment = hsp.createPayment({
+              idempotencyKey: String(body.idempotencyKey ?? ""),
+              merchant: String(body.merchant ?? ""),
+              payer: String(body.payer ?? ""),
+              recipient: String(body.recipient ?? ""),
+              token: String(body.token ?? ""),
+              amount: String(body.amount ?? ""),
+              memo: typeof body.memo === "string" ? body.memo : undefined,
+            });
+            return sendJson(res, 201, { ok: true, payment });
+          }
+          if (method === "POST" && pathname === "/hsp/payments/recover") {
+            const recovery = await hsp.recoverInProgressPayments();
+            return sendJson(res, 200, { ok: true, ...recovery });
+          }
+
+          const singleMatch = /^\/hsp\/payments\/([^/]+)$/.exec(pathname);
+          if (method === "GET" && singleMatch) {
+            const paymentId = decodeURIComponent(singleMatch[1]!);
+            const payment = hsp.getPayment(paymentId);
+            if (!payment) {
+              return sendJson(res, 404, {
+                error: "PAYMENT_NOT_FOUND",
+                message: `Payment ${paymentId} not found`,
+              });
+            }
+            return sendJson(res, 200, { payment });
+          }
+
+          const actionMatch = /^\/hsp\/payments\/([^/]+)\/(prepare|authorize|submit|refresh)$/.exec(
+            pathname,
+          );
+          if (method === "POST" && actionMatch) {
+            const paymentId = decodeURIComponent(actionMatch[1]!);
+            const action = actionMatch[2]!;
+            if (action === "prepare") {
+              const payment = await hsp.preparePayment(paymentId);
+              return sendJson(res, 200, { ok: true, payment });
+            }
+            if (action === "authorize") {
+              const body = await readJsonBody(req);
+              const payment = await hsp.authorizePayment(paymentId, {
+                explicitUserConsent: body.explicitUserConsent === true,
+                authorizedBy: typeof body.authorizedBy === "string" ? body.authorizedBy : "",
+              });
+              return sendJson(res, 200, { ok: true, payment });
+            }
+            if (action === "submit") {
+              const payment = await hsp.submitPayment(paymentId);
+              return sendJson(res, 200, { ok: true, payment });
+            }
+            if (action === "refresh") {
+              const payment = await hsp.refreshPaymentStatus(paymentId);
+              return sendJson(res, 200, { ok: true, payment });
+            }
+          }
+        } catch (hspErr) {
+          if (hspErr instanceof HspPaymentError) {
+            const codeMap: Record<string, number> = {
+              PAYMENT_NOT_FOUND: 404,
+              IDEMPOTENCY_KEY_CONFLICT: 409,
+              DUPLICATE_SUBMISSION_BLOCKED: 409,
+              INVALID_PAYMENT_INPUT: 400,
+              INVALID_AMOUNT: 400,
+              EXPLICIT_AUTHORIZATION_REQUIRED: 400,
+              INVALID_AUTHORIZER: 400,
+              MISSING_PREPARATION: 400,
+              PAYMENT_NOT_SUBMITTED: 400,
+              UNRECOGNIZED_PAYMENT_STATUS: 422,
+            };
+            return sendJson(res, codeMap[hspErr.code] ?? 400, {
+              error: hspErr.code,
+              message: hspErr.message,
+            });
+          }
+          if (hspErr instanceof Error && hspErr.message.startsWith("INVALID_STATE_TRANSITION:")) {
+            return sendJson(res, 409, {
+              error: "INVALID_STATE_TRANSITION",
+              message: hspErr.message,
+            });
+          }
+          throw hspErr;
+        }
+
+        return sendJson(res, 404, {
+          error: "NOT_FOUND",
+          message: `Unknown HSP payments route ${method} ${pathname}`,
+        });
       }
 
       return sendJson(res, 404, { error: "NOT_FOUND", message: `Unknown route ${method} ${pathname}` });

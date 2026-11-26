@@ -12,6 +12,12 @@ import {
   type DexSellQuote,
   type DexVenueAdapter,
 } from "./hskswap.js";
+import {
+  HspPaymentOrchestrator,
+  HspPaymentStore,
+  MockHspMcpProvider,
+  MockHspWalletAuthorizer,
+} from "./hsp-payments/index.js";
 import type { PolicyValidationBounds } from "./llm.js";
 import { StructuredLogger } from "./logger.js";
 import { MarketIntelligence, type OracleReader } from "./market.js";
@@ -382,6 +388,35 @@ async function main() {
       maxOptionOverheadBps: 100,
       trancheGasCostPayment,
       dexGasCostPayment,
+      dexExitGasCostPayment: dexGasCostPayment,
+      maxQuoteAgeSec: 30,
+    },
+    intelligence: {
+      enabled: process.env.AGENT_INTELLIGENCE_ENABLED !== "false",
+      dataProvenance:
+        dataSource === "fixture" ? "MOCK" : dataSource === "fork" ? "FORK" : "LIVE",
+      availableBalancePayment: riskLimits.maxTotalExposurePayment,
+      portfolioConstraints: {
+        maxAssetAllocationBps: 5000,
+        maxCorrelatedGroupAllocationBps: 7500,
+        minAvailableCapitalReservePayment: 5_000_000n,
+        minExpectedPortfolioEdgePayment: 100_000n,
+      },
+      adaptiveStrategy: {
+        enabled: true,
+        baseStrategy: strategyConfig,
+        minPoolLiquidity: riskLimits.minPoolLiquidity,
+        maxOracleAgeSec: riskLimits.maxOracleAgeSec,
+        maxOracleDeviationBps: riskLimits.maxOracleDeviationBps,
+        maxPositiveTwapDislocationBps: 250,
+        hardBounds: {
+          minTakeProfitBps: policyBounds.minTakeProfitBps,
+          maxTakeProfitBps: policyBounds.maxTakeProfitBps,
+          minStopLossBps: policyBounds.minStopLossBps,
+          maxStopLossBps: policyBounds.maxStopLossBps,
+          hardMaxVolatilityBps: 1500,
+        },
+      },
     },
     logger,
   });
@@ -453,6 +488,19 @@ async function main() {
     };
   }
 
+  // Isolated mock-only HSP payment orchestrator (zero live MCP calls, zero impact on trading)
+  const hspPaymentsStateFile = path.resolve(
+    process.env.HSP_PAYMENTS_STATE_FILE ?? path.join(path.dirname(stateFile), "hsp-payments-state.json"),
+  );
+  const hspPaymentOrchestrator =
+    process.env.HSP_PAYMENTS_ENABLED === "false"
+      ? undefined
+      : new HspPaymentOrchestrator({
+          store: new HspPaymentStore(hspPaymentsStateFile),
+          mcpProvider: new MockHspMcpProvider(),
+          walletAuthorizer: new MockHspWalletAuthorizer(),
+        });
+
   const server = new AgentApiServer({
     agent,
     runtime,
@@ -465,6 +513,7 @@ async function main() {
     dataSource,
     chainId,
     soakProvider,
+    hspPaymentOrchestrator,
   });
 
   const addr = await server.start();

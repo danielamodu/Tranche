@@ -13,7 +13,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/agent.integration.test.ts test/autonomous.test.ts test/server.test.ts test/operations.test.ts test/soak.test.ts",
+    "test": "node --import tsx --test test/agent.integration.test.ts test/autonomous.test.ts test/server.test.ts test/operations.test.ts test/soak.test.ts test/hsp-payments.test.ts test/intelligence.test.ts",
+    "test:intelligence": "node --import tsx --test test/intelligence.test.ts",
+    "test:hsp-payments": "node --import tsx --test test/hsp-payments.test.ts",
     "test:soak": "node --import tsx --test test/soak.test.ts",
     "test:chain177": "node --import tsx --test test/chain177.readonly.test.ts",
     "test:fork": "node --import tsx --test test/fork.integration.test.ts",

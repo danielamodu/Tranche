@@ -1,6 +1,9 @@
+import type { EvaluationMetricsSummary } from "./evaluation.js";
+import type { MarketRegime } from "./market.js";
+import type { PortfolioSnapshot } from "./portfolio.js";
 import type { RiskLimits } from "./risk.js";
-import type { StrategyConfig, StrategyType } from "./strategy.js";
 import type { AutonomousDecisionTrace } from "./runtime.js";
+import type { StrategyConfig, StrategyType } from "./strategy.js";
 
 export interface AgentPolicyPatch {
   strategyType?: StrategyType;
@@ -32,12 +35,121 @@ export interface PolicyValidationResult {
   rejectedFields: string[];
 }
 
+export interface StructuredPortfolioExplanation {
+  summary: string;
+  marketRegime: MarketRegime;
+  portfolioHealth: "HEALTHY" | "CONSTRAINED" | "CAUTION";
+  keyFacts: string[];
+}
+
+export interface StructuredDecisionSummary {
+  cycleId: number;
+  headline: string;
+  venueSummary: string;
+  riskSummary: string;
+  actionTaken: string;
+}
+
+export interface EvaluationInterpretation {
+  dataProvenance: EvaluationMetricsSummary["dataProvenance"];
+  headline: string;
+  strengths: string[];
+  concerns: string[];
+  sampleSizeSufficient: boolean;
+}
+
+export interface BoundedStrategyRecommendation {
+  /** Recommendations NEVER auto-apply; operator approval is strictly required. */
+  requiresExplicitApproval: true;
+  autoApplied: false;
+  rationale: string;
+  proposedPatch: AgentPolicyPatch;
+  validation: PolicyValidationResult;
+}
+
+const ALLOWED_PATCH_KEYS = new Set<string>([
+  "strategyType",
+  "takeProfitBps",
+  "stopLossBps",
+  "maxSlippageBps",
+  "maxPositionSizeInventory",
+  "maxVolatilityBps",
+  "maxTotalExposurePayment",
+  "maxDailyRealizedLossPayment",
+  "paused",
+]);
+
+/**
+ * Strictly validates raw/untrusted LLM output objects against allowed keys and hard bounds.
+ * Rejects malformed JSON, forbidden fields (e.g., killSwitch, privateKey, signTransaction),
+ * and out-of-bounds numeric proposals.
+ */
+export function sanitizeRawLlmPatch(
+  raw: unknown,
+  bounds: PolicyValidationBounds,
+): PolicyValidationResult {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      valid: false,
+      sanitizedPatch: {},
+      rejectedFields: ["MALFORMED_OUTPUT:expected_object"],
+    };
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const unknownRejections: string[] = [];
+  const candidate: AgentPolicyPatch = {};
+
+  for (const [k, v] of Object.entries(obj)) {
+    if (!ALLOWED_PATCH_KEYS.has(k)) {
+      unknownRejections.push(`FORBIDDEN_OR_UNKNOWN_FIELD:${k}`);
+      continue;
+    }
+    if (k === "strategyType" && typeof v === "string") {
+      candidate.strategyType = v as StrategyType;
+    } else if (
+      (k === "takeProfitBps" ||
+        k === "stopLossBps" ||
+        k === "maxSlippageBps" ||
+        k === "maxVolatilityBps") &&
+      typeof v === "number"
+    ) {
+      candidate[k] = v;
+    } else if (
+      k === "maxPositionSizeInventory" ||
+      k === "maxTotalExposurePayment" ||
+      k === "maxDailyRealizedLossPayment"
+    ) {
+      if (typeof v === "bigint") {
+        candidate[k] = v;
+      } else if (typeof v === "string" && /^\d+$/.test(v)) {
+        candidate[k] = BigInt(v);
+      } else {
+        unknownRejections.push(`${k}:invalid_bigint`);
+      }
+    } else if (k === "paused" && typeof v === "boolean") {
+      candidate.paused = v;
+    } else if (v !== undefined) {
+      unknownRejections.push(`${k}:invalid_type`);
+    }
+  }
+
+  const base = validatePolicyPatch(candidate, bounds);
+  const allRejected = [...unknownRejections, ...base.rejectedFields];
+  return {
+    valid: allRejected.length === 0,
+    sanitizedPatch: base.sanitizedPatch,
+    rejectedFields: allRejected,
+  };
+}
+
 /**
  * Provider-agnostic LLM interface.
  * Responsibilities are strictly bounded to:
- *  1) Interpreting natural-language instructions into a validated AgentPolicyPatch
- *  2) Explaining actual AutonomousDecisionTrace records in plain English
- * It can NEVER bypass RiskManager, modify contract addresses, or sign transactions.
+ *  1) Interpreting natural-language objectives into a validated AgentPolicyPatch
+ *  2) Explaining market, portfolio, and AutonomousDecisionTrace records
+ *  3) Interpreting evaluation metrics and proposing bounded, approval-gated adjustments
+ * It can NEVER bypass RiskManager, modify hard risk limits, clear killSwitch, or sign transactions.
  */
 export interface LlmProvider {
   readonly name: string;
@@ -47,6 +159,19 @@ export interface LlmProvider {
     currentLimits: RiskLimits,
   ): Promise<AgentPolicyPatch>;
   explainTrace(trace: AutonomousDecisionTrace): Promise<string>;
+  explainPortfolioAndMarket?(params: {
+    portfolio: PortfolioSnapshot;
+    marketRegime: MarketRegime;
+    anomalies: string[];
+  }): Promise<StructuredPortfolioExplanation>;
+  summarizeDecision?(trace: AutonomousDecisionTrace): Promise<StructuredDecisionSummary>;
+  interpretEvaluation?(summary: EvaluationMetricsSummary): Promise<EvaluationInterpretation>;
+  proposeBoundedAdjustments?(params: {
+    evaluation: EvaluationMetricsSummary;
+    currentStrategy: StrategyConfig;
+    currentLimits: RiskLimits;
+    bounds: PolicyValidationBounds;
+  }): Promise<BoundedStrategyRecommendation>;
 }
 
 export function validatePolicyPatch(
@@ -187,8 +312,9 @@ export function applyValidatedPolicyPatch(
 }
 
 /**
- * Deterministic zero-cost local provider so the full agent & NL policy interface
- * works offline with zero paid API keys.
+ * Deterministic zero-cost local provider so the full agent, NL policy interface,
+ * portfolio explanations, and bounded evaluation recommendations work offline
+ * with zero paid API keys and strict fallback guarantees.
  */
 export class LocalRuleBasedLlmProvider implements LlmProvider {
   public readonly name = "local-deterministic";
@@ -254,5 +380,128 @@ export class LocalRuleBasedLlmProvider implements LlmProvider {
       parts.push(`Transactions: ${trace.txHashes.join(", ")}.`);
     }
     return parts.join(" ");
+  }
+
+  async explainPortfolioAndMarket(params: {
+    portfolio: PortfolioSnapshot;
+    marketRegime: MarketRegime;
+    anomalies: string[];
+  }): Promise<StructuredPortfolioExplanation> {
+    const { portfolio, marketRegime, anomalies } = params;
+    const health: StructuredPortfolioExplanation["portfolioHealth"] =
+      anomalies.length > 0 || portfolio.pendingTxCount > 0
+        ? "CAUTION"
+        : portfolio.availableCapitalForAllocationPayment === 0n
+          ? "CONSTRAINED"
+          : "HEALTHY";
+
+    const keyFacts = [
+      `Market regime: ${marketRegime}${anomalies.length > 0 ? ` (${anomalies.length} anomaly flag(s))` : ""}`,
+      `Committed capital: ${portfolio.totalCommittedCapitalPayment.toString()} payment units across ${portfolio.assetExposures.length} asset(s)`,
+      `Available for allocation: ${portfolio.availableCapitalForAllocationPayment.toString()} payment units`,
+      `Open positions: ${portfolio.openPositionsCount}, Active tickets: ${portfolio.activeTicketsCount}, Pending txs: ${portfolio.pendingTxCount}`,
+    ];
+
+    return {
+      summary: `Portfolio is ${health} in a ${marketRegime} market with ${portfolio.availableCapitalForAllocationPayment.toString()} payment units available for allocation.`,
+      marketRegime,
+      portfolioHealth: health,
+      keyFacts,
+    };
+  }
+
+  async summarizeDecision(trace: AutonomousDecisionTrace): Promise<StructuredDecisionSummary> {
+    return {
+      cycleId: trace.cycleId,
+      headline: `Cycle #${trace.cycleId}: ${trace.selectedAction} (${trace.snapshot.marketRegime})`,
+      venueSummary: `${trace.venueSelection.selectedVenue} — ${trace.venueSelection.rationale}`,
+      riskSummary: trace.riskReport.allowed
+        ? "All deterministic risk checks passed"
+        : `Blocked by ${trace.riskReport.failedChecks.map((c) => c.name).join(", ")}`,
+      actionTaken: trace.selectedAction,
+    };
+  }
+
+  async interpretEvaluation(summary: EvaluationMetricsSummary): Promise<EvaluationInterpretation> {
+    const strengths: string[] = [];
+    const concerns: string[] = [];
+    const sampleSizeSufficient = summary.closedTradesCount >= 5;
+
+    if (summary.venueSelectionAccuracyBps !== null && summary.venueSelectionAccuracyBps >= 8000) {
+      strengths.push(
+        `High cross-venue accuracy (${(summary.venueSelectionAccuracyBps / 100).toFixed(1)}%) with ${summary.totalExecutionCostImprovementPayment.toString()} payment units saved.`,
+      );
+    }
+    if (summary.duplicateExecutionAttempts === 0 && summary.missedExecutionAttempts === 0) {
+      strengths.push("Zero duplicate or missed execution attempts recorded.");
+    }
+    if (!sampleSizeSufficient) {
+      concerns.push(
+        `Insufficient closed trades (${summary.closedTradesCount} < 5) for statistically meaningful Sharpe or policy adaptation.`,
+      );
+    }
+    if (summary.maxDrawdownBps > 500) {
+      concerns.push(`Observed max drawdown of ${(summary.maxDrawdownBps / 100).toFixed(2)}% exceeds 5% watch threshold.`);
+    }
+    if (summary.riskLimitViolationsCount > 0) {
+      concerns.push(`${summary.riskLimitViolationsCount} entry signal(s) were blocked by deterministic risk limits.`);
+    }
+
+    return {
+      dataProvenance: summary.dataProvenance,
+      headline: `[${summary.dataProvenance}] ${summary.totalDecisions} decisions evaluated; net P&L ${summary.netPnlAfterFeesPayment.toString()} payment units.`,
+      strengths,
+      concerns,
+      sampleSizeSufficient,
+    };
+  }
+
+  async proposeBoundedAdjustments(params: {
+    evaluation: EvaluationMetricsSummary;
+    currentStrategy: StrategyConfig;
+    currentLimits: RiskLimits;
+    bounds: PolicyValidationBounds;
+  }): Promise<BoundedStrategyRecommendation> {
+    const { evaluation, currentStrategy, bounds } = params;
+    const proposed: AgentPolicyPatch = {};
+    const reasons: string[] = [];
+
+    if (evaluation.closedTradesCount < 5) {
+      const validation = validatePolicyPatch(proposed, bounds);
+      return {
+        requiresExplicitApproval: true,
+        autoApplied: false,
+        rationale:
+          "No strategy changes recommended: fewer than 5 closed trades observed; avoiding noisy policy drift.",
+        proposedPatch: {},
+        validation,
+      };
+    }
+
+    if (evaluation.maxDrawdownBps > 500) {
+      const tighterSl = Math.max(bounds.minStopLossBps, Math.round(currentStrategy.stopLossBps * 0.85));
+      if (tighterSl < currentStrategy.stopLossBps) {
+        proposed.stopLossBps = tighterSl;
+        reasons.push(`Tighten stop-loss to ${tighterSl} bps following ${evaluation.maxDrawdownBps} bps drawdown`);
+      }
+    }
+
+    if (evaluation.winRateBps < 4000 && evaluation.losses > evaluation.wins) {
+      const tighterVol = Math.max(150, Math.round(currentStrategy.maxVolatilityBps * 0.85));
+      proposed.maxVolatilityBps = tighterVol;
+      reasons.push(`Lower maxVolatilityBps to ${tighterVol} bps due to sub-40% win rate`);
+    }
+
+    const validation = validatePolicyPatch(proposed, bounds);
+    return {
+      requiresExplicitApproval: true,
+      autoApplied: false,
+      rationale:
+        reasons.length > 0
+          ? `${reasons.join("; ")}. Requires explicit operator approval.`
+          : "Current bounded parameters remain well-calibrated for observed performance.",
+      proposedPatch: validation.sanitizedPatch,
+      validation,
+    };
   }
 }

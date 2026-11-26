@@ -1,8 +1,29 @@
 import type { Address, Hex } from "viem";
+import {
+  AdaptiveStrategyEngine,
+  type AdaptiveStrategyConfig,
+  type AdaptiveStrategyDecision,
+} from "./adaptive-strategy.js";
 import type { TrancheExecutionAgent } from "./agent.js";
+import {
+  DecisionEvaluationEngine,
+  type DataProvenance,
+  type DecisionEvaluationRecord,
+} from "./evaluation.js";
 import { BPS_DENOMINATOR, type DexVenueAdapter } from "./hskswap.js";
 import type { StructuredLogger } from "./logger.js";
 import type { MarketIntelligence, MarketSnapshot } from "./market.js";
+import {
+  PortfolioIntelligenceEngine,
+  estimateActiveTicketObligations,
+  type PortfolioAllocationDecision,
+  type PortfolioConstraints,
+  type PortfolioSnapshot,
+} from "./portfolio.js";
+import {
+  PositionLifecycleManager,
+  type PositionIntegrityReport,
+} from "./position-manager.js";
 import type { PositionStore, TrackedPosition } from "./positions.js";
 import type { TransactionReconciler, TxReconciliationResult } from "./reconciler.js";
 import { RiskManager, type RiskCheckReport, type RiskLimits } from "./risk.js";
@@ -16,6 +37,7 @@ import {
 import type { AgentIntent } from "./types.js";
 import {
   VenueSelector,
+  type VenueFailureStats,
   type VenueSelectionConstraints,
   type VenueSelectionResult,
 } from "./venue.js";
@@ -68,6 +90,23 @@ export interface AutonomousDecisionTrace {
   rationale: string;
   txHashes: Hex[];
   error?: string;
+  /** Optional additive intelligence telemetry (populated when intelligence layer is active) */
+  portfolioSnapshot?: PortfolioSnapshot;
+  allocationDecision?: PortfolioAllocationDecision;
+  adaptiveStrategy?: AdaptiveStrategyDecision;
+  positionIntegrity?: PositionIntegrityReport;
+  evaluationRecord?: DecisionEvaluationRecord;
+}
+
+export interface AgentIntelligenceConfig {
+  /** Enables portfolio allocation gating & adaptive regime strategy selection. Default false preserves legacy behavior. */
+  enabled: boolean;
+  portfolioConstraints: PortfolioConstraints;
+  adaptiveStrategy?: AdaptiveStrategyConfig;
+  /** Optional liquid payment balance reader or static value for portfolio allocation sizing. */
+  availableBalancePayment?: bigint | (() => Promise<bigint> | bigint);
+  /** Explicit data provenance tag for evaluation records (LIVE | FORK | REPLAY | MOCK). */
+  dataProvenance?: DataProvenance;
 }
 
 export interface TrancheAutonomousAgentConfig {
@@ -94,6 +133,8 @@ export interface TrancheAutonomousAgentConfig {
   logger?: StructuredLogger;
   /** Optional automated on-chain pending-tx reconciler */
   reconciler?: TransactionReconciler;
+  /** Optional additive portfolio, adaptive strategy, and evaluation intelligence layer */
+  intelligence?: AgentIntelligenceConfig;
 }
 
 function isUncertainRpcError(err: unknown): boolean {
@@ -115,13 +156,28 @@ function isUncertainRpcError(err: unknown): boolean {
 export class TrancheAutonomousAgent {
   private readonly cfg: TrancheAutonomousAgentConfig;
   private readonly strategyEngine = new StrategyEngine();
+  private readonly adaptiveEngine = new AdaptiveStrategyEngine();
+  private readonly portfolioEngine = new PortfolioIntelligenceEngine();
+  private readonly positionManager = new PositionLifecycleManager();
   private readonly venueSelector = new VenueSelector();
   private readonly riskManager = new RiskManager();
+  private readonly evaluator: DecisionEvaluationEngine;
+  private readonly venueFailureStats: Record<"TRANCHE" | "HSKSWAP", VenueFailureStats> = {
+    TRANCHE: { attempts: 0, failures: 0 },
+    HSKSWAP: { attempts: 0, failures: 0 },
+  };
   private readonly traces: AutonomousDecisionTrace[] = [];
+  private latestPortfolioSnapshot: PortfolioSnapshot | null = null;
+  private latestAdaptiveStrategy: AdaptiveStrategyDecision | null = null;
+  private latestIntegrityReport: PositionIntegrityReport | null = null;
   private cycleCounter = 0;
 
   constructor(config: TrancheAutonomousAgentConfig) {
     this.cfg = config;
+    const provenance: DataProvenance =
+      config.intelligence?.dataProvenance ??
+      (config.executionMode === "read_only" || config.executionMode === "dry_run" ? "LIVE" : "FORK");
+    this.evaluator = new DecisionEvaluationEngine(provenance);
     // Restore persisted safety & policy state on restart so killSwitch/paused/limits are never silently reset
     const persisted = config.positions.getPersistedRuntimeConfig();
     if (persisted) {
@@ -160,6 +216,29 @@ export class TrancheAutonomousAgent {
 
   getVenueConstraints(): VenueSelectionConstraints {
     return this.cfg.venueConstraints;
+  }
+
+  getEvaluationEngine(): DecisionEvaluationEngine {
+    return this.evaluator;
+  }
+
+  getLatestPortfolioSnapshot(): PortfolioSnapshot | null {
+    return this.latestPortfolioSnapshot;
+  }
+
+  getLatestAdaptiveStrategy(): AdaptiveStrategyDecision | null {
+    return this.latestAdaptiveStrategy;
+  }
+
+  getLatestIntegrityReport(): PositionIntegrityReport | null {
+    return this.latestIntegrityReport;
+  }
+
+  getVenueFailureStats(): Record<"TRANCHE" | "HSKSWAP", VenueFailureStats> {
+    return {
+      TRANCHE: { ...this.venueFailureStats.TRANCHE },
+      HSKSWAP: { ...this.venueFailureStats.HSKSWAP },
+    };
   }
 
   setPaused(paused: boolean): void {
@@ -235,14 +314,72 @@ export class TrancheAutonomousAgent {
       await this.manageActiveTicket(ticket.ticketId, snapshot, nowSec, txHashes, ticketActions);
     }
 
-    // 3. Evaluate strategy entry signal & dual-venue economics
-    const signal = this.strategyEngine.evaluateEntry(snapshot, this.cfg.strategyConfig);
-    const venueSelection = this.venueSelector.selectVenue(
-      snapshot,
-      this.cfg.strategyConfig,
-      this.cfg.venueConstraints,
-    );
+    // 3. Evaluate strategy entry signal, portfolio intelligence & dual-venue economics
+    const intel = this.cfg.intelligence;
+    const positionIntegrity = this.positionManager.auditStateIntegrity(this.cfg.positions, nowSec);
+    this.latestIntegrityReport = positionIntegrity;
+
+    let adaptiveStrategy: AdaptiveStrategyDecision | undefined;
+    let effectiveStrategyConfig = this.cfg.strategyConfig;
+    let signal: StrategySignal;
+
+    if (intel?.enabled && intel.adaptiveStrategy) {
+      adaptiveStrategy = this.adaptiveEngine.evaluate(snapshot, {
+        ...intel.adaptiveStrategy,
+        baseStrategy: this.cfg.strategyConfig,
+      });
+      this.latestAdaptiveStrategy = adaptiveStrategy;
+      effectiveStrategyConfig = adaptiveStrategy.effectiveConfig;
+      signal = adaptiveStrategy.signal;
+    } else {
+      signal = this.strategyEngine.evaluateEntry(snapshot, this.cfg.strategyConfig);
+    }
+
+    const venueSelection = this.venueSelector.selectVenue(snapshot, effectiveStrategyConfig, {
+      ...this.cfg.venueConstraints,
+      venueFailureStats: this.cfg.venueConstraints.venueFailureStats ?? this.venueFailureStats,
+    });
+
     const portfolio = this.cfg.positions.getPortfolioState(nowSec);
+    let portfolioSnapshot: PortfolioSnapshot | undefined;
+    let allocationDecision: PortfolioAllocationDecision | undefined;
+
+    if (intel) {
+      const availBal =
+        typeof intel.availableBalancePayment === "function"
+          ? await intel.availableBalancePayment()
+          : (intel.availableBalancePayment ?? this.cfg.riskLimits.maxTotalExposurePayment);
+      const obligations = estimateActiveTicketObligations(this.cfg.positions.getActiveTickets(), {
+        [this.cfg.intent.inventoryToken.toLowerCase()]: snapshot.pool.spotPriceX36,
+      });
+      portfolioSnapshot = this.portfolioEngine.buildSnapshot({
+        store: this.cfg.positions,
+        nowSec,
+        availableBalancePayment: availBal,
+        constraints: intel.portfolioConstraints,
+        ticketExerciseObligations: obligations,
+      });
+      this.latestPortfolioSnapshot = portfolioSnapshot;
+
+      if (intel.enabled && signal.action === "ENTER_LONG" && venueSelection.selectedVenue !== "NONE") {
+        const chosen =
+          venueSelection.selectedVenue === "TRANCHE"
+            ? venueSelection.tranche
+            : venueSelection.hskswap;
+        allocationDecision = this.portfolioEngine.evaluateAllocation({
+          snapshot: portfolioSnapshot,
+          constraints: intel.portfolioConstraints,
+          request: {
+            inventoryToken: this.cfg.intent.inventoryToken,
+            requestedAmountInventory: this.cfg.intent.targetAmount,
+            estimatedAcquisitionCostPayment: chosen.acquisitionCostPayment,
+            expectedNetProfitPayment: chosen.expectedNetProfitAtTargetPayment,
+            reservationPremiumPayment: chosen.reservationPremiumPayment,
+          },
+        });
+      }
+    }
+
     const riskReport = this.riskManager.evaluateEntry({
       limits: this.cfg.riskLimits,
       portfolio,
@@ -274,6 +411,9 @@ export class TrancheAutonomousAgent {
       } else if (!riskReport.allowed) {
         selectedAction = "BLOCKED_RISK";
         rationale = `Risk blocked: ${riskReport.failedChecks.map((c) => `${c.name}(${c.detail})`).join("; ")}`;
+      } else if (allocationDecision && !allocationDecision.approved) {
+        selectedAction = "BLOCKED_RISK";
+        rationale = `Portfolio allocation blocked: ${allocationDecision.rejectionReasons.join("; ")}`;
       } else if (this.cfg.positions.hasExecutedDecision(decisionKey)) {
         selectedAction = "SKIPPED_DUPLICATE";
         rationale = `Duplicate decision prevented for key ${decisionKey}`;
@@ -420,7 +560,17 @@ export class TrancheAutonomousAgent {
       rationale,
       txHashes,
       error: errorMsg,
+      portfolioSnapshot,
+      allocationDecision,
+      adaptiveStrategy,
+      positionIntegrity,
     };
+    trace.evaluationRecord = this.evaluator.recordFromTrace({
+      trace,
+      portfolioSnapshot,
+      allocationDecision,
+      adaptiveStrategy,
+    });
     this.traces.push(trace);
     return trace;
   }
@@ -442,11 +592,19 @@ export class TrancheAutonomousAgent {
       );
       this.cfg.positions.updateUnrealizedPnl(pos.positionId, exitQuote.paymentAmountOut);
 
-      const exitDecision = this.strategyEngine.evaluatePositionExit(
-        pos.remainingCostBasisPayment,
-        exitQuote.paymentAmountOut,
-        this.cfg.strategyConfig,
-      );
+      const exitDecision = this.cfg.intelligence?.enabled
+        ? this.positionManager.evaluatePositionExitWithCosts({
+            position: pos,
+            executableExitPayment: exitQuote.paymentAmountOut,
+            estimatedExitGasPayment: this.cfg.venueConstraints.dexExitGasCostPayment ?? 0n,
+            pendingTxCount: this.cfg.positions.getPendingTxs().length,
+            strategyConfig: this.cfg.strategyConfig,
+          }).decision
+        : this.strategyEngine.evaluatePositionExit(
+            pos.remainingCostBasisPayment,
+            exitQuote.paymentAmountOut,
+            this.cfg.strategyConfig,
+          );
       if (exitDecision.action === "HOLD") return;
 
       const exitRisk = this.riskManager.evaluateExit({
@@ -576,15 +734,27 @@ export class TrancheAutonomousAgent {
       const dexBuy = snapshot.dexBuyQuote?.paymentAmountIn ?? null;
       const dexExit = snapshot.dexSellQuote?.paymentAmountOut ?? null;
 
-      const decision = this.strategyEngine.evaluateActiveTicket({
-        nowSec,
-        expiresAt: tracked.expiresAt,
-        exercisePayment: quoteEx.grossPayment,
-        dexBuyCostPayment: dexBuy,
-        dexExitProceedsPayment: dexExit,
-        minExerciseEdgePayment: this.cfg.minExerciseEdgePayment ?? 0n,
-        cfg: this.cfg.strategyConfig,
-      });
+      const decision = this.cfg.intelligence?.enabled
+        ? this.positionManager.evaluateTicketLifecycle({
+            ticket: tracked,
+            nowSec,
+            exercisePayment: quoteEx.grossPayment,
+            exerciseGasPayment: this.cfg.venueConstraints.trancheGasCostPayment ?? 0n,
+            dexBuyCostPayment: dexBuy,
+            dexExitProceedsPayment: dexExit,
+            minExerciseEdgePayment: this.cfg.minExerciseEdgePayment ?? 0n,
+            pendingTxCount: this.cfg.positions.getPendingTxs().length,
+            strategyConfig: this.cfg.strategyConfig,
+          })
+        : this.strategyEngine.evaluateActiveTicket({
+            nowSec,
+            expiresAt: tracked.expiresAt,
+            exercisePayment: quoteEx.grossPayment,
+            dexBuyCostPayment: dexBuy,
+            dexExitProceedsPayment: dexExit,
+            minExerciseEdgePayment: this.cfg.minExerciseEdgePayment ?? 0n,
+            cfg: this.cfg.strategyConfig,
+          });
 
       if (decision.action === "EXERCISE_TICKET") {
         const portfolio = this.cfg.positions.getPortfolioState(nowSec);
