@@ -24,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { TrancheLogo } from "@/components/TrancheLogo";
 import { ACTIVE_NETWORK, explorerAddressUrl } from "@/config/networks";
 import { useWallet } from "@/context/WalletContext";
@@ -137,226 +136,257 @@ export function AppShell({
     { path: "/vault", label: "Vault", icon: Vault },
   ];
 
-  const sidebarBody = (
-    <div className="flex h-full flex-col justify-between bg-[#090908] px-3.5 py-5">
-      {/* Top: Brand + Primary Desk Nav */}
-      <div className="flex flex-col gap-7">
-        <div className="flex items-center justify-between px-2">
-          <button
-            type="button"
-            onClick={() => onNavigate("/")}
-            aria-label="Tranche home"
-            className="inline-flex items-center transition-opacity hover:opacity-80 cursor-pointer"
-          >
-            <TrancheLogo imgClassName="h-6" />
-          </button>
-          <span className="tabular-nums-mono rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-            {ACTIVE_NETWORK.chainId}
-          </span>
-        </div>
+  return (
+    <div className="relative flex min-h-[100svh] flex-col bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
+      {/* Subtle monochrome studio rim light echoing Landing & RolePicker */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 h-[55vh]"
+        style={{
+          background:
+            "radial-gradient(52% 46% at 50% 0%, rgba(248, 247, 238, 0.065) 0%, rgba(248, 247, 238, 0) 100%)",
+        }}
+      />
 
-        <div className="flex flex-col gap-1">
-          <span className="px-2.5 pb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Desk
-          </span>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = activeRoute === item.path;
-            return (
-              <button
-                key={item.path}
-                type="button"
-                onClick={() => {
-                  setMobileOpen(false);
-                  onNavigate(item.path);
-                }}
+      {/* Floating Apple Liquid-Glass Command Rail */}
+      <header className="fixed inset-x-0 top-4 z-40 px-4 sm:px-6">
+        <nav
+          aria-label="Workspace navigation"
+          className="glass-pill mx-auto flex h-14 max-w-[1220px] items-center justify-between gap-3 rounded-full px-3 sm:px-4"
+        >
+          {/* Left: Brand + Chain Pill */}
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onNavigate("/")}
+              aria-label="Tranche home"
+              className="inline-flex items-center rounded-full pl-1.5 pr-1 transition-opacity hover:opacity-80 cursor-pointer"
+            >
+              <TrancheLogo imgClassName="h-5" />
+            </button>
+            <a
+              href={
+                ACTIVE_NETWORK.isLive
+                  ? explorerAddressUrl(ACTIVE_NETWORK.contracts.liquidityVault)
+                  : ACTIVE_NETWORK.explorerUrl
+              }
+              target="_blank"
+              rel="noreferrer"
+              title={`${ACTIVE_NETWORK.name} · View on Blockscout`}
+              className="tabular-nums-mono hidden items-center gap-1.5 rounded-full border border-border/80 bg-background/50 px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground sm:inline-flex"
+            >
+              <span
                 className={cn(
-                  "flex h-10 w-full items-center justify-between rounded-[11px] px-3 text-sm font-medium transition-colors duration-150 cursor-pointer",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                  "size-1.5 rounded-full",
+                  ACTIVE_NETWORK.isLive ? "bg-status-live" : "bg-amber-400",
                 )}
-              >
-                <span className="inline-flex items-center gap-2.5">
-                  <Icon className="size-4" />
-                  {item.label}
-                </span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span
-                    className={cn(
-                      "tabular-nums-mono rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                      active
-                        ? "bg-primary-foreground/15 text-primary-foreground"
-                        : "bg-accent text-foreground",
-                    )}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+              />
+              Chain {ACTIVE_NETWORK.chainId}
+              <ArrowUpRight className="size-2.5" />
+            </a>
+          </div>
 
-        <div className="flex flex-col gap-1">
-          <span className="px-2.5 pb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Explorer
-          </span>
-          <a
-            href={
-              ACTIVE_NETWORK.isLive
-                ? explorerAddressUrl(ACTIVE_NETWORK.contracts.liquidityVault)
-                : ACTIVE_NETWORK.explorerUrl
-            }
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-9 w-full items-center justify-between rounded-[10px] px-3 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-          >
-            <span>{ACTIVE_NETWORK.isLive ? "Blockscout Vault" : "Blockscout Explorer"}</span>
-            <ArrowUpRight className="size-3.5" />
-          </a>
+          {/* Center: Segmented Desk Pill Switcher */}
+          <div className="hidden items-center gap-1 rounded-full border border-border/70 bg-background/55 p-1 md:flex">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = activeRoute === item.path;
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => onNavigate(item.path)}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium transition-all duration-200 cursor-pointer",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  <span>{item.label}</span>
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span
+                      className={cn(
+                        "tabular-nums-mono rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                        active
+                          ? "bg-primary-foreground/15 text-primary-foreground"
+                          : "bg-accent text-foreground",
+                      )}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-          {/* Testnet-only Faucet button (automatically hidden on Mainnet 177) */}
-          {ACTIVE_NETWORK.key === "testnet" && isConnected && (
-            <div className="mt-2 flex flex-col gap-1.5">
+          {/* Right: Faucet (testnet), Refresh, Wallet Dock, Mobile Menu */}
+          <div className="flex items-center gap-1.5">
+            {ACTIVE_NETWORK.key === "testnet" && isConnected && (
               <button
                 type="button"
                 disabled={faucetState === "minting"}
                 onClick={handleTestnetFaucet}
-                className="flex h-9 w-full items-center justify-between rounded-[10px] border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:border-foreground/25 disabled:opacity-60 cursor-pointer"
+                title={faucetMsg ?? "Mint 1,000 tUSDT + 0.5 tWETH on Chain 133"}
+                className={cn(
+                  "hidden h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium transition-colors disabled:opacity-60 cursor-pointer lg:inline-flex",
+                  faucetState === "done"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                    : faucetState === "error"
+                      ? "border-destructive/40 bg-destructive/10 text-destructive"
+                      : "border-border/80 bg-background/50 text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                )}
               >
-                <span className="inline-flex items-center gap-2">
-                  {faucetState === "minting" ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : faucetState === "done" ? (
-                    <Check className="size-3.5 text-status-live" />
-                  ) : (
-                    <Droplets className="size-3.5 text-muted-foreground" />
-                  )}
-                  {faucetState === "minting" ? "Minting…" : "Get Test Tokens"}
+                {faucetState === "minting" ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : faucetState === "done" ? (
+                  <Check className="size-3" />
+                ) : (
+                  <Droplets className="size-3" />
+                )}
+                <span>
+                  {faucetState === "minting"
+                    ? "Minting…"
+                    : faucetState === "done"
+                      ? "Minted"
+                      : "Faucet"}
                 </span>
               </button>
-              {faucetMsg && (
-                <span
-                  className={cn(
-                    "px-2 text-[10px] leading-snug",
-                    faucetState === "error" ? "text-destructive" : "text-status-live",
-                  )}
-                >
-                  {faucetMsg}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+            )}
 
-      {/* Bottom: Pinned Wallet Dock (reconnects in-dashboard without leaving) */}
-      <div className="flex flex-col gap-3">
-        <Separator />
-        {isConnected && address ? (
-          <div className="flex items-center justify-between gap-2 rounded-[14px] border border-border bg-card px-3 py-2.5">
-            <div className="flex min-w-0 flex-col">
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-                <span className="size-1.5 shrink-0 rounded-full bg-status-live" />
-                <span className="tabular-nums-mono truncate">{shortAddr(address)}</span>
-              </span>
-              <span className="tabular-nums-mono mt-0.5 text-[11px] text-muted-foreground">
-                {hskBalance ? `${hskBalance} HSK` : `Chain ${ACTIVE_NETWORK.chainId}`}
-              </span>
-            </div>
-            <button
-              type="button"
-              aria-label="Disconnect wallet"
-              onClick={() => disconnect()}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
-            >
-              <LogOut className="size-3.5" />
-            </button>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            onClick={() => {
-              clearError();
-              setWalletDialogOpen(true);
-            }}
-            className="h-10 w-full rounded-full text-xs font-medium cursor-pointer"
-          >
-            Connect Wallet
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="flex min-h-[100svh] bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
-      {/* Desktop Fixed Sidebar */}
-      <aside className="hidden w-[232px] shrink-0 border-r border-border md:fixed md:inset-y-0 md:left-0 md:block">
-        {sidebarBody}
-      </aside>
-
-      {/* Mobile Drawer Overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-          <div className="relative z-10 flex w-[256px] max-w-[82vw] flex-col border-r border-border">
-            <button
-              type="button"
-              aria-label="Close navigation"
-              onClick={() => setMobileOpen(false)}
-              className="absolute top-4 right-3 z-20 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-            {sidebarBody}
-          </div>
-        </div>
-      )}
-
-      {/* Main Workspace Area */}
-      <div className="flex min-w-0 flex-1 flex-col md:pl-[232px]">
-        {/* Slim Utility Top Bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-background/85 px-5 backdrop-blur-md sm:px-8">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label="Open navigation"
-              onClick={() => setMobileOpen(true)}
-              className="inline-flex size-9 items-center justify-center rounded-lg border border-border text-foreground md:hidden"
-            >
-              <Menu className="size-4" />
-            </button>
-            <div className="flex flex-col">
-              <h1 className="font-display text-lg font-semibold leading-tight tracking-[-0.03em]">
-                {title}
-              </h1>
-              {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            {headerActions}
             {onRefresh && (
               <button
                 type="button"
-                aria-label="Refresh on-chain data"
+                aria-label="Refresh data"
                 onClick={onRefresh}
-                className="inline-flex size-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground cursor-pointer"
+                className="inline-flex size-8 items-center justify-center rounded-full border border-border/80 bg-background/50 text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground cursor-pointer"
               >
                 <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
               </button>
             )}
-          </div>
-        </header>
 
-        {/* Mainnet Deployment Pending Banner (when VITE_NETWORK=mainnet and contracts are not deployed) */}
+            {isConnected && address ? (
+              <div className="inline-flex h-8 items-center gap-2 rounded-full border border-border/80 bg-background/60 pl-3 pr-1 text-xs">
+                <span className="size-1.5 rounded-full bg-status-live" />
+                <span className="tabular-nums-mono font-medium text-foreground">
+                  {shortAddr(address)}
+                </span>
+                {hskBalance && (
+                  <span className="tabular-nums-mono hidden text-[11px] text-muted-foreground xl:inline">
+                    {hskBalance} HSK
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-label="Disconnect wallet"
+                  onClick={() => disconnect()}
+                  className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+                >
+                  <LogOut className="size-3" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  clearError();
+                  setWalletDialogOpen(true);
+                }}
+                className="h-8 rounded-full px-3.5 text-xs font-medium cursor-pointer"
+              >
+                Connect
+              </Button>
+            )}
+
+            <button
+              type="button"
+              aria-label="Toggle workspace menu"
+              onClick={() => setMobileOpen((prev) => !prev)}
+              className="inline-flex size-8 items-center justify-center rounded-full border border-border/80 bg-background/50 text-foreground md:hidden cursor-pointer"
+            >
+              {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+            </button>
+          </div>
+        </nav>
+
+        {/* Mobile Floating Glass Menu Sheet */}
+        {mobileOpen && (
+          <div className="glass-pill animate-rise mx-auto mt-2 flex max-w-[1220px] flex-col gap-1.5 rounded-[22px] p-3 md:hidden">
+            <div className="grid grid-cols-2 gap-1.5">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = activeRoute === item.path;
+                return (
+                  <button
+                    key={item.path}
+                    type="button"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      onNavigate(item.path);
+                    }}
+                    className={cn(
+                      "flex h-10 items-center justify-between rounded-[14px] px-3.5 text-xs font-medium transition-colors cursor-pointer",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background/40 text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Icon className="size-3.5" />
+                      {item.label}
+                    </span>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="tabular-nums-mono rounded-full bg-background/20 px-1.5 py-0.5 text-[10px]">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {ACTIVE_NETWORK.key === "testnet" && isConnected && (
+              <button
+                type="button"
+                disabled={faucetState === "minting"}
+                onClick={handleTestnetFaucet}
+                className="flex h-9 items-center justify-center gap-2 rounded-[12px] border border-border bg-background/50 text-xs text-foreground cursor-pointer"
+              >
+                <Droplets className="size-3.5" />
+                {faucetState === "minting" ? "Minting Test Tokens…" : "Get Test Tokens (1k tUSDT + 0.5 tWETH)"}
+              </button>
+            )}
+          </div>
+        )}
+      </header>
+
+      {/* Full-Bleed Editorial Workspace Canvas */}
+      <div className="relative z-10 mx-auto flex w-full max-w-[1220px] flex-1 flex-col px-5 pt-24 pb-16 sm:px-8">
+        {/* Global Status Ribbons */}
+        {faucetMsg && (
+          <div
+            className={cn(
+              "mb-5 flex items-center justify-between rounded-full border px-4 py-2 text-xs",
+              faucetState === "error"
+                ? "border-destructive/30 bg-destructive/10 text-destructive"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+            )}
+          >
+            <span>{faucetMsg}</span>
+            <button
+              type="button"
+              onClick={() => setFaucetMsg(null)}
+              className="underline underline-offset-4 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {!ACTIVE_NETWORK.isLive && activeRoute !== "/agent" && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-6 py-3 text-xs text-amber-200">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-amber-500/30 bg-amber-500/10 px-5 py-3 text-xs text-amber-200">
             <span>
               {ACTIVE_NETWORK.name} (Chain {ACTIVE_NETWORK.chainId}) protocol contracts are not yet
               deployed. On-chain reads and transactions are disabled to prevent zero-address calls.
@@ -364,9 +394,8 @@ export function AppShell({
           </div>
         )}
 
-        {/* Wrong Network Banner */}
         {isWrongNetwork && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-6 py-3 text-xs">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-destructive/30 bg-destructive/10 px-5 py-3 text-xs">
             <span className="text-destructive">
               Wrong network connected. Switch to {ACTIVE_NETWORK.name} (Chain{" "}
               {ACTIVE_NETWORK.chainId}) to transact.
@@ -383,11 +412,24 @@ export function AppShell({
           </div>
         )}
 
-        {/* Page Content */}
-        <main className="mx-auto w-full max-w-[1040px] flex-1 px-5 py-8 sm:px-8">{children}</main>
+        {/* Editorial Workspace Header */}
+        <div className="mb-8 flex flex-col justify-between gap-4 border-b border-border/80 pb-6 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-1.5">
+            <h1 className="font-display text-3xl font-semibold leading-none tracking-[-0.04em] text-foreground sm:text-4xl">
+              {title}
+            </h1>
+            {subtitle && (
+              <p className="tabular-nums-mono text-xs text-muted-foreground">{subtitle}</p>
+            )}
+          </div>
+          {headerActions && <div className="flex items-center gap-2.5">{headerActions}</div>}
+        </div>
+
+        {/* Screen Canvas */}
+        <main className="flex-1">{children}</main>
       </div>
 
-      {/* In-Dashboard Wallet Reconnect Dialog (never kicks user out of the workspace) */}
+      {/* In-Dashboard Wallet Reconnect Dialog */}
       <Dialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}>
         <DialogContent className="rounded-[24px] border-border bg-card sm:max-w-[420px]">
           <DialogHeader>
