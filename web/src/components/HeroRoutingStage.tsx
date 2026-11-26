@@ -12,18 +12,42 @@ type CyclePhase = 0 | 1 | 2; // 0 = SCANNING, 1 = COMPARING, 2 = ROUTED_TRANCHE
 
 export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
   const containerRef = useRef<HTMLElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
+  const layerARef = useRef<HTMLDivElement>(null);
+  const leftNodeRef = useRef<HTMLDivElement>(null);
+  const rightNodeRef = useRef<HTMLDivElement>(null);
+  const exploreRef = useRef<HTMLButtonElement>(null);
+  const layerBRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<CyclePhase>(0);
-  const [progress, setProgress] = useState(0); // 0 = illustration, 1 = Trade statement
 
-  // Live 3-phase routing choreography (every 2.3s)
+  // Live 3-phase routing choreography (every 2.3s), paused when offscreen or tab hidden
   useEffect(() => {
+    const el = containerRef.current;
+    let inView = true;
+
+    const io =
+      el && typeof IntersectionObserver !== "undefined"
+        ? new IntersectionObserver(
+            (entries) => {
+              inView = entries[0]?.isIntersecting ?? true;
+            },
+            { threshold: 0.01 },
+          )
+        : null;
+    if (el && io) io.observe(el);
+
     const id = setInterval(() => {
+      if (!inView || (typeof document !== "undefined" && document.hidden)) return;
       setPhase((prev) => ((prev + 1) % 3) as CyclePhase);
     }, 2300);
-    return () => clearInterval(id);
+
+    return () => {
+      clearInterval(id);
+      io?.disconnect();
+    };
   }, []);
 
-  // Smooth GPU-composited scroll-scrubbed transition from Illustration -> Trade Statement
+  // Zero-re-render GPU-composited scroll-scrubbed transition from Illustration -> Trade Statement
   useEffect(() => {
     let rafId = 0;
     const update = () => {
@@ -31,12 +55,35 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const scrollable = el.offsetHeight - window.innerHeight;
-      if (scrollable <= 0) {
-        setProgress(0);
-        return;
+      const p = scrollable <= 0 ? 0 : Math.min(1, Math.max(0, -rect.top / scrollable));
+
+      const heroOut = Math.min(1, p / 0.55);
+      const textIn = Math.min(1, Math.max(0, (p - 0.35) / 0.48));
+
+      if (glowRef.current) {
+        glowRef.current.style.opacity = String(1 - heroOut * 0.35);
       }
-      const p = Math.min(1, Math.max(0, -rect.top / scrollable));
-      setProgress(p);
+      if (layerARef.current) {
+        layerARef.current.style.opacity = String(1 - heroOut);
+        layerARef.current.style.transform = `translate3d(0, ${-heroOut * 48}px, 0) scale(${1 - heroOut * 0.08})`;
+        layerARef.current.style.pointerEvents = heroOut > 0.7 ? "none" : "auto";
+      }
+      if (leftNodeRef.current) {
+        leftNodeRef.current.style.transform = `translate3d(${-heroOut * 56}px, 0, 0)`;
+      }
+      if (rightNodeRef.current) {
+        rightNodeRef.current.style.transform = `translate3d(${heroOut * 56}px, 0, 0)`;
+      }
+      if (exploreRef.current) {
+        exploreRef.current.style.opacity = String(Math.max(0, 1 - heroOut * 2.2));
+        exploreRef.current.style.transform = `translate3d(0, ${heroOut * 16}px, 0)`;
+        exploreRef.current.style.pointerEvents = heroOut > 0.4 ? "none" : "auto";
+      }
+      if (layerBRef.current) {
+        layerBRef.current.style.opacity = String(textIn);
+        layerBRef.current.style.transform = `translate3d(0, ${(1 - textIn) * 56}px, 0) scale(${0.96 + textIn * 0.04})`;
+        layerBRef.current.style.pointerEvents = textIn < 0.5 ? "none" : "auto";
+      }
     };
     const onScroll = () => {
       cancelAnimationFrame(rafId);
@@ -62,10 +109,6 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
     });
   }
 
-  // Smooth interpolation curves
-  const heroOut = Math.min(1, progress / 0.55); // 0 -> 1 over first 55% of scroll
-  const textIn = Math.min(1, Math.max(0, (progress - 0.35) / 0.48)); // 0 -> 1 from 35% to 83%
-
   const isScanning = phase === 0;
   const isComparing = phase === 1;
   const isRouted = phase === 2;
@@ -78,10 +121,11 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
       <div className="sticky top-0 flex h-[100svh] w-full flex-col items-center justify-center overflow-hidden px-6">
         {/* Dynamic Studio Rim Glow */}
         <div
+          ref={glowRef}
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0 h-[85vh] transition-opacity duration-500"
           style={{
-            opacity: 1 - heroOut * 0.35,
+            opacity: 1,
             background:
               "radial-gradient(50% 45% at 50% 44%, rgba(248, 247, 238, 0.11) 0%, rgba(248, 247, 238, 0) 100%)",
           }}
@@ -89,15 +133,17 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
 
         {/* LAYER A: Live Choreographed Dual-Venue Routing Illustration (parts & fades on scroll) */}
         <div
+          ref={layerARef}
           className="relative z-10 flex w-full max-w-[1080px] flex-col items-center justify-center gap-6 will-change-transform lg:flex-row lg:gap-0"
           style={{
-            opacity: 1 - heroOut,
-            transform: `translateY(${-heroOut * 48}px) scale(${1 - heroOut * 0.08})`,
-            pointerEvents: heroOut > 0.7 ? "none" : "auto",
+            opacity: 1,
+            transform: "translate3d(0, 0, 0) scale(1)",
+            pointerEvents: "auto",
           }}
         >
           {/* Left Node: Tranche Agent */}
           <div
+            ref={leftNodeRef}
             className={cn(
               "flex w-full max-w-[244px] flex-col gap-2.5 rounded-[18px] border bg-card/90 p-4 backdrop-blur-md transition-all duration-500 lg:w-[238px] lg:shrink-0",
               isScanning
@@ -106,9 +152,6 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
                   ? "border-emerald-500/45 shadow-[0_0_32px_rgba(74,222,128,0.14)]"
                   : "border-border/90",
             )}
-            style={{
-              transform: `translateX(${-heroOut * 56}px)`,
-            }}
           >
             <div className="flex items-center justify-between">
               <span className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -235,15 +278,13 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
 
           {/* Right Node: HSKSwap V3 AMM (Quotes -> Rejected/Skipped) */}
           <div
+            ref={rightNodeRef}
             className={cn(
               "flex w-full max-w-[244px] flex-col gap-2.5 rounded-[18px] border p-4 backdrop-blur-md transition-all duration-500 lg:w-[238px] lg:shrink-0",
               isScanning
                 ? "border-foreground/30 bg-card/80 opacity-95"
                 : "border-border/60 bg-card/45 opacity-55",
             )}
-            style={{
-              transform: `translateX(${heroOut * 56}px)`,
-            }}
           >
             <div className="flex items-center justify-between">
               <span className="inline-flex size-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
@@ -277,13 +318,14 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
 
         {/* Scroll Transition Trigger Button */}
         <button
+          ref={exploreRef}
           type="button"
           onClick={scrollToTradeStatement}
           className="absolute bottom-8 z-20 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/70 px-4 py-2 text-[11px] font-medium text-muted-foreground backdrop-blur-md transition-all duration-300 hover:border-foreground/35 hover:text-foreground cursor-pointer"
           style={{
-            opacity: Math.max(0, 1 - heroOut * 2.2),
-            transform: `translateY(${heroOut * 16}px)`,
-            pointerEvents: heroOut > 0.4 ? "none" : "auto",
+            opacity: 1,
+            transform: "translate3d(0, 0, 0)",
+            pointerEvents: "auto",
           }}
         >
           <span className="tabular-nums-mono uppercase tracking-[0.12em]">Explore</span>
@@ -292,12 +334,13 @@ export function HeroRoutingStage({ onLaunchApp }: HeroRoutingStageProps) {
 
         {/* LAYER B: Dedicated Trade Statement Section (morphs smoothly into center focus on scroll) */}
         <div
+          ref={layerBRef}
           id="trade-statement"
           className="absolute inset-x-0 z-20 mx-auto w-full max-w-[1080px] px-6 will-change-transform"
           style={{
-            opacity: textIn,
-            transform: `translateY(${(1 - textIn) * 56}px) scale(${0.96 + textIn * 0.04})`,
-            pointerEvents: textIn < 0.5 ? "none" : "auto",
+            opacity: 0,
+            transform: "translate3d(0, 56px, 0) scale(0.96)",
+            pointerEvents: "none",
           }}
         >
           <div className="grid grid-cols-1 items-end gap-10 lg:grid-cols-12">

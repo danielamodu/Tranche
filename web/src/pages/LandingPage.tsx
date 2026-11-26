@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, CheckCircle2, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -131,10 +131,32 @@ interface LandingPageProps {
 }
 
 export function LandingPage({ onNavigate }: LandingPageProps) {
-  const telemetry = useProtocolTelemetry();
+  const telemetrySectionRef = useRef<HTMLElement>(null);
+  const [telemetryVisible, setTelemetryVisible] = useState(false);
+  const telemetry = useProtocolTelemetry(telemetryVisible);
   const { isConnected, isWrongNetwork, selectedRole } = useWallet();
   const [activeBucket, setActiveBucket] = useState<string>("reserved");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  // Defer live RPC telemetry + viem chunk load until the telemetry strip approaches viewport
+  useEffect(() => {
+    const el = telemetrySectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setTelemetryVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setTelemetryVisible(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "320px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   function handleLaunchApp() {
     if (!isConnected || isWrongNetwork) {
@@ -161,11 +183,18 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       const winHeight = window.innerHeight;
       const distFromBottom = docHeight - (y + winHeight);
 
-      setScrollState({
+      const next = {
         compact: y > 36,
         showCta: y > 420,
         nearFooter: distFromBottom < 220 && y > 600,
-      });
+      };
+      setScrollState((prev) =>
+        prev.compact === next.compact &&
+        prev.showCta === next.showCta &&
+        prev.nearFooter === next.nearFooter
+          ? prev
+          : next,
+      );
     };
 
     const onScroll = () => {
@@ -221,7 +250,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     : "lg:-translate-x-12 scale-[1.3] sm:scale-[1.4]",
                 )}
               >
-                <TrancheLogo />
+                <TrancheLogo priority />
               </a>
             </div>
 
@@ -304,7 +333,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       <HeroRoutingStage onLaunchApp={handleLaunchApp} />
 
       {/* 2. Live On-Chain Telemetry Strip */}
-      <section id="protocol" className="mx-auto max-w-[1080px] px-6 py-28 sm:py-36">
+      <section ref={telemetrySectionRef} id="protocol" className="mx-auto max-w-[1080px] px-6 py-28 sm:py-36">
         <Reveal>
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] border border-border bg-border sm:grid-cols-4">
             <div className="flex flex-col gap-1.5 bg-card p-6 sm:p-7">
