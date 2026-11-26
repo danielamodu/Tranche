@@ -49,7 +49,7 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
   }, [isConnected, isWrongNetwork, selectedRole, onNavigate]);
 
   return (
-    <div className="relative flex min-h-[100svh] flex-col bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
+    <div className="relative flex h-[100svh] flex-col overflow-hidden bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
       {/* Subtle monochrome studio rim light */}
       <div
         aria-hidden="true"
@@ -83,10 +83,10 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
         </nav>
       </header>
 
-      {/* Centered Entry Gate */}
-      <main className="relative z-10 mx-auto flex w-full max-w-[460px] flex-1 flex-col items-center justify-center px-6 pt-24 pb-16">
+      {/* Centered Entry Gate (locked single-viewport, non-scrollable) */}
+      <main className="relative z-10 mx-auto flex w-full max-w-[450px] flex-1 flex-col items-center justify-center px-6 pt-16 pb-6">
         {/* Expanding Numbered Step Pill (01 Connect -> 02) */}
-        <div className="animate-rise mb-8 flex items-center gap-2.5" aria-label="Onboarding step">
+        <div className="animate-rise mb-5 flex items-center gap-2.5" aria-label="Onboarding step">
           <span className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-xs font-medium text-primary-foreground">
             <span className="tabular-nums-mono">01</span>
             <span className="ml-2">Connect</span>
@@ -97,20 +97,20 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
         </div>
 
         {/* Main Apple Glass / Matte Entry Card */}
-        <div className="animate-rise-delay-1 w-full overflow-hidden rounded-[26px] border border-border bg-card p-7 shadow-[0_32px_80px_rgba(0,0,0,0.65)] sm:p-8">
+        <div className="animate-rise-delay-1 w-full overflow-hidden rounded-[24px] border border-border bg-card p-6 shadow-[0_32px_80px_rgba(0,0,0,0.65)]">
           {!isConnected ? (
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col gap-2">
-                <h1 className="font-display text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <h1 className="font-display text-2xl font-semibold tracking-[-0.035em] text-foreground">
                   Connect your wallet
                 </h1>
-                <p className="text-sm leading-relaxed text-muted-foreground">
+                <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">
                   Sign in with a wallet to use Tranche.
                 </p>
               </div>
 
               {/* Discovered EIP-6963 Wallets */}
-              <div className="flex flex-col gap-2.5">
+              <div className="flex max-h-[36vh] flex-col gap-2 overflow-y-auto pr-0.5">
                 {wallets.length > 0 ? (
                   wallets.map((w) => (
                     <button
