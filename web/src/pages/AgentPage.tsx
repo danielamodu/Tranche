@@ -341,39 +341,39 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
       }
     >
       <div className="flex flex-col gap-8">
-        {/* Operational Status Ribbons (Hairline Left-Rail Telemetry Callouts) */}
+        {/* Operational Status Ribbons (Theme-Aware Left-Rail Telemetry Callouts) */}
         {hostedLocalMismatch && disconnected && (
-          <div className="relative overflow-hidden rounded-[16px] border border-amber-500/30 bg-[#14120c] pl-5 pr-5 py-4 text-xs text-amber-100">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
+          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-amber-500/[0.08] py-4 pl-5 pr-5 text-xs text-amber-950 dark:text-amber-100">
+            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-400">
+              <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
                 WARN · MIXED_CONTENT / LOCALHOST_CORS
               </span>
-              <span className="tabular-nums-mono text-[10px] text-amber-200/70">
+              <span className="tabular-nums-mono text-[10px] text-amber-800/70 dark:text-amber-200/70">
                 {normalizedApiUrl}
               </span>
             </div>
-            <p className="mt-1.5 font-medium text-amber-50">
+            <p className="mt-1.5 font-medium">
               Hosted HTTPS page cannot automatically call a localhost Agent API
             </p>
-            <p className="mt-1 leading-relaxed text-amber-100/75">
+            <p className="mt-1 leading-relaxed opacity-80">
               Browsers block <code className="font-mono">https://</code> →{" "}
               <code className="font-mono">http://127.0.0.1</code> requests, and the local API
               restricts CORS to <code className="font-mono">localhost:5173</code> by default:
             </p>
-            <div className="mt-2.5 grid gap-2 sm:grid-cols-2 text-[11px] text-amber-100/85">
-              <div className="rounded-[10px] border border-amber-500/20 bg-black/30 px-3 py-2">
-                <span className="font-semibold text-amber-200">Local Operator Mode</span>
-                <p className="mt-0.5 text-amber-100/75">
+            <div className="mt-2.5 grid gap-2 text-[11px] sm:grid-cols-2">
+              <div className="rounded-[10px] border border-amber-500/20 bg-card/80 px-3 py-2">
+                <span className="font-semibold">Local Operator Mode</span>
+                <p className="mt-0.5 opacity-80">
                   Run <code className="font-mono">cd agent && npm run api</code> +{" "}
                   <code className="font-mono">cd web && npm run dev</code>, then open{" "}
                   <code className="font-mono">http://localhost:5173/agent</code>.
                 </p>
               </div>
-              <div className="rounded-[10px] border border-amber-500/20 bg-black/30 px-3 py-2">
-                <span className="font-semibold text-amber-200">Remote API Mode</span>
-                <p className="mt-0.5 text-amber-100/75">
-                  Enter a reachable HTTPS Agent API URL in the Mandate Slip with{" "}
+              <div className="rounded-[10px] border border-amber-500/20 bg-card/80 px-3 py-2">
+                <span className="font-semibold">Remote API Mode</span>
+                <p className="mt-0.5 opacity-80">
+                  Enter a reachable HTTPS Agent API URL in the Control Panel with{" "}
                   <code className="font-mono">AGENT_API_ALLOWED_ORIGINS</code> configured.
                 </p>
               </div>
@@ -382,32 +382,32 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         )}
 
         {disconnected && !hostedLocalMismatch && (
-          <div className="relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-[14px] border border-destructive/30 bg-[#150c0c] py-3.5 pl-5 pr-5 text-xs">
+          <div className="relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-[14px] border border-destructive/30 bg-destructive/[0.07] py-3.5 pl-5 pr-5 text-xs">
             <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
             <div className="flex flex-col gap-0.5">
-              <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-destructive">
+              <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-destructive">
                 OFFLINE · API_UNREACHABLE
               </span>
               <span className="text-foreground/85">
                 Cannot reach{" "}
                 <code className="tabular-nums-mono text-foreground">{client.getBaseUrl()}</code> (
                 {connError ?? "Unavailable"}). Start with{" "}
-                <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px]">
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
                   cd agent && npm run api
                 </code>{" "}
-                or update the URL in the Mandate Slip.
+                or update the URL in the Control Panel.
               </span>
             </div>
           </div>
         )}
 
         {rateLimited && !disconnected && (
-          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-[#14120c] py-3 pl-5 pr-5 text-xs">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-400">
+          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-amber-500/[0.08] py-3 pl-5 pr-5 text-xs text-amber-950 dark:text-amber-100">
+            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
+            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
               THROTTLED · HTTP_429
             </span>
-            <p className="mt-0.5 text-amber-100/85">
+            <p className="mt-0.5 opacity-85">
               Agent API rate limit reached. Polling automatically backed off to 35s; close extra
               Agent Console tabs if open.
             </p>
@@ -415,21 +415,19 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         )}
 
         {!disconnected && isStale && (
-          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-[#14120c] py-3 pl-5 pr-5 text-xs">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-400">
+          <div className="relative overflow-hidden rounded-[14px] border border-amber-500/30 bg-amber-500/[0.08] py-3 pl-5 pr-5 text-xs text-amber-950 dark:text-amber-100">
+            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
+            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
               STALE · TELEMETRY_LAG
             </span>
-            <p className="mt-0.5 text-amber-100/85">
-              Last successful snapshot is over 40 seconds old.
-            </p>
+            <p className="mt-0.5 opacity-85">Last successful snapshot is over 40 seconds old.</p>
           </div>
         )}
 
         {status?.stateCorrupted && (
-          <div className="relative overflow-hidden rounded-[14px] border border-destructive/40 bg-[#190a0a] py-3.5 pl-5 pr-5 text-xs">
+          <div className="relative overflow-hidden rounded-[14px] border border-destructive/40 bg-destructive/[0.08] py-3.5 pl-5 pr-5 text-xs">
             <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-destructive">
+            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-destructive">
               FAIL-CLOSED · STATE_CORRUPTED
             </span>
             <p className="mt-0.5 text-foreground/90">
@@ -440,9 +438,9 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         )}
 
         {status?.killSwitch && (
-          <div className="relative overflow-hidden rounded-[14px] border border-destructive/40 bg-[#190a0a] py-3.5 pl-5 pr-5 text-xs">
+          <div className="relative overflow-hidden rounded-[14px] border border-destructive/40 bg-destructive/[0.08] py-3.5 pl-5 pr-5 text-xs">
             <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
-            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-destructive">
+            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-destructive">
               HALT · AUTHORITATIVE_KILL_SWITCH
             </span>
             <p className="mt-0.5 text-foreground/90">
@@ -453,17 +451,15 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
         )}
 
         {status && status.pendingTxs.length > 0 && (
-          <div className="relative flex flex-col gap-3 overflow-hidden rounded-[16px] border border-amber-500/35 bg-[#14120c] py-4 pl-5 pr-5 text-xs">
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
-            <div className="flex items-center justify-between gap-2">
-              <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-400">
-                PENDING · {status.pendingTxs.length} UNCERTAIN TX(S) BLOCKING RESUME
-              </span>
-            </div>
+          <div className="relative flex flex-col gap-3 overflow-hidden rounded-[14px] border border-amber-500/35 bg-amber-500/[0.08] py-4 pl-5 pr-5 text-xs">
+            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
+            <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
+              PENDING · {status.pendingTxs.length} UNCERTAIN TX(S) BLOCKING RESUME
+            </span>
             {status.pendingTxs.map((ptx) => (
               <div
                 key={ptx.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-amber-500/20 bg-black/35 px-3.5 py-2.5"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-border bg-card px-3.5 py-2.5"
               >
                 <div className="flex flex-col gap-0.5">
                   <span className="tabular-nums-mono font-medium text-foreground">
@@ -662,7 +658,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
             </div>
 
             {/* Center Telemetry Spine */}
-            <div className="flex flex-col justify-between gap-4 border-y border-border bg-[#0b0b0a] px-5 py-6 lg:col-span-2 lg:border-x lg:border-y-0">
+            <div className="flex flex-col justify-between gap-4 border-y border-border bg-muted/60 px-5 py-6 lg:col-span-2 lg:border-x lg:border-y-0">
               <div className="flex flex-col items-center gap-1 text-center">
                 <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   Router Verdict
@@ -713,11 +709,8 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
               </span>
             </div>
 
-            {/* Right Wing: HSKSwap V3 Immediate AMM (Carbon Obsidian Stock) */}
-            <div
-              className="relative flex flex-col justify-between gap-4 p-6 sm:p-7 lg:col-span-5"
-              style={{ backgroundColor: "#121210", color: "#f8f7ee" }}
-            >
+            {/* Right Wing: HSKSwap V3 Immediate AMM */}
+            <div className="relative flex flex-col justify-between gap-4 bg-card p-6 text-card-foreground sm:p-7 lg:col-span-5">
               <div className="flex items-center justify-between">
                 <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Venue B · HSKSwap V3 AMM
@@ -754,7 +747,7 @@ export function AgentPage({ onNavigate }: AgentPageProps) {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between border-t border-white/10 pt-3 text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-between border-t border-border pt-3 text-[11px] text-muted-foreground">
                 <span className="tabular-nums-mono">
                   Exit quote: {fmtPayment6(markets?.dexSellQuote?.paymentAmountOut, paymentSymbol)}
                 </span>

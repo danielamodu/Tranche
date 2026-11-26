@@ -434,17 +434,17 @@ export function TradePage({ onNavigate }: TradePageProps) {
                       key={offer.offerId.toString()}
                       onClick={() => openReserveSheet(offer)}
                       className={cn(
-                        "group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[18px] border transition-all duration-200 hover:-translate-y-0.5 sm:flex-row sm:items-center cursor-pointer",
-                        isFixed
-                          ? "border-[#f8f7ee]/20 bg-[#11110f] hover:border-[#f8f7ee]/40"
-                          : "border-border bg-card/80 hover:border-foreground/30",
+                        "group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[16px] border bg-card transition-all duration-150 hover:border-foreground/30 hover:bg-accent/35 sm:flex-row sm:items-center cursor-pointer",
+                        isFixed ? "border-border" : "border-border/80",
                       )}
                     >
-                      {/* Tactile Left Stock Accent Bar (Cream for FIXED, Carbon Slate for FLOATING) */}
+                      {/* Tactile Left Stock Accent Bar */}
                       <span
                         aria-hidden="true"
-                        className="absolute inset-y-0 left-0 w-1"
-                        style={{ backgroundColor: isFixed ? "#f8f7ee" : "rgba(248,247,238,0.22)" }}
+                        className={cn(
+                          "absolute inset-y-0 left-0 w-1",
+                          isFixed ? "bg-primary" : "bg-muted-foreground/30",
+                        )}
                       />
 
                       <div className="grid flex-1 grid-cols-2 items-center gap-4 py-4 pl-6 pr-4 sm:grid-cols-12">
@@ -751,7 +751,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
                     </div>
 
                     {txError && (
-                      <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-[#190a0a] py-2.5 pl-4 pr-3.5 text-xs text-destructive">
+                      <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-destructive/10 py-2.5 pl-4 pr-3.5 text-xs text-destructive">
                         <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
                         <span>{txError}</span>
                       </div>

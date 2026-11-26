@@ -859,7 +859,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                     </div>
 
                     {transferError && (
-                      <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-[#190a0a] py-2.5 pl-4 pr-3.5 text-xs text-destructive">
+                      <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-destructive/10 py-2.5 pl-4 pr-3.5 text-xs text-destructive">
                         <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
                         <span>{transferError}</span>
                       </div>
@@ -1128,7 +1128,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                 </div>
 
                 {offerError && (
-                  <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-[#190a0a] py-2.5 pl-4 pr-3.5 text-xs text-destructive">
+                  <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-destructive/10 py-2.5 pl-4 pr-3.5 text-xs text-destructive">
                     <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
                     <span>{offerError}</span>
                   </div>
