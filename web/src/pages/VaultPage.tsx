@@ -18,8 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -422,12 +420,40 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
       }
     >
       {!isConnected ? (
-        <div className="flex flex-col items-center gap-4 rounded-[20px] border border-border bg-card px-6 py-20 text-center">
-          <h2 className="font-display text-xl font-semibold">Connect wallet to manage vault</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Deposit ERC-20 inventory, publish fixed or oracle-bounded offers, and claim earned
-            proceeds.
-          </p>
+        <div className="mx-auto flex max-w-[540px] flex-col gap-6 py-12 text-center">
+          <div className="rounded-[24px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
+            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              INV-1 Segregated Vault · Wallet Required
+            </span>
+            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em]">
+              Connect wallet to manage liquidity
+            </h2>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Deposit ERC-20 inventory into isolated buckets, publish fixed or oracle-bounded
+              offers, and claim upfront hold fees.
+            </p>
+            <div className="mt-6 grid grid-cols-3 gap-2 border-t border-dashed border-border/80 pt-5 text-left text-[11px]">
+              <div>
+                <span className="tabular-nums-mono text-[10px] text-muted-foreground">01</span>
+                <p className="font-medium text-foreground">Deposit Free</p>
+              </div>
+              <div>
+                <span className="tabular-nums-mono text-[10px] text-muted-foreground">02</span>
+                <p className="font-medium text-foreground">Quote Offers</p>
+              </div>
+              <div>
+                <span className="tabular-nums-mono text-[10px] text-muted-foreground">03</span>
+                <p className="font-medium text-foreground">Claim Proceeds</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={() => onNavigate("/connect")}
+              className="mt-7 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+            >
+              Connect Wallet
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-8">
@@ -449,19 +475,19 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
 
           {/* Contextual 3-step LP Onboarding Strip (auto-ticks live) */}
           {showOnboarding && (
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[16px] border border-border bg-card px-5 py-3.5 text-xs">
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-border/80 bg-card/60 px-5 py-2.5 text-xs">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-muted-foreground">
                 <span className="font-medium text-foreground">LP flow:</span>
                 <span className={cn(hasDeposited && "text-foreground")}>
-                  <strong className="tabular-nums-mono">1.</strong> Deposit inventory{" "}
+                  <strong className="tabular-nums-mono">01</strong> Deposit inventory{" "}
                   {hasDeposited && <Check className="inline size-3 text-status-live" />}
                 </span>
                 <span className={cn(hasActiveOffer && "text-foreground")}>
-                  <strong className="tabular-nums-mono">2.</strong> Create an offer{" "}
+                  <strong className="tabular-nums-mono">02</strong> Create an offer{" "}
                   {hasActiveOffer && <Check className="inline size-3 text-status-live" />}
                 </span>
                 <span>
-                  <strong className="tabular-nums-mono">3.</strong> Claim premiums &amp; proceeds
+                  <strong className="tabular-nums-mono">03</strong> Claim premiums &amp; proceeds
                 </span>
               </div>
               <button
@@ -478,78 +504,118 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
             </div>
           )}
 
-          {/* Section 1: Token Balances Ledger */}
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold text-foreground">
-                Vault Balances
-              </h2>
+          {/* Editorial INV-1 Segregated Vault Hairline Strip */}
+          <section className="grid grid-cols-2 gap-y-5 border-b border-border/80 pb-7 lg:grid-cols-4 lg:divide-x lg:divide-border/80">
+            <div className="flex flex-col gap-1 pr-5">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                01 · Solvency Invariant
+              </span>
+              <span className="font-display text-2xl font-bold tracking-[-0.03em] text-foreground">
+                INV-1 Segregated
+              </span>
               <span className="tabular-nums-mono text-[11px] text-muted-foreground">
-                INV-1 segregated accounting
+                5 isolated token buckets
               </span>
             </div>
+            <div className="flex flex-col gap-1 lg:px-6">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                02 · Vault Free Assets
+              </span>
+              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+                {vaultRows.filter((r) => r.freeBal > 0n).length}
+              </span>
+              <span className="text-[11px] text-muted-foreground">Withdrawable anytime</span>
+            </div>
+            <div className="flex flex-col gap-1 pr-5 lg:px-6">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                03 · Claimable Proceeds
+              </span>
+              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-status-live">
+                {vaultRows.filter((r) => r.pendingProceeds > 0n).length}
+              </span>
+              <span className="text-[11px] text-muted-foreground">Upfront premiums + fills</span>
+            </div>
+            <div className="flex flex-col gap-1 lg:pl-6">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                04 · Active LP Offers
+              </span>
+              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+                {myOffers.filter((o) => o.status === 0 && o.availableBalance > 0n).length}
+              </span>
+              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
+                {myOffers.length} total created
+              </span>
+            </div>
+          </section>
 
-            <div className="overflow-hidden rounded-[20px] border border-border bg-card">
-              <div className="hidden grid-cols-12 items-center border-b border-border px-6 py-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground sm:grid">
-                <span className="col-span-3">Asset</span>
-                <span className="col-span-2 text-right">Wallet</span>
-                <span className="col-span-2 text-right">Vault Free</span>
-                <span className="col-span-2 text-right">Proceeds</span>
-                <span className="col-span-3 text-right">Actions</span>
+          {/* Asymmetric 7/5 Split: Hairline Asset Ledger (Left) + Serrated LP Offer Stubs (Right) */}
+          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+            {/* Section 1: Clean Hairline Asset Ledger */}
+            <section className="flex flex-col gap-4 lg:col-span-7">
+              <div className="flex items-baseline justify-between border-b border-border pb-3">
+                <h2 className="font-display text-xl font-semibold tracking-[-0.03em] text-foreground">
+                  Vault Balances
+                </h2>
+                <span className="tabular-nums-mono text-[11px] text-muted-foreground">
+                  Multicall3 live state
+                </span>
               </div>
 
               {loading ? (
                 <div className="flex flex-col divide-y divide-border">
                   {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="grid grid-cols-12 items-center gap-4 px-6 py-4">
-                      <Skeleton className="col-span-3 h-5 w-24" />
-                      <Skeleton className="col-span-2 ml-auto h-5 w-16" />
-                      <Skeleton className="col-span-2 ml-auto h-5 w-16" />
-                      <Skeleton className="col-span-2 ml-auto h-5 w-16" />
-                      <Skeleton className="col-span-3 ml-auto h-8 w-36 rounded-full" />
+                    <div key={i} className="flex items-center justify-between py-4">
+                      <Skeleton className="h-5 w-28" />
+                      <Skeleton className="h-8 w-40 rounded-full" />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-border/80">
                   {vaultRows.map((row) => (
                     <div
                       key={row.token.address}
-                      className="grid grid-cols-1 items-center gap-3 px-6 py-4 sm:grid-cols-12 sm:gap-2"
+                      className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
                     >
-                      <div className="col-span-3 flex flex-col">
-                        <span className="text-sm font-semibold text-foreground">
+                      <div className="flex flex-col">
+                        <span className="font-display text-base font-semibold text-foreground">
                           {row.token.symbol}
                         </span>
                         <span className="text-[11px] text-muted-foreground">{row.token.name}</span>
                       </div>
 
-                      <div className="col-span-2 flex items-center justify-between sm:justify-end">
-                        <span className="text-xs text-muted-foreground sm:hidden">Wallet</span>
-                        <span className="tabular-nums-mono text-sm text-muted-foreground">
-                          {formatTokenAmount(row.walletBal, row.token.decimals)}
-                        </span>
+                      <div className="grid grid-cols-3 gap-5 text-xs sm:text-right">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Wallet
+                          </span>
+                          <span className="tabular-nums-mono font-medium text-muted-foreground">
+                            {formatTokenAmount(row.walletBal, row.token.decimals)}
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Vault Free
+                          </span>
+                          <span className="tabular-nums-mono font-semibold text-foreground">
+                            {formatTokenAmount(row.freeBal, row.token.decimals)}
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Proceeds
+                          </span>
+                          <span className="tabular-nums-mono font-semibold text-status-live">
+                            {formatTokenAmount(row.pendingProceeds, row.token.decimals)}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="col-span-2 flex items-center justify-between sm:justify-end">
-                        <span className="text-xs text-muted-foreground sm:hidden">Vault Free</span>
-                        <span className="tabular-nums-mono text-sm font-medium text-foreground">
-                          {formatTokenAmount(row.freeBal, row.token.decimals)}
-                        </span>
-                      </div>
-
-                      <div className="col-span-2 flex items-center justify-between sm:justify-end">
-                        <span className="text-xs text-muted-foreground sm:hidden">Proceeds</span>
-                        <span className="tabular-nums-mono text-sm font-medium text-status-live">
-                          {formatTokenAmount(row.pendingProceeds, row.token.decimals)}
-                        </span>
-                      </div>
-
-                      <div className="col-span-3 flex flex-wrap items-center justify-end gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                         <button
                           type="button"
                           onClick={() => openTransfer("deposit", row.token)}
-                          className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:border-foreground/30 cursor-pointer"
+                          className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:border-foreground/30 cursor-pointer"
                         >
                           <ArrowDownToLine className="size-3" />
                           Deposit
@@ -558,7 +624,7 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                           <button
                             type="button"
                             onClick={() => openTransfer("withdraw", row.token)}
-                            className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
+                            className="inline-flex h-8 items-center gap-1 rounded-full border border-border px-3 text-xs text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
                           >
                             <ArrowUpFromLine className="size-3" />
                             Withdraw
@@ -580,74 +646,112 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                   ))}
                 </div>
               )}
-            </div>
-          </section>
+            </section>
 
-          {/* Section 2: Your LP Offers */}
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold text-foreground">Your Offers</h2>
-              <span className="tabular-nums-mono text-xs text-muted-foreground">
-                {myOffers.length} total
-              </span>
-            </div>
+            {/* Section 2: Mini Serrated LP Offer Stubs */}
+            <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:col-span-5">
+              <div className="flex items-baseline justify-between border-b border-border pb-3">
+                <h2 className="font-display text-xl font-semibold tracking-[-0.03em] text-foreground">
+                  Your LP Offers
+                </h2>
+                <span className="tabular-nums-mono text-xs text-muted-foreground">
+                  {myOffers.length} total
+                </span>
+              </div>
 
-            <div className="overflow-hidden rounded-[20px] border border-border bg-card">
               {myOffers.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+                <div className="flex flex-col items-center gap-3 rounded-[20px] border border-dashed border-border px-6 py-14 text-center">
                   <p className="text-sm font-medium text-foreground">No LP offers created yet</p>
-                  <p className="max-w-sm text-xs text-muted-foreground">
-                    Deposit inventory above, then click Create Offer to publish live liquidity on
-                    the Trade Desk.
+                  <p className="max-w-xs text-xs text-muted-foreground">
+                    Deposit inventory on the left, then click Create Offer to publish live
+                    liquidity on the Trade Desk.
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-border">
+                <div className="flex flex-col gap-4">
                   {myOffers.map((o) => {
                     const inv = getTokenMeta(o.inventoryToken);
                     const pay = getTokenMeta(o.paymentToken);
+                    const isFixed = o.priceMode === 0;
                     const isActive = o.status === 0 && o.availableBalance > 0n;
+                    const bg = isFixed ? "#f8f7ee" : "#121210";
+                    const fg = isFixed ? "#050505" : "#f8f7ee";
+                    const muted = isFixed ? "rgba(5,5,5,0.58)" : "rgba(248,247,238,0.56)";
+                    const hairline = isFixed ? "rgba(5,5,5,0.14)" : "rgba(248,247,238,0.14)";
+
                     return (
                       <div
                         key={o.offerId.toString()}
-                        className="flex flex-col justify-between gap-3 px-6 py-4 sm:flex-row sm:items-center"
+                        className="flex flex-col drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)]"
                       >
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-foreground">
+                        <div
+                          className="relative flex flex-col gap-3 rounded-t-[18px] px-5 pt-5 pb-4"
+                          style={{
+                            backgroundColor: bg,
+                            color: fg,
+                            borderTop: isFixed ? "none" : "1px solid rgba(248,247,238,0.12)",
+                            borderLeft: isFixed ? "none" : "1px solid rgba(248,247,238,0.08)",
+                            borderRight: isFixed ? "none" : "1px solid rgba(248,247,238,0.08)",
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-display text-base font-bold tracking-[-0.02em]">
                               Offer #{o.offerId.toString()} · {inv.symbol} / {pay.symbol}
                             </span>
-                            <span className="tabular-nums-mono rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                            <span
+                              className="tabular-nums-mono rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
+                              style={{ border: `1px solid ${hairline}`, color: fg }}
+                            >
                               {o.status === 2 ? "CANCELLED" : isActive ? "ACTIVE" : "EMPTY"}
                             </span>
                           </div>
-                          <span className="tabular-nums-mono text-xs text-muted-foreground">
-                            Available: {formatTokenAmount(o.availableBalance, inv.decimals)}{" "}
-                            {inv.symbol} ·{" "}
-                            {o.priceMode === 0
-                              ? `${formatPriceX36(o.fixedPriceX36, inv.decimals, pay.decimals)} ${pay.symbol}`
-                              : `Oracle ${o.spreadBps >= 0 ? "+" : ""}${o.spreadBps} bps`}{" "}
-                            · {(o.basePremiumBps / 100).toFixed(2)}% prem · max{" "}
-                            {formatDuration(o.maxDuration)}
-                          </span>
-                        </div>
 
-                        {isActive && (
-                          <button
-                            type="button"
-                            onClick={() => setCancelTarget(o)}
-                            className="h-8 w-fit rounded-full border border-destructive/30 px-3.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 cursor-pointer"
-                          >
-                            Cancel Offer
-                          </button>
-                        )}
+                          <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
+                            <span className="tabular-nums-mono font-semibold">
+                              {formatTokenAmount(o.availableBalance, inv.decimals)} {inv.symbol}
+                            </span>
+                            <span className="tabular-nums-mono" style={{ color: muted }}>
+                              {isFixed
+                                ? `${formatPriceX36(o.fixedPriceX36, inv.decimals, pay.decimals)} ${pay.symbol}`
+                                : `Oracle ${o.spreadBps >= 0 ? "+" : ""}${o.spreadBps} bps`}{" "}
+                              · {(o.basePremiumBps / 100).toFixed(2)}% · max{" "}
+                              {formatDuration(o.maxDuration)}
+                            </span>
+                          </div>
+
+                          {isActive && (
+                            <div
+                              className="mt-1 flex justify-end border-t border-dashed pt-3"
+                              style={{ borderColor: hairline }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setCancelTarget(o)}
+                                className="h-7 rounded-full border border-red-500/40 px-3 text-[11px] font-medium text-red-500 transition-colors hover:bg-red-500/10 cursor-pointer"
+                              >
+                                Cancel Offer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <svg
+                          viewBox="0 0 440 24"
+                          preserveAspectRatio="none"
+                          aria-hidden="true"
+                          className="block h-3.5 w-full -mt-[2px]"
+                        >
+                          <polygon
+                            points="0,0 440,0 440,24 330,4 220,24 110,4 0,24"
+                            style={{ fill: bg }}
+                          />
+                        </svg>
                       </div>
                     );
                   })}
                 </div>
               )}
-            </div>
-          </section>
+            </aside>
+          </div>
         </div>
       )}
 
@@ -700,11 +804,14 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-2.5">
                       <div className="flex items-center justify-between text-xs">
-                        <label htmlFor="vault-amt" className="text-muted-foreground">
-                          Amount ({transferSheet.token.symbol})
+                        <label
+                          htmlFor="vault-amt"
+                          className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+                        >
+                          {transferSheet.mode === "deposit" ? "Deposit Size" : "Withdraw Size"}
                         </label>
                         {activeTransferRow && (
                           <button
@@ -722,9 +829,9 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                                 ).replace(/,/g, ""),
                               );
                             }}
-                            className="tabular-nums-mono text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                            className="tabular-nums-mono rounded-full border border-border px-2.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground cursor-pointer"
                           >
-                            Max:{" "}
+                            Max{" "}
                             {formatTokenAmount(
                               transferSheet.mode === "deposit"
                                 ? activeTransferRow.walletBal
@@ -735,20 +842,25 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                           </button>
                         )}
                       </div>
-                      <Input
-                        id="vault-amt"
-                        type="text"
-                        inputMode="decimal"
-                        value={transferInput}
-                        onChange={(e) => setTransferInput(e.target.value)}
-                        placeholder="0.02"
-                        className="tabular-nums-mono h-12 rounded-[12px] bg-background text-base"
-                      />
+                      <div className="flex items-baseline justify-between gap-2 border-b border-border/90 pb-2 transition-colors focus-within:border-foreground">
+                        <input
+                          id="vault-amt"
+                          type="text"
+                          inputMode="decimal"
+                          value={transferInput}
+                          onChange={(e) => setTransferInput(e.target.value)}
+                          placeholder="0.02"
+                          className="tabular-nums-mono w-full bg-transparent font-display text-3xl font-bold tracking-[-0.04em] text-foreground placeholder:text-muted-foreground/35 focus:outline-none"
+                        />
+                        <span className="tabular-nums-mono shrink-0 text-sm font-medium text-muted-foreground">
+                          {transferSheet.token.symbol}
+                        </span>
+                      </div>
                     </div>
 
                     {transferError && (
-                      <div className="flex items-start gap-2 rounded-[12px] border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
-                        <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                      <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-[#190a0a] py-2.5 pl-4 pr-3.5 text-xs text-destructive">
+                        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
                         <span>{transferError}</span>
                       </div>
                     )}
@@ -865,35 +977,39 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                   </div>
                 </div>
 
-                {/* Amount & Min Fill */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">
+                {/* Amount & Min Fill (Hairline Instrument Fields) */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                       Offer Size ({invToken.symbol})
                     </label>
-                    <Input
+                    <input
                       type="text"
                       inputMode="decimal"
                       value={offerAmtInput}
                       onChange={(e) => setOfferAmtInput(e.target.value)}
-                      className="tabular-nums-mono h-11 rounded-[12px] bg-background"
+                      className="tabular-nums-mono h-10 w-full border-b border-border/90 bg-transparent px-0.5 text-lg font-semibold text-foreground transition-colors focus:border-foreground focus:outline-none"
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">Min Fill</label>
-                    <Input
+                  <div className="flex flex-col gap-1">
+                    <label className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      Min Fill
+                    </label>
+                    <input
                       type="text"
                       inputMode="decimal"
                       value={minFillInput}
                       onChange={(e) => setMinFillInput(e.target.value)}
-                      className="tabular-nums-mono h-11 rounded-[12px] bg-background"
+                      className="tabular-nums-mono h-10 w-full border-b border-border/90 bg-transparent px-0.5 text-lg font-semibold text-foreground transition-colors focus:border-foreground focus:outline-none"
                     />
                   </div>
                 </div>
 
-                {/* Price Mode Segmented Pill (Progressive Disclosure) */}
+                {/* Price Mode Segmented Pill (Polarity Preview) */}
                 <div className="flex flex-col gap-2">
-                  <span className="text-xs text-muted-foreground">Pricing Mode</span>
+                  <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                    Pricing Stock
+                  </span>
                   <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-background p-1">
                     {(["FIXED", "FLOATING"] as const).map((m) => (
                       <button
@@ -907,77 +1023,87 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                             : "text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        {m === "FIXED" ? "Fixed Price" : "Floating Oracle"}
+                        {m === "FIXED" ? "Fixed Paper" : "Floating Vellum"}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {priceMode === "FIXED" ? (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">
+                  <div className="flex flex-col gap-1">
+                    <label className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                       Fixed Strike ({PAYMENT_TOKEN.symbol} per 1 {invToken.symbol})
                     </label>
-                    <Input
+                    <input
                       type="text"
                       inputMode="decimal"
                       value={fixedPriceInput}
                       onChange={(e) => setFixedPriceInput(e.target.value)}
-                      className="tabular-nums-mono h-11 rounded-[12px] bg-background"
+                      className="tabular-nums-mono h-10 w-full border-b border-border/90 bg-transparent px-0.5 text-lg font-semibold text-foreground transition-colors focus:border-foreground focus:outline-none"
                     />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2.5">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] text-muted-foreground">Spread (bps)</label>
-                      <Input
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                        Spread (bps)
+                      </label>
+                      <input
                         type="text"
                         inputMode="numeric"
                         value={spreadBpsInput}
                         onChange={(e) => setSpreadBpsInput(e.target.value)}
-                        className="tabular-nums-mono h-10 rounded-[12px] bg-background text-xs"
+                        className="tabular-nums-mono h-9 w-full border-b border-border/90 bg-transparent px-0.5 text-sm font-semibold text-foreground transition-colors focus:border-foreground focus:outline-none"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] text-muted-foreground">Min Price</label>
-                      <Input
+                    <div className="flex flex-col gap-1">
+                      <label className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                        Min Price
+                      </label>
+                      <input
                         type="text"
                         inputMode="decimal"
                         value={minPriceInput}
                         onChange={(e) => setMinPriceInput(e.target.value)}
-                        className="tabular-nums-mono h-10 rounded-[12px] bg-background text-xs"
+                        className="tabular-nums-mono h-9 w-full border-b border-border/90 bg-transparent px-0.5 text-sm font-semibold text-foreground transition-colors focus:border-foreground focus:outline-none"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] text-muted-foreground">Max Price</label>
-                      <Input
+                    <div className="flex flex-col gap-1">
+                      <label className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                        Max Price
+                      </label>
+                      <input
                         type="text"
                         inputMode="decimal"
                         value={maxPriceInput}
                         onChange={(e) => setMaxPriceInput(e.target.value)}
-                        className="tabular-nums-mono h-10 rounded-[12px] bg-background text-xs"
+                        className="tabular-nums-mono h-9 w-full border-b border-border/90 bg-transparent px-0.5 text-sm font-semibold text-foreground transition-colors focus:border-foreground focus:outline-none"
                       />
                     </div>
                   </div>
                 )}
 
-                <Separator />
+                <div className="border-t border-dashed border-border/90" />
 
                 {/* Upfront Premium & Max Lock */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">Upfront Premium (bps)</label>
-                    <Input
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      Upfront Premium (bps)
+                    </label>
+                    <input
                       type="text"
                       inputMode="numeric"
                       value={premiumBpsInput}
                       onChange={(e) => setPremiumBpsInput(e.target.value)}
-                      className="tabular-nums-mono h-11 rounded-[12px] bg-background"
+                      className="tabular-nums-mono h-10 w-full border-b border-border/90 bg-transparent px-0.5 text-lg font-semibold text-foreground transition-colors focus:border-foreground focus:outline-none"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-xs text-muted-foreground">Max Lock Window</span>
-                    <div className="flex h-11 items-center gap-1">
+                    <span className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      Max Lock Window
+                    </span>
+                    <div className="flex h-10 items-center gap-1">
                       {[
                         { label: "30m", sec: 1800 },
                         { label: "1h", sec: 3600 },
@@ -988,10 +1114,10 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                           type="button"
                           onClick={() => setMaxLockSec(d.sec)}
                           className={cn(
-                            "h-9 flex-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
+                            "tabular-nums-mono h-8 flex-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
                             maxLockSec === d.sec
                               ? "bg-primary text-primary-foreground"
-                              : "border border-border bg-background text-muted-foreground",
+                              : "border border-border bg-background/60 text-muted-foreground hover:text-foreground",
                           )}
                         >
                           {d.label}
@@ -1002,8 +1128,8 @@ export function VaultPage({ onNavigate }: VaultPageProps) {
                 </div>
 
                 {offerError && (
-                  <div className="flex items-start gap-2 rounded-[12px] border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
-                    <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                  <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-[#190a0a] py-2.5 pl-4 pr-3.5 text-xs text-destructive">
+                    <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
                     <span>{offerError}</span>
                   </div>
                 )}
