@@ -161,26 +161,45 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (address || localStorage.getItem("tranche-disconnected") === "1") return;
     const preferredRdns = localStorage.getItem("tranche-wallet-rdns");
-    const candidate =
-      (preferredRdns ? wallets.find((w) => w.rdns === preferredRdns)?.provider : undefined) ??
-      wallets[0]?.provider ??
-      getWindowWithWallets().ethereum;
-    if (!candidate) return;
+    const win = getWindowWithWallets();
+
+    // Build deduplicated priority list: saved wallet -> Zerion -> all EIP-6963 wallets -> window.ethereum
+    const candidates: Eip1193Provider[] = [];
+    const pushUnique = (p?: Eip1193Provider) => {
+      if (p && !candidates.includes(p)) candidates.push(p);
+    };
+    if (preferredRdns) {
+      pushUnique(wallets.find((w) => w.rdns === preferredRdns)?.provider);
+    }
+    pushUnique(win.zerionWallet);
+    for (const w of wallets) pushUnique(w.provider);
+    if (Array.isArray(win.ethereum?.providers)) {
+      for (const p of win.ethereum.providers) pushUnique(p);
+    }
+    pushUnique(win.ethereum);
+
+    if (candidates.length === 0) return;
 
     let cancelled = false;
-    candidate
-      .request({ method: "eth_accounts" })
-      .then(async (accs) => {
+    (async () => {
+      for (const candidate of candidates) {
         if (cancelled) return;
-        const list = Array.isArray(accs) ? (accs as Address[]) : [];
-        if (list.length === 0) return;
-        const hexChain = (await candidate.request({ method: "eth_chainId" })) as string;
-        if (cancelled) return;
-        setActiveProvider(candidate);
-        setAddress(list[0]);
-        setChainId(Number.parseInt(hexChain, 16));
-      })
-      .catch(() => {});
+        try {
+          const accs = await candidate.request({ method: "eth_accounts" });
+          if (cancelled) return;
+          const list = Array.isArray(accs) ? (accs as Address[]) : [];
+          if (list.length === 0) continue;
+          const hexChain = (await candidate.request({ method: "eth_chainId" })) as string;
+          if (cancelled) return;
+          setActiveProvider(candidate);
+          setAddress(list[0]);
+          setChainId(Number.parseInt(hexChain, 16));
+          return;
+        } catch {
+          // try next wallet provider
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
