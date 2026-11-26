@@ -17,6 +17,7 @@
     "test:soak": "node --import tsx --test test/soak.test.ts",
     "test:chain177": "node --import tsx --test test/chain177.readonly.test.ts",
     "test:fork": "node --import tsx --test test/fork.integration.test.ts",
+    "bench:chain177": "tsx src/benchmark-chain177.ts",
     "api": "tsx src/start-api.ts",
     "demo": "tsx src/run-demo.ts",
     "soak:24h": "tsx src/start-soak.ts --hours 24",
