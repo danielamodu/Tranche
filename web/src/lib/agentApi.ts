@@ -335,7 +335,8 @@ export class AgentApiClient {
   constructor(options?: { baseUrl?: string; token?: string; fetchImpl?: typeof fetch }) {
     this.baseUrl = (options?.baseUrl ?? DEFAULT_AGENT_API_URL).replace(/\/+$/, "");
     this.token = options?.token ?? "";
-    this.fetchImpl = options?.fetchImpl ?? fetch;
+    this.fetchImpl =
+      options?.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
   }
 
   setToken(token: string): void {
