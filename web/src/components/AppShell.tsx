@@ -173,32 +173,31 @@ export function AppShell({
   const mainPadding = collapsed ? "md:pl-[72px]" : "md:pl-[236px]";
 
   const sidebarBody = (
-    <div className="flex h-full flex-col justify-between bg-sidebar text-sidebar-foreground">
-      {/* Top Brand Header + Collapse Toggle */}
-      <div className="flex flex-col">
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      {/* Top Brand Header + Collapse Toggle (always pinned) */}
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
+        <button
+          type="button"
+          onClick={() => onNavigate("/")}
+          aria-label="Tranche home"
+          className="inline-flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80 cursor-pointer"
+        >
+          <TrancheLogo imgClassName={collapsed ? "h-5" : "h-6"} />
+        </button>
+        {!collapsed && (
           <button
             type="button"
-            onClick={() => onNavigate("/")}
-            aria-label="Tranche home"
-            className="inline-flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80 cursor-pointer"
+            aria-label="Collapse sidebar"
+            onClick={() => setCollapsed(true)}
+            className="hidden size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground md:inline-flex cursor-pointer"
           >
-            <TrancheLogo imgClassName={collapsed ? "h-5" : "h-6"} />
+            <PanelLeftClose className="size-4" />
           </button>
-          {!collapsed && (
-            <button
-              type="button"
-              aria-label="Collapse sidebar"
-              onClick={() => setCollapsed(true)}
-              className="hidden size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground md:inline-flex cursor-pointer"
-            >
-              <PanelLeftClose className="size-4" />
-            </button>
-          )}
-        </div>
+        )}
+      </div>
 
-        {/* Grouped Navigation (Vestra-style clean sections) */}
-        <div className="flex flex-col gap-5 px-3 py-5">
+      {/* Grouped Navigation (scrollable internally if ever needed) */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
           {/* Group 1: Autonomous Agent */}
           <div className="flex flex-col gap-1">
             {!collapsed && (
@@ -388,12 +387,11 @@ export function AppShell({
               </div>
             )}
           </div>
-        </div>
       </div>
 
-      {/* Bottom: Pinned Account / Wallet Dock */}
-      <div className="border-t border-sidebar-border p-3">
-        {collapsed ? (
+      {/* Bottom: Expand button only when collapsed */}
+      {collapsed && (
+        <div className="shrink-0 border-t border-sidebar-border p-3">
           <button
             type="button"
             aria-label="Expand sidebar"
@@ -402,39 +400,8 @@ export function AppShell({
           >
             <PanelLeftOpen className="size-4" />
           </button>
-        ) : isConnected && address ? (
-          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-border bg-card px-3 py-2">
-            <div className="flex min-w-0 flex-col">
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-                <span className="size-1.5 shrink-0 rounded-full bg-status-live" />
-                <span className="tabular-nums-mono truncate">{shortAddr(address)}</span>
-              </span>
-              <span className="tabular-nums-mono mt-0.5 text-[11px] text-muted-foreground">
-                {hskBalance ? `${hskBalance} HSK` : `Chain ${ACTIVE_NETWORK.chainId}`}
-              </span>
-            </div>
-            <button
-              type="button"
-              aria-label="Disconnect wallet"
-              onClick={() => disconnect()}
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
-            >
-              <LogOut className="size-3.5" />
-            </button>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            onClick={() => {
-              clearError();
-              setWalletDialogOpen(true);
-            }}
-            className="h-9 w-full rounded-[10px] text-xs font-medium cursor-pointer"
-          >
-            Connect Wallet
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 
@@ -515,6 +482,42 @@ export function AppShell({
               />
               Chain {ACTIVE_NETWORK.chainId}
             </span>
+
+            {isConnected && address ? (
+              <div className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background pl-3 pr-1.5 text-xs">
+                <span className="size-1.5 shrink-0 rounded-full bg-status-live" />
+                <span className="tabular-nums-mono font-medium text-foreground">
+                  {shortAddr(address)}
+                </span>
+                {hskBalance && (
+                  <span className="tabular-nums-mono hidden text-[11px] text-muted-foreground xl:inline">
+                    · {hskBalance} HSK
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-label="Disconnect wallet"
+                  title="Disconnect wallet"
+                  onClick={() => disconnect()}
+                  className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+                >
+                  <LogOut className="size-3" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  clearError();
+                  setWalletDialogOpen(true);
+                }}
+                className="h-9 rounded-full px-3.5 text-xs font-medium cursor-pointer"
+              >
+                <Wallet className="mr-1.5 size-3.5" />
+                Connect
+              </Button>
+            )}
 
             <button
               type="button"
