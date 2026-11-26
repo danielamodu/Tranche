@@ -319,40 +319,109 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
       refreshing={refreshing}
     >
       {!isConnected ? (
-        <div className="flex flex-col items-center gap-4 rounded-[20px] border border-border bg-card px-6 py-20 text-center">
-          <h2 className="font-display text-xl font-semibold">Connect wallet to view tickets</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Your active ERC-721 Execution Tickets appear here automatically once connected.
-          </p>
+        <div className="mx-auto flex max-w-[460px] flex-col items-center py-12 text-center">
+          <div className="w-full rounded-t-[22px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
+            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              ERC-721 Vault · Wallet Required
+            </span>
+            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em]">
+              Connect wallet to inspect tickets
+            </h2>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Your active Execution Tickets appear here automatically as physical stubs once
+              connected.
+            </p>
+            <Button
+              type="button"
+              onClick={() => onNavigate("/connect")}
+              className="mt-6 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+            >
+              Connect Wallet
+              <ArrowRight data-icon="inline-end" />
+            </Button>
+          </div>
+          <svg
+            viewBox="0 0 440 24"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            className="block h-4 w-full opacity-20"
+          >
+            <polygon
+              points="0,0 440,0 440,24 330,4 220,24 110,4 0,24"
+              style={{ fill: "#f8f7ee" }}
+            />
+          </svg>
         </div>
       ) : loading ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {[1, 2].map((i) => (
-            <Skeleton key={i} className="h-[310px] w-full rounded-[20px]" />
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-[310px] w-full rounded-[22px]" />
           ))}
         </div>
       ) : tickets.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-[20px] border border-border bg-card px-6 py-20 text-center">
-          <div className="flex flex-col gap-1.5">
-            <h2 className="font-display text-xl font-semibold text-foreground">
+        <div className="mx-auto flex max-w-[460px] flex-col items-center py-12 text-center">
+          <div className="w-full rounded-t-[22px] border border-dashed border-border/90 bg-card/40 px-8 py-12">
+            <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              0 Active Stubs
+            </span>
+            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em] text-foreground">
               No active execution tickets
             </h2>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Reserve inventory from an open offer on the Trade Desk to mint your first ERC-721
-              ticket.
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Reserve inventory from an open offer strip on the Trade Desk to mint your first
+              ERC-721 Execution Ticket.
             </p>
+            <Button
+              type="button"
+              onClick={() => onNavigate("/trade")}
+              className="mt-6 h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+            >
+              Browse Open Offers
+              <ArrowRight data-icon="inline-end" />
+            </Button>
           </div>
-          <Button
-            type="button"
-            onClick={() => onNavigate("/trade")}
-            className="h-10 rounded-full px-6 text-xs font-medium cursor-pointer"
+          <svg
+            viewBox="0 0 440 24"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            className="block h-4 w-full opacity-20"
           >
-            Browse Open Offers
-            <ArrowRight data-icon="inline-end" />
-          </Button>
+            <polygon
+              points="0,0 440,0 440,24 330,4 220,24 110,4 0,24"
+              style={{ fill: "#f8f7ee" }}
+            />
+          </svg>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-8">
+          {/* Editorial Hairline Ticket Summary Strip */}
+          <section className="grid grid-cols-3 gap-y-4 border-b border-border/80 pb-6 sm:divide-x sm:divide-border/80">
+            <div className="flex flex-col gap-1 pr-4">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                01 · Owned Tickets
+              </span>
+              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+                {tickets.length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1 sm:px-6">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                02 · Active
+              </span>
+              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-foreground">
+                {tickets.filter((t) => t.expiresAt > nowSec).length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1 sm:pl-6">
+              <span className="tabular-nums-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                03 · Expired
+              </span>
+              <span className="tabular-nums-mono font-display text-3xl font-bold tracking-[-0.04em] text-muted-foreground">
+                {tickets.filter((t) => t.expiresAt <= nowSec).length}
+              </span>
+            </div>
+          </section>
+
           {reclaimError && (
             <div className="flex items-start justify-between gap-3 rounded-[14px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
               <div className="flex items-start gap-2">
@@ -368,7 +437,7 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
               </button>
             </div>
           )}
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {tickets.map((t) => {
             const inv = getTokenMeta(t.inventoryToken);
             const pay = getTokenMeta(t.paymentToken);
@@ -591,9 +660,12 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2.5">
                       <div className="flex items-center justify-between text-xs">
-                        <label htmlFor="fill-amount" className="text-muted-foreground">
+                        <label
+                          htmlFor="fill-amount"
+                          className="tabular-nums-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+                        >
                           Fill Amount ({exInv.symbol})
                         </label>
                         <div className="flex items-center gap-1">
@@ -609,27 +681,32 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
                                   formatTokenAmount(q.val, exInv.decimals, 6).replace(/,/g, ""),
                                 )
                               }
-                              className="rounded-full border border-border px-2.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                              className="tabular-nums-mono rounded-full border border-border px-2.5 py-0.5 text-[10px] text-muted-foreground hover:border-foreground/40 hover:text-foreground cursor-pointer"
                             >
                               {q.label}
                             </button>
                           ))}
                         </div>
                       </div>
-                      <Input
-                        id="fill-amount"
-                        type="text"
-                        inputMode="decimal"
-                        value={fillInput}
-                        onChange={(e) => setFillInput(e.target.value)}
-                        className="tabular-nums-mono h-12 rounded-[12px] bg-background text-base"
-                      />
+                      <div className="flex items-baseline justify-between gap-2 border-b border-border/90 pb-2 transition-colors focus-within:border-foreground">
+                        <input
+                          id="fill-amount"
+                          type="text"
+                          inputMode="decimal"
+                          value={fillInput}
+                          onChange={(e) => setFillInput(e.target.value)}
+                          className="tabular-nums-mono w-full bg-transparent font-display text-3xl font-bold tracking-[-0.04em] text-foreground focus:outline-none"
+                        />
+                        <span className="tabular-nums-mono shrink-0 text-sm font-medium text-muted-foreground">
+                          {exInv.symbol}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 rounded-[16px] border border-border bg-background p-4 text-xs">
+                    <div className="flex flex-col gap-2.5 border-t border-dashed border-border/90 pt-4 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Total Settlement Cost</span>
-                        <span className="tabular-nums-mono font-semibold text-foreground">
+                        <span className="tabular-nums-mono text-sm font-semibold text-foreground">
                           {exQuoteLoading
                             ? "Quoting…"
                             : exQuote
@@ -648,8 +725,8 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
                     </div>
 
                     {exError && (
-                      <div className="flex items-start gap-2 rounded-[12px] border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
-                        <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                      <div className="relative overflow-hidden rounded-[12px] border border-destructive/35 bg-[#190a0a] py-2.5 pl-4 pr-3.5 text-xs text-destructive">
+                        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-destructive" />
                         <span>{exError}</span>
                       </div>
                     )}
