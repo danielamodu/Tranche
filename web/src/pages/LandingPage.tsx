@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, CheckCircle2, Plus, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Bot, CheckCircle2, Plus, ShieldCheck, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Reveal } from "@/components/Reveal";
@@ -312,10 +312,94 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           }}
         />
 
-        {/* Upper-center sculptural focal artifact */}
-        <div className="relative z-10 mx-auto my-auto flex w-full max-w-[1080px] items-center justify-center py-10 sm:py-14">
-          <div className="animate-rise w-full max-w-[420px]">
+        {/* Upper-center sculptural visual diagram: Agent → Dual-Venue Comparison → Tranche Ticket vs HSKSwap */}
+        <div className="relative z-10 mx-auto my-auto flex w-full max-w-[1080px] flex-col items-center justify-center gap-6 py-8 lg:flex-row lg:gap-0 lg:py-12">
+          {/* Left Satellite: Tranche Agent Brain */}
+          <div className="animate-rise flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/90 bg-card/85 p-4 backdrop-blur-md lg:w-[230px] lg:shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Bot className="size-3.5" />
+              </span>
+              <span className="tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                <span className="size-1.5 rounded-full bg-emerald-400" />
+                ROUTING
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="font-display text-sm font-semibold text-foreground">
+                Tranche Agent
+              </span>
+              <span className="text-[11px] leading-snug text-muted-foreground">
+                Compares venues · Risk-checked
+              </span>
+            </div>
+            <div className="flex items-center justify-between border-t border-border/80 pt-2 text-[10px] text-muted-foreground">
+              <span className="tabular-nums-mono">Decision</span>
+              <span className="tabular-nums-mono font-semibold text-foreground">TRANCHE ✓</span>
+            </div>
+          </div>
+
+          {/* Connecting Active Route Line (Left → Center Ticket) */}
+          <div aria-hidden="true" className="hidden w-14 shrink-0 items-center lg:flex">
+            <svg viewBox="0 0 64 24" className="h-6 w-full overflow-visible">
+              <line
+                x1="0"
+                y1="12"
+                x2="56"
+                y2="12"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+                className="text-foreground/70"
+              />
+              <circle cx="58" cy="12" r="3.5" className="fill-primary" />
+            </svg>
+          </div>
+
+          {/* Center Focal Artifact: Serrated Cream Execution Ticket (Selected Route) */}
+          <div className="animate-rise-delay-1 w-full max-w-[390px] shrink-0">
             <TicketSpecimen stage={0} mode="FIXED" />
+          </div>
+
+          {/* Connecting Dimmed Comparison Line (Center ← Right AMM) */}
+          <div aria-hidden="true" className="hidden w-14 shrink-0 items-center lg:flex">
+            <svg viewBox="0 0 64 24" className="h-6 w-full overflow-visible">
+              <line
+                x1="6"
+                y1="12"
+                x2="64"
+                y2="12"
+                stroke="currentColor"
+                strokeWidth="1.25"
+                strokeDasharray="3 5"
+                className="text-muted-foreground/40"
+              />
+              <circle cx="4" cy="12" r="2.5" className="fill-muted-foreground/50" />
+            </svg>
+          </div>
+
+          {/* Right Satellite: HSKSwap V3 AMM (Compared & Skipped) */}
+          <div className="animate-rise-delay-2 flex w-full max-w-[240px] flex-col gap-2.5 rounded-[18px] border border-border/70 bg-card/55 p-4 opacity-80 backdrop-blur-md lg:w-[230px] lg:shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex size-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
+                <Waves className="size-3.5" />
+              </span>
+              <span className="tabular-nums-mono rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                SKIPPED
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="font-display text-sm font-semibold text-foreground">
+                HSKSwap V3 Pool
+              </span>
+              <span className="tabular-nums-mono text-[11px] text-muted-foreground">
+                30.42 USDT · +1.4% slippage
+              </span>
+            </div>
+            <div className="flex items-center justify-between border-t border-border/70 pt-2 text-[10px] text-muted-foreground">
+              <span>Higher all-in cost</span>
+              <span className="tabular-nums-mono text-destructive">+0.27</span>
+            </div>
           </div>
         </div>
 

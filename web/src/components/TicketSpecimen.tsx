@@ -265,29 +265,25 @@ export function TicketSpecimen({
               />
             </div>
 
-            {/* Ledger details */}
-            <dl className="relative grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+            {/* Compact 2-Pill Key Facts (scannable in 1 second) */}
+            <div className="relative flex flex-wrap items-center justify-between gap-2 text-xs">
               <div className="flex flex-col gap-0.5">
-                <dt style={{ color: stockMuted }}>Settlement Cost</dt>
-                <dd key={`cost-${mode}`} className="animate-rise tabular-nums-mono font-medium">
-                  {isFixed ? `30.00 ${SPECIMEN_PAY_SYMBOL}` : `29.40 – 30.90 ${SPECIMEN_PAY_SYMBOL}`}
-                </dd>
+                <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: stockMuted }}>
+                  All-in Cost
+                </span>
+                <span key={`cost-${mode}`} className="animate-rise tabular-nums-mono font-semibold">
+                  {isFixed ? `30.15 ${SPECIMEN_PAY_SYMBOL}` : `29.55–31.05 ${SPECIMEN_PAY_SYMBOL}`}
+                </span>
               </div>
-              <div className="flex flex-col gap-0.5 text-right">
-                <dt style={{ color: stockMuted }}>Upfront Premium</dt>
-                <dd className="tabular-nums-mono font-medium">0.15 {SPECIMEN_PAY_SYMBOL} (50 bps)</dd>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <dt style={{ color: stockMuted }}>Status Window</dt>
-                <dd key={`win-${stage}`} className="animate-rise tabular-nums-mono font-medium">
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: stockMuted }}>
+                  Window
+                </span>
+                <span key={`win-${stage}`} className="animate-rise tabular-nums-mono font-semibold">
                   {meta.windowLabel}
-                </dd>
+                </span>
               </div>
-              <div className="flex flex-col gap-0.5 text-right">
-                <dt style={{ color: stockMuted }}>Protocol Fee</dt>
-                <dd className="tabular-nums-mono font-medium">0.05% (5 bps)</dd>
-              </div>
-            </dl>
+            </div>
 
             {/* Bottom live proof row */}
             <div
