@@ -103,6 +103,26 @@ export type {
 } from "./runtime.js";
 export { AgentApiServer } from "./server.js";
 export type { AgentApiServerConfig } from "./server.js";
+export {
+  SoakEvidenceStore,
+  findLatestSoakSessionDir,
+  inspectSoakSession,
+} from "./soak-evidence.js";
+export type {
+  InspectedSoakReport,
+  SoakDecisionRecord,
+  SoakEventType,
+  SoakEvidenceStoreConfig,
+  SoakMetricsRecord,
+  SoakOperationalEventRecord,
+  SoakSessionMetadata,
+  SoakSessionStatus,
+  SoakSnapshotRecord,
+  SoakStatusProvider,
+  SoakStatusSummary,
+} from "./soak-evidence.js";
+export { SoakRunner } from "./soak-runner.js";
+export type { SoakRunnerConfig } from "./soak-runner.js";
 export type {
   AgentDecisionTrace,
   AgentIntent,

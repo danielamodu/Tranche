@@ -18,5 +18,8 @@ Thumbs.db
 # Forge script broadcast / dry-run artifacts
 broadcast/
 
+# Read-only soak evidence artifacts
+agent/soak-evidence/
+
 !web/src/lib/
 !web/src/lib/**

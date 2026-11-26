@@ -13,10 +13,17 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/agent.integration.test.ts test/autonomous.test.ts test/server.test.ts test/operations.test.ts",
+    "test": "node --import tsx --test test/agent.integration.test.ts test/autonomous.test.ts test/server.test.ts test/operations.test.ts test/soak.test.ts",
+    "test:soak": "node --import tsx --test test/soak.test.ts",
+    "test:chain177": "node --import tsx --test test/chain177.readonly.test.ts",
     "test:fork": "node --import tsx --test test/fork.integration.test.ts",
     "api": "tsx src/start-api.ts",
-    "demo": "tsx src/run-demo.ts"
+    "demo": "tsx src/run-demo.ts",
+    "soak:24h": "tsx src/start-soak.ts --hours 24",
+    "soak:48h": "tsx src/start-soak.ts --hours 48",
+    "soak:72h": "tsx src/start-soak.ts --hours 72",
+    "soak:stop": "tsx src/stop-soak.ts",
+    "soak:inspect": "tsx src/inspect-soak.ts"
   },
   "dependencies": {
     "@tranche/sdk": "file:../sdk",
