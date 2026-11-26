@@ -519,6 +519,32 @@ export class AgentApiClient {
     return this.request<AgentIntelligenceSnapshot>("GET", "/agent/intelligence");
   }
 
+  getProtocolActivity(): Promise<ProtocolActivitySnapshot> {
+    return this.request<ProtocolActivitySnapshot>("GET", "/agent/protocol/activity");
+  }
+
+  approveProtocolProposal(
+    proposalId: string,
+    payload: { approvedBy: string; expectedBindingHash: string },
+  ): Promise<{ ok: true; proposal: ProtocolActionProposalItem }> {
+    return this.request<{ ok: true; proposal: ProtocolActionProposalItem }>(
+      "POST",
+      `/agent/protocol/proposals/${encodeURIComponent(proposalId)}/approve`,
+      payload,
+    );
+  }
+
+  rejectProtocolProposal(
+    proposalId: string,
+    payload?: { reason?: string },
+  ): Promise<{ ok: true; proposal: ProtocolActionProposalItem }> {
+    return this.request<{ ok: true; proposal: ProtocolActionProposalItem }>(
+      "POST",
+      `/agent/protocol/proposals/${encodeURIComponent(proposalId)}/reject`,
+      payload ?? {},
+    );
+  }
+
   getUserProfile(address: string): Promise<{ profile: UserAgentProfile | null }> {
     return this.request<{ profile: UserAgentProfile | null }>(
       "GET",
@@ -544,6 +570,121 @@ export class AgentApiClient {
       payload,
     );
   }
+
+  getProtocolState(): Promise<ProtocolStateSnapshot> {
+    return this.request<ProtocolStateSnapshot>("GET", "/agent/protocol/state");
+  }
+
+  updateProtocolPermissions(
+    patch: Partial<ProtocolPermissionsConfig>,
+  ): Promise<{ ok: true; permissions: ProtocolPermissionsConfig }> {
+    return this.request<{ ok: true; permissions: ProtocolPermissionsConfig }>(
+      "POST",
+      "/agent/protocol/permissions",
+      patch,
+    );
+  }
+
+  approveProposal(proposalId: string): Promise<{ ok: true; proposal: ProtocolActionProposal }> {
+    return this.request<{ ok: true; proposal: ProtocolActionProposal }>(
+      "POST",
+      `/agent/protocol/proposals/${encodeURIComponent(proposalId)}/approve`,
+      {},
+    );
+  }
+
+  rejectProposal(
+    proposalId: string,
+    reason: string,
+  ): Promise<{ ok: true; proposal: ProtocolActionProposal }> {
+    return this.request<{ ok: true; proposal: ProtocolActionProposal }>(
+      "POST",
+      `/agent/protocol/proposals/${encodeURIComponent(proposalId)}/reject`,
+      { reason },
+    );
+  }
+}
+
+export interface ProtocolPermissionsConfig {
+  maxReservationSizePayment: string;
+  dailySpendingLimitPayment: string;
+  maxPortfolioAllocationBps: number;
+  minExpectedNetAdvantageBps: number;
+  trancheEnabled: boolean;
+  hskswapEnabled: boolean;
+  abstainWhenUnsuitable: boolean;
+}
+
+export type ProposalLifecycleState =
+  | "PROPOSED"
+  | "AWAITING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "SUBMITTED"
+  | "CONFIRMED"
+  | "FAILED"
+  | "EXPIRED";
+
+export interface ProtocolActionProposal {
+  proposalId: string;
+  actionType: "RESERVE_INVENTORY" | "EXERCISE_TICKET" | "CANCEL_RESERVATION";
+  status: ProposalLifecycleState;
+  chainId: number;
+  dataProvenance: DataProvenance;
+  offerId: string | null;
+  ticketId: string | null;
+  assetSymbol: string;
+  amountInventory: string;
+  reservationPremiumPayment: string;
+  exercisePricePayment: string;
+  expiry: number;
+  estimatedTotalCostPayment: string;
+  alternativeHskswapCostPayment: string;
+  expectedAdvantagePayment: string;
+  expectedAdvantageBps: number;
+  riskChecks: Array<{ name: string; passed: boolean; detail: string }>;
+  rationale: string;
+  txHash: string | null;
+  confirmationNote: string | null;
+  rejectionReason: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ProtocolAuditEvent {
+  eventId: string;
+  timestamp: number;
+  category:
+    | "MARKET_OBSERVATION"
+    | "VENUE_COMPARISON"
+    | "STRATEGY_DECISION"
+    | "RESERVATION_PROPOSAL"
+    | "APPROVAL_DECISION"
+    | "TX_SUBMISSION"
+    | "CONFIRMED_RESERVATION"
+    | "TICKET_EXERCISE"
+    | "TICKET_CANCELLATION"
+    | "POSITION_MANAGEMENT"
+    | "ABSTENTION"
+    | "ERROR_RECOVERY";
+  lifecycleState: ProposalLifecycleState | "OBSERVED" | "ABSTAINED";
+  title: string;
+  detail: string;
+  chainId: number;
+  dataProvenance: DataProvenance;
+  proposalId?: string;
+  txHash?: string;
+}
+
+export interface ProtocolStateSnapshot {
+  chainId: number;
+  dataSource: string;
+  dataProvenance: DataProvenance;
+  permissionMatrix: Record<string, "AUTONOMOUS" | "APPROVAL_REQUIRED" | "RESTRICTED">;
+  permissions: ProtocolPermissionsConfig;
+  proposals: ProtocolActionProposal[];
+  pendingSubmittedCount: number;
+  events: ProtocolAuditEvent[];
 }
 
 export interface UserAgentProfile {
@@ -642,4 +783,70 @@ export interface AgentIntelligenceSnapshot {
     missedExecutionAttempts: number;
     duplicateExecutionAttempts: number;
   };
+}
+
+export type ProtocolProposalStatus =
+  | "PROPOSED"
+  | "APPROVED"
+  | "REJECTED"
+  | "SUBMITTED"
+  | "CONFIRMED"
+  | "FAILED"
+  | "EXPIRED";
+
+export interface ProtocolActionProposalItem {
+  proposalId: string;
+  status: ProtocolProposalStatus;
+  bindingHash: string;
+  dataProvenance: DataProvenance;
+  rationale: string;
+  parameters: {
+    action: "RESERVE" | "EXERCISE" | "RECLAIM_EXPIRED";
+    wallet: string;
+    chainId: number;
+    contractAddress: string;
+    token: string;
+    amount: string;
+    maxPaymentOrPremium: string;
+    offerId?: string;
+    ticketId?: string;
+    durationSec?: number;
+    recipient: string;
+    expiresAt: number;
+  };
+  createdAt: number;
+  updatedAt: number;
+  approvedAt?: number;
+  approvedBy?: string;
+  txHash?: string;
+  blockNumber?: string;
+  failureReason?: string;
+}
+
+export interface ProtocolActivitySnapshot {
+  dataProvenance: DataProvenance;
+  chainId: number;
+  autonomousMainnetSigningEnabled: boolean;
+  offers: Array<{
+    offerId: string;
+    inventoryToken: string;
+    paymentToken: string;
+    availableInventory: string;
+    strikePrice: string;
+    expiresAt: number;
+    active: boolean;
+  }>;
+  tickets: Array<{
+    ticketId: string;
+    offerId: string;
+    status: "ACTIVE" | "EXERCISED" | "EXPIRED" | "RECLAIMED";
+    remainingAmount: string;
+    expiresAt: number;
+  }>;
+  latestVenueDecision: {
+    selectedVenue: "TRANCHE" | "HSKSWAP" | "NONE";
+    reason: string;
+    timestamp: number;
+  } | null;
+  proposals: ProtocolActionProposalItem[];
 }

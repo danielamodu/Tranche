@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AgentIntelligencePanel } from "@/components/AgentIntelligencePanel";
 import { AppShell } from "@/components/AppShell";
+import { ProtocolActivityPanel } from "@/components/ProtocolActivityPanel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,6 +34,7 @@ import {
   normalizeAgentApiUrl,
   type AgentDashboardSnapshot,
   type AgentIntelligenceSnapshot,
+  type ProtocolActivitySnapshot,
   type StrategyType,
 } from "@/lib/agentApi";
 import { cn } from "@/lib/utils";
@@ -91,14 +93,6 @@ function humanStrategy(type: string | undefined): string {
   if (type === "momentum") return "Trend Following";
   if (type === "volatility_aware") return "Volatility-Protected";
   return "Default Strategy";
-}
-
-function humanRegime(regime: string | undefined): string {
-  if (regime === "CALM") return "Calm Market";
-  if (regime === "TRENDING") return "Trending";
-  if (regime === "VOLATILE") return "High Volatility";
-  if (regime === "DISLOCATED") return "Price Gap";
-  return "Checking…";
 }
 
 function humanAction(action: string): { label: string; tone: "neutral" | "good" | "warn" } {
@@ -228,7 +222,7 @@ function parsePersonalRule(instruction: string): {
 }
 
 export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
-  const { address, activeProvider } = useWallet();
+  const { address, activeProvider, chainId: walletChainId } = useWallet();
   const personalKey = `tranche-personal-agent-${(address ?? "guest").toLowerCase()}`;
   const [personalAgent, setPersonalAgent] = useState<PersonalAgentState>(() => {
     try {
@@ -239,6 +233,16 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
     }
   });
   const [feedbackFading, setFeedbackFading] = useState(false);
+  const [activityCategory, setActivityCategory] = useState<string>("ALL");
+  const [protoPerms, setProtoPerms] = useState({
+    maxReservationUsd: "25",
+    dailyLimitUsd: "50",
+    maxAllocationPct: "40",
+    minAdvantagePct: "0.15",
+    trancheEnabled: true,
+    hskswapEnabled: true,
+    abstainWhenUnsuitable: true,
+  });
 
   useEffect(() => {
     try {
@@ -293,6 +297,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
 
   const [snapshot, setSnapshot] = useState<AgentDashboardSnapshot | null>(null);
   const [intelligence, setIntelligence] = useState<AgentIntelligenceSnapshot | null>(null);
+  const [protocolActivity, setProtocolActivity] = useState<ProtocolActivitySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -333,13 +338,15 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
       const seq = ++requestSeqRef.current;
       if (isManual) setRefreshing(true);
       try {
-        const [data, intel] = await Promise.all([
+        const [data, intel, protoAct] = await Promise.all([
           client.fetchSnapshot(),
           client.getIntelligence().catch(() => null),
+          client.getProtocolActivity().catch(() => null),
         ]);
         if (seq !== requestSeqRef.current) return;
         setSnapshot(data);
         setIntelligence(intel);
+        setProtocolActivity(protoAct);
         setDisconnected(false);
         setRateLimited(false);
         if (
@@ -678,6 +685,23 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
   const effectivePaused = isOperator ? Boolean(status?.paused) : personalAgent.paused;
   const effectiveStrategy = isOperator ? status?.activeStrategy : personalAgent.strategyType;
   const effectivePolicyVersion = isOperator ? policyVersion : personalAgent.version;
+  const agentChainId = status?.chainId ?? health?.chainId ?? 177;
+  const dataProvenance: "LIVE" | "FORK" | "REPLAY" | "MOCK" =
+    intelligence?.dataProvenance ??
+    (health?.dataSource === "fixture"
+      ? "MOCK"
+      : health?.dataSource === "fork"
+        ? "FORK"
+        : "LIVE");
+  const chainMismatch = Boolean(walletChainId && agentChainId && walletChainId !== agentChainId);
+  const effectiveVenueOutcome: "TRANCHE" | "HSKSWAP" | "ABSTAIN" =
+    !protoPerms.trancheEnabled && !protoPerms.hskswapEnabled
+      ? "ABSTAIN"
+      : winningVenue === "TRANCHE" && protoPerms.trancheEnabled
+        ? "TRANCHE"
+        : winningVenue === "HSKSWAP" && protoPerms.hskswapEnabled
+          ? "HSKSWAP"
+          : "ABSTAIN";
 
   const routeForView =
     view === "activity" ? "/agent/activity" : view === "policy" ? "/agent/policy" : "/agent";
@@ -761,7 +785,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
           {/* 1. Personal Hero + Direct Pause/Resume Control */}
           <section className="flex flex-col justify-between gap-4 pt-1 sm:flex-row sm:items-end">
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                 <span
                   className={cn(
                     "size-2 rounded-full",
@@ -779,15 +803,23 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                       ? "Agent stopped"
                       : effectivePaused
                         ? "Your agent is paused"
-                        : `Active · Watching ${status?.market ?? "WHSK/USDT"}`}
+                        : `Active · Watching ${status?.market ?? "WHSK/USDT"} (Chain ${agentChainId})`}
                 </span>
+                <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-semibold text-foreground">
+                  {dataProvenance} DATA
+                </span>
+                {chainMismatch && (
+                  <span className="rounded-full border border-amber-500/35 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                    Wallet: Chain {walletChainId} · Agent: Chain {agentChainId}
+                  </span>
+                )}
               </div>
               <h1 className="font-display text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
-                Tell your agent how to trade.
+                Tell your agent what to achieve.
               </h1>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                Set a rule in plain English. Changes apply only to your personal wallet session and
-                never affect other users.
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                It finds the best eligible execution opportunity across Tranche Protocol, HSKSwap,
+                or abstains when conditions don&apos;t fit your rules.
               </p>
             </div>
 
@@ -985,42 +1017,102 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               </div>
             </div>
 
-            {/* Right: Latest Market Check */}
-            <div className="flex flex-col justify-between gap-4 rounded-[20px] border border-border bg-card p-5">
+            {/* Right: Upgraded Latest Market Check (Execution Comparison) */}
+            <div className="flex flex-col justify-between gap-3 rounded-[20px] border border-border bg-card p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Latest Market Check · {fmtTime(health?.lastSuccessfulCycleAt)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Latest Market Check · {fmtTime(health?.lastSuccessfulCycleAt)}
+                    </span>
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {dataProvenance}
+                    </span>
+                  </div>
                   <h2 className="mt-0.5 text-base font-semibold text-foreground">
-                    {winningVenue === "TRANCHE"
-                      ? "Tranche is cheaper right now"
-                      : winningVenue === "HSKSWAP"
-                        ? `HSKSwap is best right now (${markets?.venueComparison ? fmtPayment6(markets.venueComparison.hskswap.acquisitionCostPayment, paymentSymbol) : "—"})`
-                        : "Waiting for a better price"}
+                    {effectiveVenueOutcome === "TRANCHE"
+                      ? "Tranche Protocol selected (Inventory-backed)"
+                      : effectiveVenueOutcome === "HSKSWAP"
+                        ? "HSKSwap selected (Immediate AMM)"
+                        : "Abstained — no eligible execution"}
                   </h2>
                 </div>
                 <button
                   type="button"
                   onClick={() => onNavigate("/agent/activity")}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
                 >
-                  Activity ({snapshot?.decisions.length ?? 0})
+                  Audit ({snapshot?.decisions.length ?? 0})
                   <ArrowRight className="size-3.5" />
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span>
-                  {humanRegime(markets?.marketRegime)} · {metrics?.totalCycles ?? 0} checks ·{" "}
-                  {metrics?.liveExecutionsCount ?? 0} trades made
+              {/* 3-Path Execution Selector Strip */}
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div
+                  className={cn(
+                    "rounded-[10px] border px-2.5 py-1.5",
+                    effectiveVenueOutcome === "TRANCHE"
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-background/60 text-muted-foreground",
+                  )}
+                >
+                  <span className="block font-semibold">Tranche</span>
+                  <span className="tabular-nums-mono text-[10px] opacity-80">
+                    {(markets?.trancheOffersCount ?? 0) > 0 && markets?.venueComparison
+                      ? fmtPayment6(markets.venueComparison.tranche.acquisitionCostPayment, paymentSymbol)
+                      : "0 offers"}
+                  </span>
+                </div>
+                <div
+                  className={cn(
+                    "rounded-[10px] border px-2.5 py-1.5",
+                    effectiveVenueOutcome === "HSKSWAP"
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-background/60 text-muted-foreground",
+                  )}
+                >
+                  <span className="block font-semibold">HSKSwap</span>
+                  <span className="tabular-nums-mono text-[10px] opacity-80">
+                    {markets?.venueComparison
+                      ? fmtPayment6(markets.venueComparison.hskswap.acquisitionCostPayment, paymentSymbol)
+                      : "—"}
+                  </span>
+                </div>
+                <div
+                  className={cn(
+                    "rounded-[10px] border px-2.5 py-1.5",
+                    effectiveVenueOutcome === "ABSTAIN"
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-background/60 text-muted-foreground",
+                  )}
+                >
+                  <span className="block font-semibold">Abstain</span>
+                  <span className="text-[10px] opacity-80">
+                    {effectiveVenueOutcome === "ABSTAIN" ? "Active" : "Standby"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Real Backend Cost & Quality Evidence Row */}
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                <span className="tabular-nums-mono">
+                  Slippage:{" "}
+                  {markets?.venueComparison?.hskswap.priceImpactBps !== undefined
+                    ? `${(markets.venueComparison.hskswap.priceImpactBps / 100).toFixed(2)}%`
+                    : "—"}{" "}
+                  · Exit:{" "}
+                  {markets?.dexSellQuote
+                    ? fmtPayment6(markets.dexSellQuote.paymentAmountOut, paymentSymbol)
+                    : "—"}{" "}
+                  · Freshness: {markets?.oracleAgeSec ?? "—"}s
                 </span>
                 <button
                   type="button"
                   onClick={() => onNavigate("/trade")}
                   className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4 cursor-pointer"
                 >
-                  Lock a price manually
+                  Trade Desk
                   <ArrowRight className="size-3" />
                 </button>
               </div>
@@ -1074,11 +1166,62 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
             </div>
           </div>
 
+          {activeTab === "decisions" && (
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { id: "ALL", label: "All Events" },
+                  { id: "VENUES", label: "Venue Comparisons" },
+                  { id: "ABSTENTIONS", label: "Abstentions & Skips" },
+                  { id: "ERRORS", label: "Errors & Blocks" },
+                ] as const
+              ).map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActivityCategory(cat.id)}
+                  className={cn(
+                    "h-7 rounded-full px-3 text-[11px] font-medium transition-colors cursor-pointer",
+                    activityCategory === cat.id
+                      ? "bg-foreground text-background"
+                      : "border border-border bg-card text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <section className="min-h-0 flex-1 overflow-y-auto rounded-[20px] border border-border bg-card">
             {activeTab === "decisions" &&
               (snapshot && snapshot.decisions.length > 0 ? (
                 <div className="divide-y divide-border/70">
-                  {snapshot.decisions.map((d) => {
+                  {snapshot.decisions
+                    .filter((d) => {
+                      if (activityCategory === "ALL") return true;
+                      if (activityCategory === "VENUES") {
+                        return (
+                          d.selectedAction.includes("HSKSWAP") ||
+                          d.selectedAction.includes("TRANCHE")
+                        );
+                      }
+                      if (activityCategory === "ABSTENTIONS") {
+                        return (
+                          d.selectedAction === "WAIT" ||
+                          d.selectedAction === "SKIPPED_DUPLICATE"
+                        );
+                      }
+                      if (activityCategory === "ERRORS") {
+                        return (
+                          d.selectedAction === "BLOCKED_RISK" ||
+                          d.selectedAction === "EXECUTION_FAILED" ||
+                          !d.riskAllowed
+                        );
+                      }
+                      return true;
+                    })
+                    .map((d) => {
                     const act = humanAction(d.selectedAction);
                     return (
                       <article
@@ -1216,7 +1359,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
               ))}
 
             {activeTab === "insights" && (
-              <div className="p-6">
+              <div className="flex flex-col gap-6 p-6">
                 {intelligence ? (
                   <AgentIntelligencePanel intelligence={intelligence} />
                 ) : (
@@ -1228,6 +1371,23 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     </p>
                   </div>
                 )}
+
+                <ProtocolActivityPanel
+                  activity={protocolActivity}
+                  onApprove={async (proposalId, bindingHash) => {
+                    await client.approveProtocolProposal(proposalId, {
+                      approvedBy: "operator",
+                      expectedBindingHash: bindingHash,
+                    });
+                    await loadSnapshot(true);
+                  }}
+                  onReject={async (proposalId) => {
+                    await client.rejectProtocolProposal(proposalId, {
+                      reason: "Rejected by user",
+                    });
+                    await loadSnapshot(true);
+                  }}
+                />
               </div>
             )}
           </section>
@@ -1471,12 +1631,78 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={disconnected || actionBusy}
+                    disabled={disconnected && isOperator ? true : actionBusy}
                     onClick={() => void handleStrategySave()}
                     className="h-9 rounded-full px-5 text-xs cursor-pointer"
                   >
                     Save Parameters
                   </Button>
+                </div>
+              </div>
+
+              {/* Dedicated Protocol Permissions Section (Autonomous / Approval Required / Restricted) */}
+              <div className="flex flex-col gap-3 border-t border-border pt-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-foreground">Protocol Permissions</span>
+                  <span className="text-[11px] text-muted-foreground">Enforced before execution</span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-3">
+                  <div className="rounded-[12px] border border-emerald-500/30 bg-emerald-500/5 p-3">
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      Autonomous
+                    </span>
+                    <p className="mt-1 text-muted-foreground">
+                      Discover offers, inspect inventory, compare venues, calculate costs, simulate.
+                    </p>
+                  </div>
+                  <div className="rounded-[12px] border border-amber-500/30 bg-amber-500/5 p-3">
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">
+                      Approval Required
+                    </span>
+                    <p className="mt-1 text-muted-foreground">
+                      Reserve inventory, exercise tickets, cancel reservations.
+                    </p>
+                  </div>
+                  <div className="rounded-[12px] border border-destructive/30 bg-destructive/5 p-3">
+                    <span className="font-semibold text-destructive">Restricted</span>
+                    <p className="mt-1 text-muted-foreground">
+                      LP deposits, LP withdrawals, admin ops — always blocked.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={protoPerms.trancheEnabled}
+                      onChange={(e) =>
+                        setProtoPerms((p) => ({ ...p, trancheEnabled: e.target.checked }))
+                      }
+                    />
+                    <span>Tranche execution</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={protoPerms.hskswapEnabled}
+                      onChange={(e) =>
+                        setProtoPerms((p) => ({ ...p, hskswapEnabled: e.target.checked }))
+                      }
+                    />
+                    <span>HSKSwap execution</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={protoPerms.abstainWhenUnsuitable}
+                      onChange={(e) =>
+                        setProtoPerms((p) => ({ ...p, abstainWhenUnsuitable: e.target.checked }))
+                      }
+                    />
+                    <span>Abstain when unsuitable</span>
+                  </label>
                 </div>
               </div>
             </section>

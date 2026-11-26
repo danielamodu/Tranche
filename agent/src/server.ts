@@ -12,9 +12,15 @@ import {
   HspPaymentError,
   type HspPaymentOrchestrator,
 } from "./hsp-payments/index.js";
+import {
+  ProtocolPermissionError,
+  type ProtocolApprovalManager,
+  type TrancheProtocolActionLayer,
+} from "./protocol-actions/index.js";
 import type { AgentDataSourceMode } from "./protocol-config.js";
 import type { AgentRuntime, AutonomousDecisionTrace, TrancheAutonomousAgent } from "./runtime.js";
 import type { SoakStatusProvider } from "./soak-evidence.js";
+import { UserProfileStore, type SignedProfileUpdatePayload } from "./user-profiles.js";
 
 export interface AgentApiServerConfig {
   agent: TrancheAutonomousAgent;
@@ -32,6 +38,10 @@ export interface AgentApiServerConfig {
   soakProvider?: SoakStatusProvider;
   /** Isolated HSP payment orchestrator (completely separate from trading runtime). */
   hspPaymentOrchestrator?: HspPaymentOrchestrator;
+  /** Protocol-native approval & permission manager (completely separate from HSP payments). */
+  protocolApprovalManager?: ProtocolApprovalManager;
+  /** Typed read/simulation protocol action layer bound to real Tranche contracts. */
+  protocolActionLayer?: TrancheProtocolActionLayer;
 }
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -137,6 +147,7 @@ export class AgentApiServer {
   private readonly llmProvider: LlmProvider;
   private readonly maxRequestsPerMinute: number;
   private readonly requestTimestampsByIp = new Map<string, number[]>();
+  private readonly userProfiles: UserProfileStore;
 
   constructor(config: AgentApiServerConfig) {
     if (!config.apiToken || config.apiToken.length < 8) {
@@ -148,6 +159,7 @@ export class AgentApiServer {
     this.allowedOrigins = new Set(config.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
     this.llmProvider = config.llmProvider ?? new LocalRuleBasedLlmProvider();
     this.maxRequestsPerMinute = config.maxRequestsPerMinute ?? 120;
+    this.userProfiles = new UserProfileStore();
   }
 
   private checkRateLimit(req: IncomingMessage): boolean {
@@ -276,6 +288,33 @@ export class AgentApiServer {
           killSwitch: limits.killSwitch,
           stateCorrupted: store.isStateCorrupted(),
         });
+      }
+
+      // Per-wallet user agent profile endpoints (authenticated via EIP-191 wallet signature)
+      if (pathname.startsWith("/profiles/")) {
+        const walletAddress = decodeURIComponent(pathname.slice("/profiles/".length)).trim();
+        if (method === "GET") {
+          return sendJson(res, 200, { profile: this.userProfiles.get(walletAddress) });
+        }
+        if (method === "POST") {
+          const body = await readJsonBody(req);
+          const result = await this.userProfiles.verifyAndSave(walletAddress, {
+            paused: Boolean(body.paused),
+            strategyType: String(body.strategyType) as SignedProfileUpdatePayload["strategyType"],
+            takeProfitBps: Number(body.takeProfitBps),
+            stopLossBps: Number(body.stopLossBps),
+            maxSlippageBps: Number(body.maxSlippageBps),
+            timestamp: Number(body.timestamp),
+            signature: String(body.signature) as SignedProfileUpdatePayload["signature"],
+          });
+          if (!result.ok) {
+            return sendJson(res, result.status, {
+              error: result.code,
+              message: result.message,
+            });
+          }
+          return sendJson(res, 200, { ok: true, profile: result.profile });
+        }
       }
 
       if (method === "GET" && pathname === "/agent/soak") {
@@ -868,6 +907,162 @@ export class AgentApiServer {
           ok: true,
           dataProvenance: this.cfg.agent.getEvaluationEngine().getProvenance(),
           recommendation,
+        });
+      }
+
+      // Authenticated Protocol-Native Activity & Approval API (strictly separated from HSP payments)
+      if (pathname === "/agent/protocol/activity" || pathname.startsWith("/agent/protocol/")) {
+        if (!this.isAuthorized(req)) {
+          return sendJson(res, 401, {
+            error: "UNAUTHORIZED",
+            message: "Valid Authorization: Bearer <token> or X-Agent-Token header required",
+          });
+        }
+        const approvals = this.cfg.protocolApprovalManager;
+        if (!approvals) {
+          return sendJson(res, 503, {
+            error: "PROTOCOL_ACTIONS_UNAVAILABLE",
+            message: "Protocol approval manager is not configured on this server",
+          });
+        }
+
+        try {
+          if (method === "GET" && pathname === "/agent/protocol/activity") {
+            const evalEngine = this.cfg.agent.getEvaluationEngine();
+            const traces = this.cfg.agent.getTraces();
+            const latest = traces.length > 0 ? traces[traces.length - 1] : null;
+            const offers = this.cfg.protocolActionLayer
+              ? await this.cfg.protocolActionLayer.discoverActiveOffers().catch(() => [])
+              : [];
+            const tickets = this.cfg.protocolActionLayer
+              ? await this.cfg.protocolActionLayer.inspectTickets().catch(() => [])
+              : [];
+            return sendJson(res, 200, {
+              dataProvenance: evalEngine.getProvenance(),
+              executionMode: this.cfg.agent.getExecutionMode(),
+              policy: approvals.getPolicy(),
+              offers,
+              tickets,
+              proposals: approvals.listProposals(),
+              latestVenueEvidence: latest?.venueSelection.evidence ?? null,
+              latestVenueDecision: latest
+                ? {
+                    selectedVenue: latest.venueSelection.selectedVenue,
+                    rationale: latest.venueSelection.rationale,
+                    timestamp: latest.timestamp,
+                  }
+                : null,
+            });
+          }
+
+          if (method === "POST" && pathname === "/agent/protocol/propose") {
+            const body = await readJsonBody(req);
+            const limits = this.cfg.agent.getRiskLimits();
+            const proposal = approvals.createProposal({
+              idempotencyKey: String(body.idempotencyKey ?? ""),
+              dataProvenance: this.cfg.agent.getEvaluationEngine().getProvenance(),
+              killSwitchActive: limits.killSwitch,
+              rationale: String(body.rationale ?? "Protocol-native action proposal"),
+              venueEvidenceSummary:
+                typeof body.venueEvidenceSummary === "string"
+                  ? body.venueEvidenceSummary
+                  : undefined,
+              parameters: {
+                action: String(body.action ?? "") as never,
+                wallet: String(body.wallet ?? "") as `0x${string}`,
+                chainId: Number(body.chainId ?? this.cfg.chainId ?? 0),
+                contractAddress: String(body.contractAddress ?? "") as `0x${string}`,
+                token: String(body.token ?? "") as `0x${string}`,
+                amount: BigInt(String(body.amount ?? "0")),
+                maxPaymentOrPremium: BigInt(String(body.maxPaymentOrPremium ?? "0")),
+                offerId: body.offerId !== undefined ? BigInt(String(body.offerId)) : undefined,
+                ticketId: body.ticketId !== undefined ? BigInt(String(body.ticketId)) : undefined,
+                durationSec:
+                  body.durationSec !== undefined ? Number(body.durationSec) : undefined,
+                recipient: String(body.recipient ?? "") as `0x${string}`,
+              },
+            });
+            return sendJson(res, 201, { ok: true, proposal });
+          }
+
+          const propAction =
+            /^\/agent\/protocol\/proposals\/([^/]+)\/(approve|reject|submit|confirm)$/.exec(
+              pathname,
+            );
+          if (method === "POST" && propAction) {
+            const proposalId = decodeURIComponent(propAction[1]!);
+            const action = propAction[2]!;
+            const body = await readJsonBody(req);
+            const limits = this.cfg.agent.getRiskLimits();
+
+            if (action === "approve") {
+              const proposal = approvals.approveProposal({
+                proposalId,
+                approvedBy: typeof body.approvedBy === "string" ? body.approvedBy : "operator",
+                expectedBindingHash:
+                  typeof body.expectedBindingHash === "string"
+                    ? body.expectedBindingHash
+                    : undefined,
+                killSwitchActive: limits.killSwitch,
+              });
+              return sendJson(res, 200, { ok: true, proposal });
+            }
+            if (action === "reject") {
+              const proposal = approvals.rejectProposal(
+                proposalId,
+                typeof body.reason === "string" ? body.reason : "Rejected by user",
+              );
+              return sendJson(res, 200, { ok: true, proposal });
+            }
+            if (action === "submit") {
+              const proposal = approvals.recordSubmission({
+                proposalId,
+                txHash: String(body.txHash ?? "") as `0x${string}`,
+                killSwitchActive: limits.killSwitch,
+                readOnlyMode: this.cfg.agent.getExecutionMode() === "read_only",
+                externalPendingTxCount: this.cfg.agent.getPositionStore().getPendingTxs().length,
+              });
+              return sendJson(res, 200, { ok: true, proposal });
+            }
+            if (action === "confirm") {
+              const proposal = approvals.recordConfirmation({
+                proposalId,
+                confirmed: body.confirmed === true,
+                blockNumber:
+                  body.blockNumber !== undefined ? BigInt(String(body.blockNumber)) : undefined,
+                resultingTicketId:
+                  body.resultingTicketId !== undefined
+                    ? BigInt(String(body.resultingTicketId))
+                    : undefined,
+                detail: typeof body.detail === "string" ? body.detail : "On-chain receipt verified",
+              });
+              return sendJson(res, 200, { ok: true, proposal });
+            }
+          }
+        } catch (pErr) {
+          if (pErr instanceof ProtocolPermissionError) {
+            const codeMap: Record<string, number> = {
+              PROPOSAL_NOT_FOUND: 404,
+              PERMISSION_DENIED_OUT_OF_SCOPE: 403,
+              KILL_SWITCH_ACTIVE: 423,
+              READ_ONLY_MODE_BLOCKED: 403,
+              REPLAY_OR_DUPLICATE_BLOCKED: 409,
+              PENDING_TX_BLOCKING: 409,
+              IDEMPOTENCY_CONFLICT: 409,
+              APPROVAL_PARAMETER_MISMATCH: 400,
+              APPROVAL_EXPIRED: 410,
+            };
+            return sendJson(res, codeMap[pErr.code] ?? 400, {
+              error: pErr.code,
+              message: pErr.message,
+            });
+          }
+          throw pErr;
+        }
+
+        return sendJson(res, 404, {
+          error: "NOT_FOUND",
+          message: `Unknown protocol route ${method} ${pathname}`,
         });
       }
 

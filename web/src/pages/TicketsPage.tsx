@@ -559,6 +559,28 @@ export function TicketsPage({ onNavigate }: TicketsPageProps) {
                     />
                   </div>
 
+                  {/* Agent Ticket Evaluation Strip (requires explicit user approval) */}
+                  {(() => {
+                    const secsLeft = Math.max(0, t.expiresAt - nowSec);
+                    const expiringSoon = !expired && secsLeft <= 900;
+                    const recText = expired
+                      ? "Agent: Expired — reclaim to release lock (approval required)."
+                      : expiringSoon
+                        ? "Agent: Expiring soon — review Buy Now before timer hits zero."
+                        : "Agent: Active — monitor spot price; exercise anytime before expiry.";
+                    return (
+                      <div
+                        className="mb-3 rounded-[10px] px-3 py-2 text-[11px] leading-snug"
+                        style={{
+                          backgroundColor: isFixed ? "rgba(5,5,5,0.05)" : "rgba(248,247,238,0.08)",
+                          color: fg,
+                        }}
+                      >
+                        {recText}
+                      </div>
+                    );
+                  })()}
+
                   {/* Action Buttons */}
                   <div className="flex items-center gap-2">
                     {expired ? (

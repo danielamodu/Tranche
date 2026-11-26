@@ -18,6 +18,10 @@ import {
   MockHspMcpProvider,
   MockHspWalletAuthorizer,
 } from "./hsp-payments/index.js";
+import {
+  ProtocolApprovalManager,
+  TrancheProtocolActionLayer,
+} from "./protocol-actions/index.js";
 import type { PolicyValidationBounds } from "./llm.js";
 import { StructuredLogger } from "./logger.js";
 import { MarketIntelligence, type OracleReader } from "./market.js";
@@ -501,6 +505,24 @@ async function main() {
           walletAuthorizer: new MockHspWalletAuthorizer(),
         });
 
+  const protocolApprovalsFile = path.resolve(
+    process.env.PROTOCOL_APPROVALS_FILE ??
+      path.join(path.dirname(stateFile), "protocol-approvals.json"),
+  );
+  const protocolApprovalManager = new ProtocolApprovalManager({
+    filePath: protocolApprovalsFile,
+    policy: {
+      maxSingleActionPayment: riskLimits.maxTotalExposurePayment,
+      maxDailyApprovedPayment: riskLimits.maxTotalExposurePayment * 2n,
+      defaultProposalTtlSec: 300,
+      autonomousMainnetSigningEnabled: false,
+      delegatedSigningStatus: "DEFERRED_AWAITING_SCOPED_SESSION_KEY_AUDIT",
+    },
+  });
+  const protocolActionLayer = new TrancheProtocolActionLayer({
+    client: trancheAgent.client,
+  });
+
   const server = new AgentApiServer({
     agent,
     runtime,
@@ -514,6 +536,8 @@ async function main() {
     chainId,
     soakProvider,
     hspPaymentOrchestrator,
+    protocolApprovalManager,
+    protocolActionLayer,
   });
 
   const addr = await server.start();
