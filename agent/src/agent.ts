@@ -55,6 +55,7 @@ export class TrancheAgentError extends Error {
 
 export class TrancheExecutionAgent {
   public readonly client: TrancheClient;
+  public readonly readOnly: boolean;
 
   private readonly trace: AgentDecisionTrace = {
     intent: null,
@@ -68,8 +69,23 @@ export class TrancheExecutionAgent {
     failures: [],
   };
 
-  constructor(client: TrancheClient) {
+  constructor(client: TrancheClient, options?: { readOnly?: boolean }) {
     this.client = client;
+    this.readOnly = options?.readOnly ?? false;
+  }
+
+  private assertWritable(action: DecodedAgentFailure["action"], timestamp: number, targetId?: bigint): void {
+    if (!this.readOnly) return;
+    const message = `READ_ONLY_MODE_BLOCKED: ${action} is forbidden in read_only mode (no transaction submission allowed)`;
+    this.recordFailure({
+      action,
+      timestamp,
+      targetId,
+      errorName: "ReadOnlyModeBlocked",
+      contract: "TrancheExecutionAgent",
+      message,
+    });
+    throw new TrancheAgentError("ReadOnlyModeBlocked", "TrancheExecutionAgent", message);
   }
 
   public getDecisionTrace(): AgentDecisionTrace {
@@ -304,6 +320,7 @@ export class TrancheExecutionAgent {
     recipient: Address,
     currentTimestamp?: number,
   ): Promise<ReserveBestOfferResult> {
+    this.assertWritable("reserveBestOffer", currentTimestamp ?? Math.floor(Date.now() / 1000));
     const { timestamp, selected, evaluations } = await this.evaluateOffers(intent, currentTimestamp);
 
     if (!selected) {
@@ -380,6 +397,7 @@ export class TrancheExecutionAgent {
     receiver: Address,
     currentTimestamp?: number,
   ): Promise<ExerciseTicketResult> {
+    this.assertWritable("exerciseTicket", currentTimestamp ?? Math.floor(Date.now() / 1000), ticketId);
     const timestamp = await this.resolveTimestamp(currentTimestamp);
     const ticket = await this.client.getTicket(ticketId);
     const status = Number(ticket.status) as TicketStatus;
@@ -476,6 +494,7 @@ export class TrancheExecutionAgent {
     ticketId: bigint,
     currentTimestamp?: number,
   ): Promise<ReclaimTicketResult> {
+    this.assertWritable("reclaimIfExpired", currentTimestamp ?? Math.floor(Date.now() / 1000), ticketId);
     const timestamp = await this.resolveTimestamp(currentTimestamp);
     const ticket = await this.client.getTicket(ticketId);
     const status = Number(ticket.status) as TicketStatus;

@@ -34,6 +34,7 @@ export type MarketRegime = "CALM" | "TRENDING" | "VOLATILE" | "DISLOCATED";
 
 export interface MarketSnapshot {
   timestamp: number;
+  blockNumber?: bigint;
   inventoryToken: Address;
   paymentToken: Address;
   targetAmount: bigint;
@@ -49,6 +50,7 @@ export interface MarketSnapshot {
   dislocationVsTwapBps: number;
   marketRegime: MarketRegime;
   anomalies: string[];
+  dataSourceHealthy?: boolean;
 }
 
 export interface MarketIntelligenceConfig {
@@ -60,6 +62,8 @@ export interface MarketIntelligenceConfig {
   maxHistorySize?: number;
   /** Optional snapshot cache TTL in ms to prevent redundant RPC bursts (default 0 = disabled) */
   cacheTtlMs?: number;
+  /** Optional max wall-clock age in seconds for live pool timestamps (disabled if omitted) */
+  maxSnapshotAgeSec?: number;
   minPoolLiquidity: bigint;
   maxOracleAgeSec: number;
   maxOracleDeviationBps: number;
@@ -86,6 +90,8 @@ export class MarketIntelligence {
   private readonly history: MarketObservation[] = [];
   private readonly maxHistory: number;
   private cachedSnapshot: { snapshot: MarketSnapshot; cachedAtMs: number } | null = null;
+  private lastBlockNumber: bigint | null = null;
+  private lastSnapshotTimestamp: number | null = null;
 
   constructor(config: MarketIntelligenceConfig) {
     this.cfg = config;
@@ -110,7 +116,13 @@ export class MarketIntelligence {
       this.cachedSnapshot &&
       Date.now() - this.cachedSnapshot.cachedAtMs < ttl
     ) {
-      return this.cachedSnapshot.snapshot;
+      const cachedAgeSec = Math.max(0, Math.floor(Date.now() / 1000) - this.cachedSnapshot.snapshot.timestamp);
+      const maxAge = this.cfg.maxSnapshotAgeSec;
+      if (maxAge === undefined || cachedAgeSec <= maxAge) {
+        return this.cachedSnapshot.snapshot;
+      }
+      // Never return stale cached data as a fresh observation
+      this.cachedSnapshot = null;
     }
 
     const anomalies: string[] = [];
@@ -121,6 +133,26 @@ export class MarketIntelligence {
       intent.paymentToken,
     );
     const timestamp = nowSecOverride ?? pool.timestamp;
+    const blockNumber = pool.blockNumber;
+
+    if (pool.spotPriceX36 <= 0n) {
+      anomalies.push("INVALID_SPOT_PRICE:spotPriceX36<=0");
+    }
+
+    if (blockNumber !== undefined && this.lastBlockNumber !== null && blockNumber < this.lastBlockNumber) {
+      anomalies.push(`BLOCK_NUMBER_REGRESSION:${blockNumber}<${this.lastBlockNumber}`);
+    }
+
+    if (this.lastSnapshotTimestamp !== null && timestamp < this.lastSnapshotTimestamp) {
+      anomalies.push(`TIMESTAMP_REGRESSION:${timestamp}<${this.lastSnapshotTimestamp}`);
+    }
+
+    if (nowSecOverride === undefined && this.cfg.maxSnapshotAgeSec !== undefined) {
+      const wallAgeSec = Math.floor(Date.now() / 1000) - pool.timestamp;
+      if (wallAgeSec > this.cfg.maxSnapshotAgeSec) {
+        anomalies.push(`STALE_POOL_TIMESTAMP:${wallAgeSec}s>${this.cfg.maxSnapshotAgeSec}s`);
+      }
+    }
 
     if (pool.liquidity < this.cfg.minPoolLiquidity) {
       anomalies.push(`LOW_POOL_LIQUIDITY:${pool.liquidity}<${this.cfg.minPoolLiquidity}`);
@@ -203,17 +235,27 @@ export class MarketIntelligence {
     // Discover & evaluate Tranche offers using existing TrancheExecutionAgent
     const trancheOffers = await this.cfg.trancheAgent.evaluateOffers(intent, timestamp);
 
-    // Record observation & compute rolling metrics
-    this.pushObservation({
-      timestamp,
-      spotPriceX36: pool.spotPriceX36,
-      twapPriceX36: pool.twapPriceX36,
-      poolLiquidity: pool.liquidity,
-      dexEntryCostPayment: dexBuyQuote?.paymentAmountIn ?? null,
-      dexExitProceedsPayment: dexSellQuote?.paymentAmountOut ?? null,
-      dexEntryImpactBps: dexBuyQuote?.priceImpactBps ?? null,
-      dexExitImpactBps: dexSellQuote?.priceImpactBps ?? null,
-    });
+    // Record observation & compute rolling metrics only when spot price is valid & monotonic
+    const hasConsistencyAnomaly = anomalies.some(
+      (a) =>
+        a.startsWith("INVALID_SPOT_PRICE") ||
+        a.startsWith("BLOCK_NUMBER_REGRESSION") ||
+        a.startsWith("TIMESTAMP_REGRESSION"),
+    );
+    if (!hasConsistencyAnomaly) {
+      if (blockNumber !== undefined) this.lastBlockNumber = blockNumber;
+      this.lastSnapshotTimestamp = timestamp;
+      this.pushObservation({
+        timestamp,
+        spotPriceX36: pool.spotPriceX36,
+        twapPriceX36: pool.twapPriceX36,
+        poolLiquidity: pool.liquidity,
+        dexEntryCostPayment: dexBuyQuote?.paymentAmountIn ?? null,
+        dexExitProceedsPayment: dexSellQuote?.paymentAmountOut ?? null,
+        dexEntryImpactBps: dexBuyQuote?.priceImpactBps ?? null,
+        dexExitImpactBps: dexSellQuote?.priceImpactBps ?? null,
+      });
+    }
 
     const realizedVolatilityBps = this.computeRealizedVolatilityBps();
     const momentumReturnBps = this.computeMomentumReturnBps();
@@ -224,8 +266,10 @@ export class MarketIntelligence {
       dislocationVsTwapBps,
     });
 
+    const dataSourceHealthy = anomalies.length === 0;
     const snapshot: MarketSnapshot = {
       timestamp,
+      blockNumber,
       inventoryToken: intent.inventoryToken,
       paymentToken: intent.paymentToken,
       targetAmount: intent.targetAmount,
@@ -241,8 +285,9 @@ export class MarketIntelligence {
       dislocationVsTwapBps,
       marketRegime,
       anomalies,
+      dataSourceHealthy,
     };
-    this.cachedSnapshot = { snapshot, cachedAtMs: Date.now() };
+    this.cachedSnapshot = dataSourceHealthy && ttl > 0 ? { snapshot, cachedAtMs: Date.now() } : null;
     return snapshot;
   }
 

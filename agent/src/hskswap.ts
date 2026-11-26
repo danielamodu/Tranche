@@ -57,6 +57,7 @@ export interface DexPoolState {
   spotPriceX36: bigint; // paymentToken raw units per inventoryToken raw unit * 1e36
   twapPriceX36: bigint | null;
   timestamp: number;
+  blockNumber?: bigint;
 }
 
 export interface DexBuyQuote {
@@ -214,6 +215,8 @@ export interface HskSwapVenueConfig {
   quoterV2: Address;
   swapRouter02: Address;
   multicall3?: Address;
+  /** When true, strips signer references and fails closed on any swap/approval attempt */
+  readOnly?: boolean;
 }
 
 /**
@@ -222,6 +225,7 @@ export interface HskSwapVenueConfig {
  */
 export class HskSwapVenue implements DexVenueAdapter {
   public readonly name = "HSKSwapV3";
+  public readonly readOnly: boolean;
   private readonly publicClient: PublicClient;
   private readonly walletClient?: WalletClient;
   private readonly account?: Account;
@@ -230,9 +234,10 @@ export class HskSwapVenue implements DexVenueAdapter {
   private readonly multicall3: Address;
 
   constructor(config: HskSwapVenueConfig) {
+    this.readOnly = config.readOnly ?? false;
     this.publicClient = config.publicClient;
-    this.walletClient = config.walletClient;
-    this.account = config.account;
+    this.walletClient = this.readOnly ? undefined : config.walletClient;
+    this.account = this.readOnly ? undefined : config.account;
     this.quoterV2 = config.quoterV2;
     this.swapRouter02 = config.swapRouter02;
     this.multicall3 = config.multicall3 ?? CANONICAL_CHAIN_177_HSKSWAP.multicall3;
@@ -327,6 +332,7 @@ export class HskSwapVenue implements DexVenueAdapter {
       spotPriceX36,
       twapPriceX36,
       timestamp: Number(block.timestamp),
+      blockNumber: block.number,
     };
   }
 
@@ -415,6 +421,11 @@ export class HskSwapVenue implements DexVenueAdapter {
     expectedChainId?: number;
     quotedAmountOut?: bigint;
   }): Promise<DexSwapExecution> {
+    if (this.readOnly) {
+      throw new Error(
+        "READ_ONLY_MODE_BLOCKED: HskSwapVenue cannot approve tokens or broadcast swaps in read_only mode",
+      );
+    }
     if (!this.walletClient || !this.account) {
       throw new Error("HskSwapVenue requires walletClient and account to execute swaps");
     }

@@ -20,10 +20,12 @@ import {
   type VenueSelectionResult,
 } from "./venue.js";
 
-export type AgentExecutionMode = "dry_run" | "live";
+export type AgentExecutionMode = "read_only" | "dry_run" | "live";
 
 export type AutonomousAction =
   | "WAIT"
+  | "READ_ONLY_RESERVE_TRANCHE"
+  | "READ_ONLY_SWAP_HSKSWAP"
   | "DRY_RUN_RESERVE_TRANCHE"
   | "DRY_RUN_SWAP_HSKSWAP"
   | "RESERVE_TRANCHE"
@@ -39,6 +41,10 @@ export interface AutonomousDecisionTrace {
   cycleId: number;
   decisionKey: string;
   timestamp: number;
+  executionMode: AgentExecutionMode;
+  policyVersion: number;
+  executionBlockedByReadOnly: boolean;
+  rpcLatencyMs?: number;
   strategyConfig: StrategyConfig;
   riskLimits: RiskLimits;
   snapshot: MarketSnapshot;
@@ -207,10 +213,13 @@ export class TrancheAutonomousAgent {
 
   async runCycle(nowSecOverride?: number): Promise<AutonomousDecisionTrace> {
     const cycleId = ++this.cycleCounter;
-    if (this.cfg.reconciler && this.cfg.positions.getPendingTxs().length > 0) {
+    const mode = this.getExecutionMode();
+    if (mode !== "read_only" && this.cfg.reconciler && this.cfg.positions.getPendingTxs().length > 0) {
       await this.autoReconcilePendingTxs();
     }
+    const snapshotStartMs = Date.now();
     const snapshot = await this.cfg.market.collectSnapshot(this.cfg.intent, nowSecOverride);
+    const rpcLatencyMs = Date.now() - snapshotStartMs;
     const nowSec = snapshot.timestamp;
     const txHashes: Hex[] = [];
     const ticketActions: AutonomousDecisionTrace["ticketActions"] = [];
@@ -248,6 +257,7 @@ export class TrancheAutonomousAgent {
     let selectedAction: AutonomousAction = "WAIT";
     let rationale = signal.reason;
     let errorMsg: string | undefined;
+    let executionBlockedByReadOnly = false;
 
     if (this.cfg.positions.isStateCorrupted()) {
       selectedAction = "BLOCKED_RISK";
@@ -268,7 +278,12 @@ export class TrancheAutonomousAgent {
         selectedAction = "SKIPPED_DUPLICATE";
         rationale = `Duplicate decision prevented for key ${decisionKey}`;
       } else if (venueSelection.selectedVenue === "TRANCHE") {
-        if (this.getExecutionMode() === "dry_run") {
+        if (mode === "read_only") {
+          executionBlockedByReadOnly = true;
+          this.cfg.positions.markDecisionExecuted(decisionKey);
+          selectedAction = "READ_ONLY_RESERVE_TRANCHE";
+          rationale = `[READ-ONLY MODE — EXECUTION BLOCKED, NO TX BROADCAST] ${venueSelection.rationale}`;
+        } else if (mode === "dry_run") {
           selectedAction = "DRY_RUN_RESERVE_TRANCHE";
           rationale = `[DRY-RUN ONLY — NO TX BROADCAST] ${venueSelection.rationale}`;
         } else {
@@ -317,7 +332,12 @@ export class TrancheAutonomousAgent {
         }
         }
       } else if (venueSelection.selectedVenue === "HSKSWAP" && snapshot.dexBuyQuote) {
-        if (this.getExecutionMode() === "dry_run") {
+        if (mode === "read_only") {
+          executionBlockedByReadOnly = true;
+          this.cfg.positions.markDecisionExecuted(decisionKey);
+          selectedAction = "READ_ONLY_SWAP_HSKSWAP";
+          rationale = `[READ-ONLY MODE — EXECUTION BLOCKED, NO TX BROADCAST] ${venueSelection.rationale}`;
+        } else if (mode === "dry_run") {
           selectedAction = "DRY_RUN_SWAP_HSKSWAP";
           rationale = `[DRY-RUN ONLY — NO TX BROADCAST] ${venueSelection.rationale}`;
         } else {
@@ -379,10 +399,15 @@ export class TrancheAutonomousAgent {
       rationale = first.decision.reason;
     }
 
+    const policyVersion = this.cfg.positions.getPersistedRuntimeConfig()?.policyVersion ?? 1;
     const trace: AutonomousDecisionTrace = {
       cycleId,
       decisionKey,
       timestamp: nowSec,
+      executionMode: mode,
+      policyVersion,
+      executionBlockedByReadOnly,
+      rpcLatencyMs,
       strategyConfig: { ...this.cfg.strategyConfig },
       riskLimits: { ...this.cfg.riskLimits },
       snapshot,
@@ -460,6 +485,15 @@ export class TrancheAutonomousAgent {
       const minOut =
         (sellQuote.paymentAmountOut * (BPS_DENOMINATOR - BigInt(slipBps))) / BPS_DENOMINATOR;
 
+      if (this.getExecutionMode() === "read_only" || this.getExecutionMode() === "dry_run") {
+        positionActions.push({
+          positionId: pos.positionId,
+          decision: exitDecision,
+          error: `READ_ONLY_MODE_BLOCKED: position exit suppressed in ${this.getExecutionMode()} mode`,
+        });
+        return;
+      }
+
       const swap = await this.cfg.dexVenue.executeSwapExactInput({
         tokenIn: pos.inventoryToken,
         tokenOut: pos.paymentToken,
@@ -517,6 +551,14 @@ export class TrancheAutonomousAgent {
           reason: `Ticket #${ticketId} expired; calling reclaimIfExpired`,
           remainingSeconds,
         };
+        if (this.getExecutionMode() === "read_only" || this.getExecutionMode() === "dry_run") {
+          ticketActions.push({
+            ticketId,
+            decision,
+            error: `READ_ONLY_MODE_BLOCKED: ticket reclaim suppressed in ${this.getExecutionMode()} mode`,
+          });
+          return;
+        }
         const rec = await this.cfg.trancheAgent.reclaimIfExpired(ticketId);
         if (rec.reclaimed && rec.tx) {
           this.cfg.positions.markTicketReclaimed(ticketId, rec.tx.hash);
@@ -557,6 +599,15 @@ export class TrancheAutonomousAgent {
             ticketId,
             decision,
             error: `Exercise risk blocked: ${exRisk.failedChecks.map((c) => c.name).join(", ")}`,
+          });
+          return;
+        }
+
+        if (this.getExecutionMode() === "read_only" || this.getExecutionMode() === "dry_run") {
+          ticketActions.push({
+            ticketId,
+            decision,
+            error: `READ_ONLY_MODE_BLOCKED: ticket exercise suppressed in ${this.getExecutionMode()} mode`,
           });
           return;
         }
@@ -638,9 +689,17 @@ export interface AgentRuntimeConfig {
   transientRpcRetries?: number;
   /** Initial retry backoff in ms (default 100ms, doubles per attempt) */
   retryBackoffMs?: number;
+  /** Maximum backoff cap in ms for bounded exponential backoff (default 5000ms) */
+  maxRetryBackoffMs?: number;
+  /** When true, do not permanently pause on consecutive RPC errors so observation recovers automatically */
+  autoRecoverFromRpcErrors?: boolean;
   logger?: StructuredLogger;
   onTrace?: (trace: AutonomousDecisionTrace) => void;
   onError?: (err: unknown, consecutiveErrors: number) => void;
+  onRetry?: (attempt: number, backoffMs: number, err: unknown) => void;
+  onRecovery?: (previousConsecutiveErrors: number) => void;
+  onHealthTransition?: (from: RuntimeRecoveryState, to: RuntimeRecoveryState, reason: string) => void;
+  onMissedCycle?: (reason: string) => void;
 }
 
 /**
@@ -656,13 +715,30 @@ export class AgentRuntime {
   private consecutiveErrors = 0;
   private lastSuccessfulCycleAt: number | null = null;
   private rpcHealthy = true;
+  private lastReportedRecoveryState: RuntimeRecoveryState = "HEALTHY";
 
   constructor(config: AgentRuntimeConfig) {
     this.cfg = config;
+    this.lastReportedRecoveryState = this.getHealthInfo().recoveryState;
   }
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  private emitHealthTransitionIfChanged(reason: string): void {
+    const next = this.getHealthInfo().recoveryState;
+    if (next !== this.lastReportedRecoveryState) {
+      const prev = this.lastReportedRecoveryState;
+      this.lastReportedRecoveryState = next;
+      this.cfg.logger?.info("runtime.health_transition", {
+        from: prev,
+        to: next,
+        reason,
+        mode: this.cfg.agent.getExecutionMode(),
+      });
+      this.cfg.onHealthTransition?.(prev, next, reason);
+    }
   }
 
   getHealthInfo(): RuntimeHealthInfo {
@@ -672,7 +748,10 @@ export class AgentRuntime {
     if (store.isStateCorrupted()) recoveryState = "CORRUPTED_STATE";
     else if (limits.killSwitch) recoveryState = "KILLED";
     else if (store.getPendingTxs().length > 0) recoveryState = "PENDING_TX_BLOCKED";
-    else if (this.consecutiveErrors >= (this.cfg.maxConsecutiveErrors ?? 5)) {
+    else if (
+      this.consecutiveErrors >= (this.cfg.maxConsecutiveErrors ?? 5) &&
+      !(this.cfg.autoRecoverFromRpcErrors ?? this.cfg.agent.getExecutionMode() === "read_only")
+    ) {
       recoveryState = "PAUSED_CIRCUIT_BREAKER";
     } else if (!this.rpcHealthy || this.consecutiveErrors > 0) {
       recoveryState = "RECOVERING";
@@ -691,9 +770,20 @@ export class AgentRuntime {
     if (this.running) return;
     this.cfg.agent.getPositionStore().acquireLock();
     this.running = true;
-    this.cfg.logger?.info("runtime.started", { pollIntervalMs: this.cfg.pollIntervalMs });
+    this.cfg.logger?.info("runtime.started", {
+      pollIntervalMs: this.cfg.pollIntervalMs,
+      mode: this.cfg.agent.getExecutionMode(),
+    });
     void this.tickOnce();
     this.timer = setInterval(() => {
+      if (this.inFlight) {
+        this.cfg.logger?.warn("runtime.cycle_missed", {
+          reason: "previous_cycle_still_in_flight",
+          mode: this.cfg.agent.getExecutionMode(),
+        });
+        this.cfg.onMissedCycle?.("previous_cycle_still_in_flight");
+        return;
+      }
       void this.tickOnce();
     }, this.cfg.pollIntervalMs);
   }
@@ -708,7 +798,7 @@ export class AgentRuntime {
       await new Promise((r) => setTimeout(r, 15));
     }
     this.cfg.agent.getPositionStore().releaseLock();
-    this.cfg.logger?.info("runtime.stopped");
+    this.cfg.logger?.info("runtime.stopped", { mode: this.cfg.agent.getExecutionMode() });
   }
 
   async tickOnce(nowSecOverride?: number): Promise<AutonomousDecisionTrace | null> {
@@ -716,21 +806,36 @@ export class AgentRuntime {
     this.inFlight = true;
     const maxRetries = Math.max(0, this.cfg.transientRpcRetries ?? 2);
     const baseBackoff = Math.max(10, this.cfg.retryBackoffMs ?? 100);
+    const maxBackoff = Math.max(baseBackoff, this.cfg.maxRetryBackoffMs ?? 5000);
+    const autoRecover =
+      this.cfg.autoRecoverFromRpcErrors ?? this.cfg.agent.getExecutionMode() === "read_only";
     try {
       let lastErr: unknown;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           const trace = await this.cfg.agent.runCycle(nowSecOverride);
+          const prevErrors = this.consecutiveErrors;
+          const wasUnhealthy = !this.rpcHealthy || prevErrors > 0;
           this.consecutiveErrors = 0;
           this.rpcHealthy = true;
           this.lastSuccessfulCycleAt = trace.timestamp;
+          if (wasUnhealthy) {
+            this.cfg.logger?.info("runtime.rpc_recovered", {
+              previousConsecutiveErrors: prevErrors,
+              mode: trace.executionMode,
+            });
+            this.cfg.onRecovery?.(prevErrors);
+          }
+          this.emitHealthTransitionIfChanged("cycle_succeeded");
           this.cfg.logger?.info(
             "runtime.cycle_completed",
             {
               cycleId: trace.cycleId,
+              mode: trace.executionMode,
               action: trace.selectedAction,
               venue: trace.venueSelection.selectedVenue,
               txCount: trace.txHashes.length,
+              rpcLatencyMs: trace.rpcLatencyMs,
             },
             trace.decisionKey,
           );
@@ -739,7 +844,16 @@ export class AgentRuntime {
         } catch (err) {
           lastErr = err;
           if (attempt < maxRetries && isUncertainRpcError(err)) {
-            await new Promise((r) => setTimeout(r, baseBackoff * 2 ** attempt));
+            const backoffMs = Math.min(maxBackoff, baseBackoff * 2 ** attempt);
+            this.cfg.logger?.warn("runtime.rpc_retry", {
+              attempt: attempt + 1,
+              maxRetries,
+              backoffMs,
+              mode: this.cfg.agent.getExecutionMode(),
+              error: err instanceof Error ? err.message : String(err),
+            });
+            this.cfg.onRetry?.(attempt + 1, backoffMs, err);
+            await new Promise((r) => setTimeout(r, backoffMs));
             continue;
           }
           break;
@@ -753,13 +867,15 @@ export class AgentRuntime {
       this.cfg.logger?.warn("runtime.cycle_failed", {
         consecutiveErrors: this.consecutiveErrors,
         transient: isUncertainRpcError(lastErr),
+        mode: this.cfg.agent.getExecutionMode(),
         error: lastErr instanceof Error ? lastErr.message : String(lastErr),
       });
       this.cfg.onError?.(lastErr, this.consecutiveErrors);
       const maxErrs = this.cfg.maxConsecutiveErrors ?? 5;
-      if (this.consecutiveErrors >= maxErrs) {
+      if (this.consecutiveErrors >= maxErrs && !autoRecover) {
         this.cfg.agent.setPaused(true);
       }
+      this.emitHealthTransitionIfChanged("cycle_failed");
       return null;
     } finally {
       this.inFlight = false;

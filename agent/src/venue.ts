@@ -152,6 +152,15 @@ export class VenueSelector {
     };
 
     // 3. Deterministic venue selection
+    if (snapshot.anomalies.length > 0) {
+      return {
+        selectedVenue: "NONE",
+        rationale: `Market observation unhealthy — blocked by anomalies: [${snapshot.anomalies.join("; ")}]`,
+        tranche: trancheRoute,
+        hskswap: hskswapRoute,
+      };
+    }
+
     if (!trancheRoute.eligible && !hskswapRoute.eligible) {
       return {
         selectedVenue: "NONE",

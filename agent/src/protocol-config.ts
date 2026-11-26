@@ -3,7 +3,7 @@ import { PRICE_SCALE, ceilDiv } from "./hskswap.js";
 import type { OracleReader, OracleReading } from "./market.js";
 import type { AgentExecutionMode } from "./runtime.js";
 
-export type AgentDataSourceMode = "fixture" | "dry_run" | "fork";
+export type AgentDataSourceMode = "fixture" | "dry_run" | "fork" | "chain177_read_only";
 
 export const CANONICAL_CHAIN_177_TOKENS = {
   WHSK: { address: "0xB210D2120d57b758EE163cFfb43e73728c471Cf1" as Address, decimals: 18, symbol: "WHSK" },
@@ -46,8 +46,8 @@ export function validateRuntimeSafety(params: RuntimeSafetyCheckParams): void {
   const { dataSource, executionMode, rpcUrl, chainId } = params;
 
   if (dataSource === "fixture") {
-    if (executionMode !== "dry_run") {
-      throw new Error("SAFETY_BLOCKED: fixture data source must run in dry_run mode");
+    if (executionMode !== "dry_run" && executionMode !== "read_only") {
+      throw new Error("SAFETY_BLOCKED: fixture data source must run in dry_run or read_only mode");
     }
     return;
   }
@@ -56,8 +56,18 @@ export function validateRuntimeSafety(params: RuntimeSafetyCheckParams): void {
     throw new Error(`SAFETY_BLOCKED: rpcUrl is required for dataSource=${dataSource}`);
   }
 
+  if (dataSource === "chain177_read_only") {
+    if (executionMode !== "read_only") {
+      throw new Error("SAFETY_BLOCKED: chain177_read_only data source strictly requires read_only executionMode");
+    }
+    if (chainId !== undefined && chainId !== 177) {
+      throw new Error(`SAFETY_BLOCKED: chain177_read_only strictly requires Chain 177 (got ${chainId})`);
+    }
+    return;
+  }
+
   if (dataSource === "dry_run") {
-    if (executionMode !== "dry_run") {
+    if (executionMode !== "dry_run" && executionMode !== "read_only") {
       throw new Error("SAFETY_BLOCKED: dry_run data source cannot enable live execution");
     }
     if (chainId !== undefined && chainId !== 177 && chainId !== 133 && chainId !== 31337) {
