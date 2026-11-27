@@ -82,6 +82,8 @@ export function AppShell({
     isConnected,
     isWrongNetwork,
     connecting,
+    connectingWalletRdns,
+    lastUsedWalletRdns,
     switching,
     error,
     connect,
@@ -612,34 +614,44 @@ export function AppShell({
 
           <div className="mt-2 flex flex-col gap-2.5">
             {wallets.length > 0 ? (
-              wallets.map((w) => (
-                <button
-                  key={w.uuid}
-                  type="button"
-                  disabled={connecting}
-                  onClick={async () => {
-                    const ok = await connect(w.provider);
-                    if (ok) setWalletDialogOpen(false);
-                  }}
-                  className="group flex min-h-[54px] w-full items-center justify-between rounded-[14px] border border-border bg-background px-4 py-2.5 text-left transition-colors hover:bg-accent disabled:opacity-50 cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    {w.icon ? (
-                      <img src={w.icon} alt={w.name} className="size-7 rounded-lg object-contain" />
+              wallets.map((w) => {
+                const walletKey = w.rdns || w.uuid;
+                const isLastUsed = Boolean(lastUsedWalletRdns && walletKey === lastUsedWalletRdns);
+                const isThisConnecting = connecting && connectingWalletRdns === walletKey;
+                return (
+                  <button
+                    key={w.uuid}
+                    type="button"
+                    disabled={connecting}
+                    onClick={async () => {
+                      const ok = await connect(w.provider, walletKey);
+                      if (ok) setWalletDialogOpen(false);
+                    }}
+                    className="group flex min-h-[54px] w-full items-center justify-between rounded-[14px] border border-border bg-background px-4 py-2.5 text-left transition-colors hover:bg-accent disabled:opacity-50 cursor-pointer"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      {w.icon ? (
+                        <img src={w.icon} alt={w.name} className="size-7 shrink-0 rounded-lg object-contain" />
+                      ) : (
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent text-foreground">
+                          <Wallet className="size-4" />
+                        </span>
+                      )}
+                      <span className="truncate text-sm font-medium text-foreground">{w.name}</span>
+                      {isLastUsed && (
+                        <span className="shrink-0 rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium leading-none text-emerald-400">
+                          Last used
+                        </span>
+                      )}
+                    </div>
+                    {isThisConnecting ? (
+                      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
                     ) : (
-                      <span className="flex size-7 items-center justify-center rounded-lg bg-accent text-foreground">
-                        <Wallet className="size-4" />
-                      </span>
+                      <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                     )}
-                    <span className="text-sm font-medium text-foreground">{w.name}</span>
-                  </div>
-                  {connecting ? (
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                  ) : (
-                    <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-                  )}
-                </button>
-              ))
+                  </button>
+                );
+              })
             ) : hasInjectedFallback ? (
               <Button
                 type="button"

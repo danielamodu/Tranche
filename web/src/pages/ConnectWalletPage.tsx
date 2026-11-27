@@ -24,6 +24,8 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
     isConnected,
     isWrongNetwork,
     connecting,
+    connectingWalletRdns,
+    lastUsedWalletRdns,
     switching,
     error,
     selectedRole,
@@ -112,38 +114,54 @@ export function ConnectWalletPage({ onNavigate }: ConnectWalletPageProps) {
               {/* Discovered EIP-6963 Wallets */}
               <div className="flex flex-col gap-2">
                 {wallets.length > 0 ? (
-                  wallets.map((w) => (
-                    <button
-                      key={w.uuid}
-                      type="button"
-                      disabled={connecting}
-                      onClick={() => connect(w.provider)}
-                      className="glass-pill glass-pill-interactive group flex min-h-[48px] w-full items-center justify-between rounded-[14px] px-3.5 py-2 text-left disabled:opacity-50 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        {w.icon ? (
-                          <img
-                            src={w.icon}
-                            alt={w.name}
-                            className="size-8 rounded-lg object-contain"
-                          />
-                        ) : (
-                          <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-foreground">
-                            <Wallet className="size-4" />
-                          </span>
-                        )}
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-foreground">{w.name}</span>
-                          <span className="text-[11px] text-muted-foreground">Detected</span>
+                  wallets.map((w) => {
+                    const walletKey = w.rdns || w.uuid;
+                    const isLastUsed = Boolean(lastUsedWalletRdns && walletKey === lastUsedWalletRdns);
+                    const isThisConnecting = connecting && connectingWalletRdns === walletKey;
+                    return (
+                      <button
+                        key={w.uuid}
+                        type="button"
+                        disabled={connecting}
+                        onClick={() => connect(w.provider, walletKey)}
+                        className="glass-pill glass-pill-interactive group flex min-h-[52px] w-full items-center justify-between rounded-[14px] px-3.5 py-2 text-left disabled:opacity-50 cursor-pointer"
+                      >
+                        <div className="flex min-w-0 items-center gap-3.5">
+                          {w.icon ? (
+                            <img
+                              src={w.icon}
+                              alt={w.name}
+                              className="size-8 shrink-0 rounded-lg object-contain"
+                            />
+                          ) : (
+                            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-foreground">
+                              <Wallet className="size-4" />
+                            </span>
+                          )}
+                          <div className="flex min-w-0 flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium text-foreground">
+                                {w.name}
+                              </span>
+                              {isLastUsed && (
+                                <span className="shrink-0 rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium leading-none text-emerald-400">
+                                  Last used
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-muted-foreground">
+                              {isLastUsed ? "Previously connected" : "Detected"}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      {connecting ? (
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                      ) : (
-                        <ArrowRight className="size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground" />
-                      )}
-                    </button>
-                  ))
+                        {isThisConnecting ? (
+                          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                        ) : (
+                          <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground" />
+                        )}
+                      </button>
+                    );
+                  })
                 ) : hasInjectedFallback ? (
                   <button
                     type="button"

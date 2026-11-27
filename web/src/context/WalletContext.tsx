@@ -43,10 +43,12 @@ interface WalletContextValue {
   isConnected: boolean;
   isWrongNetwork: boolean;
   connecting: boolean;
+  connectingWalletRdns: string | null;
+  lastUsedWalletRdns: string | null;
   switching: boolean;
   error: string | null;
   selectedRole: UserRole | null;
-  connect: (provider?: Eip1193Provider) => Promise<boolean>;
+  connect: (provider?: Eip1193Provider, walletRdns?: string) => Promise<boolean>;
   switchToActiveChain: () => Promise<boolean>;
   disconnect: () => void;
   setSelectedRole: (role: UserRole) => void;
@@ -150,6 +152,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [chainId, setChainId] = useState<number | null>(null);
   const [hskBalance, setHskBalance] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [connectingWalletRdns, setConnectingWalletRdns] = useState<string | null>(null);
+  const [lastUsedWalletRdns, setLastUsedWalletRdns] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("tranche-wallet-rdns");
+    } catch {
+      return null;
+    }
+  });
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRole, setSelectedRoleState] = useState<UserRole | null>(() => {
@@ -160,19 +170,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Silent auto-reconnect for returning users (eth_accounts — never triggers a popup)
   useEffect(() => {
     if (address || localStorage.getItem("tranche-disconnected") === "1") return;
-    const preferredRdns = localStorage.getItem("tranche-wallet-rdns");
+    const preferredRdns = lastUsedWalletRdns ?? localStorage.getItem("tranche-wallet-rdns");
     const win = getWindowWithWallets();
 
     // Build deduplicated priority list: saved wallet -> Zerion -> all EIP-6963 wallets -> window.ethereum
-    const candidates: Eip1193Provider[] = [];
-    const pushUnique = (p?: Eip1193Provider) => {
-      if (p && !candidates.includes(p)) candidates.push(p);
+    const candidates: Array<{ provider: Eip1193Provider; rdns?: string }> = [];
+    const seen = new Set<Eip1193Provider>();
+    const pushUnique = (p?: Eip1193Provider, rdns?: string) => {
+      if (p && !seen.has(p)) {
+        seen.add(p);
+        candidates.push({ provider: p, rdns });
+      }
     };
     if (preferredRdns) {
-      pushUnique(wallets.find((w) => w.rdns === preferredRdns)?.provider);
+      const preferred = wallets.find((w) => (w.rdns || w.uuid) === preferredRdns);
+      pushUnique(preferred?.provider, preferred?.rdns || preferred?.uuid);
     }
-    pushUnique(win.zerionWallet);
-    for (const w of wallets) pushUnique(w.provider);
+    for (const w of wallets) pushUnique(w.provider, w.rdns || w.uuid);
+    pushUnique(win.zerionWallet, "io.zerion.wallet");
     if (Array.isArray(win.ethereum?.providers)) {
       for (const p of win.ethereum.providers) pushUnique(p);
     }
@@ -180,20 +195,45 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     if (candidates.length === 0) return;
 
+    const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
+      new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("timeout")), ms);
+        promise.then(
+          (val) => {
+            clearTimeout(timer);
+            resolve(val);
+          },
+          (err) => {
+            clearTimeout(timer);
+            reject(err);
+          },
+        );
+      });
+
     let cancelled = false;
     (async () => {
       for (const candidate of candidates) {
         if (cancelled) return;
         try {
-          const accs = await candidate.request({ method: "eth_accounts" });
+          const accs = await withTimeout(
+            candidate.provider.request({ method: "eth_accounts" }),
+            3_500,
+          );
           if (cancelled) return;
           const list = Array.isArray(accs) ? (accs as Address[]) : [];
           if (list.length === 0) continue;
-          const hexChain = (await candidate.request({ method: "eth_chainId" })) as string;
+          const hexChain = (await withTimeout(
+            candidate.provider.request({ method: "eth_chainId" }),
+            3_500,
+          )) as string;
           if (cancelled) return;
-          setActiveProvider(candidate);
+          setActiveProvider(candidate.provider);
           setAddress(list[0]);
           setChainId(Number.parseInt(hexChain, 16));
+          if (candidate.rdns) {
+            localStorage.setItem("tranche-wallet-rdns", candidate.rdns);
+            setLastUsedWalletRdns(candidate.rdns);
+          }
           return;
         } catch {
           // try next wallet provider
@@ -204,7 +244,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [wallets, address]);
+  }, [wallets, address, lastUsedWalletRdns]);
 
   // EIP-6963 multi-wallet discovery + legacy window.ethereum.providers / window.zerionWallet fallback
   useEffect(() => {
@@ -342,58 +382,68 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
   }, [activeProvider]);
 
-  const connect = useCallback(async (chosenProvider?: Eip1193Provider): Promise<boolean> => {
-    const provider = chosenProvider ?? getWindowWithWallets().ethereum;
-    if (!provider) {
-      setError("No browser wallet detected. Install MetaMask, Zerion, or Rabby to continue.");
-      return false;
-    }
-
-    setError(null);
-    setConnecting(true);
-    try {
-      const accounts = (await provider.request({ method: "eth_requestAccounts" })) as Address[];
-      if (!accounts || accounts.length === 0) {
-        setError("Wallet connection returned no account.");
+  const connect = useCallback(
+    async (chosenProvider?: Eip1193Provider, explicitWalletRdns?: string): Promise<boolean> => {
+      const provider = chosenProvider ?? getWindowWithWallets().ethereum;
+      if (!provider) {
+        setError("No browser wallet detected. Install MetaMask, Zerion, or Rabby to continue.");
         return false;
       }
-      const hexChain = (await provider.request({ method: "eth_chainId" })) as string;
-      let currentChain = Number.parseInt(hexChain, 16);
 
-      setActiveProvider(provider);
-      setAddress(accounts[0]);
-      setChainId(currentChain);
-      localStorage.removeItem("tranche-disconnected");
       const matched = wallets.find((w) => w.provider === provider);
-      if (matched?.rdns) localStorage.setItem("tranche-wallet-rdns", matched.rdns);
+      const resolvedRdns = explicitWalletRdns ?? matched?.rdns ?? matched?.uuid ?? null;
 
-      // Automatically switch to / add HashKey Chain right after connecting
-      if (currentChain !== ACTIVE_NETWORK.chainId) {
-        setSwitching(true);
-        try {
-          await ensureActiveChain(provider);
-          currentChain = ACTIVE_NETWORK.chainId;
-          setChainId(currentChain);
-        } catch (chainErr) {
-          const msg =
-            chainErr instanceof Error
-              ? chainErr.message
-              : `Please approve adding ${ACTIVE_NETWORK.name} (Chain ${ACTIVE_NETWORK.chainId}).`;
-          setError(msg);
-        } finally {
-          setSwitching(false);
+      setError(null);
+      setConnecting(true);
+      setConnectingWalletRdns(resolvedRdns);
+      try {
+        const accounts = (await provider.request({ method: "eth_requestAccounts" })) as Address[];
+        if (!accounts || accounts.length === 0) {
+          setError("Wallet connection returned no account.");
+          return false;
         }
-      }
+        const hexChain = (await provider.request({ method: "eth_chainId" })) as string;
+        let currentChain = Number.parseInt(hexChain, 16);
 
-      return true;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Connection request was rejected.";
-      setError(msg.includes("User rejected") ? "Connection request rejected in wallet." : msg);
-      return false;
-    } finally {
-      setConnecting(false);
-    }
-  }, []);
+        setActiveProvider(provider);
+        setAddress(accounts[0]);
+        setChainId(currentChain);
+        localStorage.removeItem("tranche-disconnected");
+        if (resolvedRdns) {
+          localStorage.setItem("tranche-wallet-rdns", resolvedRdns);
+          setLastUsedWalletRdns(resolvedRdns);
+        }
+
+        // Automatically switch to / add HashKey Chain right after connecting
+        if (currentChain !== ACTIVE_NETWORK.chainId) {
+          setSwitching(true);
+          try {
+            await ensureActiveChain(provider);
+            currentChain = ACTIVE_NETWORK.chainId;
+            setChainId(currentChain);
+          } catch (chainErr) {
+            const msg =
+              chainErr instanceof Error
+                ? chainErr.message
+                : `Please approve adding ${ACTIVE_NETWORK.name} (Chain ${ACTIVE_NETWORK.chainId}).`;
+            setError(msg);
+          } finally {
+            setSwitching(false);
+          }
+        }
+
+        return true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Connection request was rejected.";
+        setError(msg.includes("User rejected") ? "Connection request rejected in wallet." : msg);
+        return false;
+      } finally {
+        setConnecting(false);
+        setConnectingWalletRdns(null);
+      }
+    },
+    [wallets],
+  );
 
   const switchToActiveChain = useCallback(async (): Promise<boolean> => {
     const provider = activeProvider ?? getWindowWithWallets().ethereum;
@@ -434,9 +484,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const sortedWallets = useMemo(() => {
+    if (!lastUsedWalletRdns) return wallets;
+    return [...wallets].sort((a, b) => {
+      const aLast = (a.rdns || a.uuid) === lastUsedWalletRdns ? 0 : 1;
+      const bLast = (b.rdns || b.uuid) === lastUsedWalletRdns ? 0 : 1;
+      return aLast - bLast;
+    });
+  }, [wallets, lastUsedWalletRdns]);
+
   const value = useMemo<WalletContextValue>(
     () => ({
-      wallets,
+      wallets: sortedWallets,
       activeProvider,
       hasInjectedFallback: Boolean(getWindowWithWallets().ethereum),
       address,
@@ -445,6 +504,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       isConnected: Boolean(address),
       isWrongNetwork: Boolean(address && chainId !== null && chainId !== ACTIVE_NETWORK.chainId),
       connecting,
+      connectingWalletRdns,
+      lastUsedWalletRdns,
       switching,
       error,
       selectedRole,
@@ -455,12 +516,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       clearError,
     }),
     [
-      wallets,
+      sortedWallets,
       activeProvider,
       address,
       chainId,
       hskBalance,
       connecting,
+      connectingWalletRdns,
+      lastUsedWalletRdns,
       switching,
       error,
       selectedRole,

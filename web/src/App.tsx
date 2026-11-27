@@ -62,6 +62,33 @@ function getHostKind(): "marketing" | "app" | "local" {
   return "local";
 }
 
+const RETURNING_WORKSPACE_ROUTES = new Set<AppRoute>([
+  "/agent",
+  "/agent/activity",
+  "/agent/policy",
+  "/trade",
+  "/tickets",
+  "/vault",
+  "/payments",
+]);
+
+function getSavedReturningRoute(): AppRoute | null {
+  try {
+    const lastRoute = localStorage.getItem("tranche-last-route") as AppRoute | null;
+    if (lastRoute && RETURNING_WORKSPACE_ROUTES.has(lastRoute)) {
+      return lastRoute;
+    }
+    const role = localStorage.getItem("tranche-role");
+    if (role === "agent") return "/agent";
+    if (role === "lp") return "/vault";
+    if (role === "trader") return "/trade";
+    if (localStorage.getItem("tranche-wallet-rdns")) return "/agent";
+  } catch {
+    // ignore storage errors
+  }
+  return null;
+}
+
 function resolveRoute(pathname: string, hostKind: "marketing" | "app" | "local"): AppRoute {
   if (pathname === "/docs") return "/docs";
   if (pathname === "/privacy") return "/privacy";
@@ -75,7 +102,10 @@ function resolveRoute(pathname: string, hostKind: "marketing" | "app" | "local")
   if (pathname === "/agent/activity") return "/agent/activity";
   if (pathname === "/agent/policy") return "/agent/policy";
   if (pathname === "/payments") return "/payments";
-  return hostKind === "app" ? "/connect" : "/";
+  if (hostKind === "app") {
+    return getSavedReturningRoute() ?? "/connect";
+  }
+  return "/";
 }
 
 function RouteFallback() {
@@ -87,6 +117,20 @@ function AppRouter() {
   const [route, setRoute] = useState<AppRoute>(() =>
     resolveRoute(window.location.pathname, hostKind),
   );
+
+  // Persist last visited workspace route so returning users skip /connect on app.tranche.space
+  useEffect(() => {
+    if (RETURNING_WORKSPACE_ROUTES.has(route)) {
+      try {
+        localStorage.setItem("tranche-last-route", route);
+      } catch {
+        // ignore storage errors
+      }
+      if (hostKind === "app" && window.location.pathname === "/") {
+        window.history.replaceState({}, "", route);
+      }
+    }
+  }, [route, hostKind]);
 
   useEffect(() => {
     const onPopState = () => {
