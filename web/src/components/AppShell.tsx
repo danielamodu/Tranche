@@ -170,7 +170,7 @@ export function AppShell({
   const paymentsNav = [{ path: "/payments" as const, label: "HSP Payments", icon: CreditCard }];
 
   const sidebarWidth = collapsed ? "w-[72px]" : "w-[236px]";
-  const mainPadding = collapsed ? "lg:pl-[72px]" : "lg:pl-[236px]";
+  const mainPadding = collapsed ? "lg:pl-[96px]" : "lg:pl-[260px]";
 
   const networkLabel =
     ACTIVE_NETWORK.chainId === 133
@@ -180,9 +180,9 @@ export function AppShell({
         : `Chain ${ACTIVE_NETWORK.chainId}`;
 
   const sidebarBody = (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+    <div className="glass-panel flex h-full flex-col overflow-hidden rounded-[24px] text-sidebar-foreground">
       {/* Top Brand Header + Collapse Toggle (always pinned) */}
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
+      <div className="flex h-15 shrink-0 items-center justify-between border-b border-border/60 px-4">
         <button
           type="button"
           onClick={() => onNavigate("/")}
@@ -196,7 +196,7 @@ export function AppShell({
             type="button"
             aria-label="Collapse sidebar"
             onClick={() => setCollapsed(true)}
-            className="hidden size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground lg:inline-flex cursor-pointer"
+            className="hidden size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground lg:inline-flex cursor-pointer"
           >
             <PanelLeftClose className="size-4" />
           </button>
@@ -225,11 +225,11 @@ export function AppShell({
                     onNavigate(item.path);
                   }}
                   className={cn(
-                    "flex h-9 w-full items-center rounded-[10px] text-[13px] font-medium transition-colors duration-150 cursor-pointer",
+                    "flex h-9 w-full items-center rounded-[12px] text-[13px] font-medium transition-all duration-150 active:scale-[0.985] cursor-pointer",
                     collapsed ? "justify-center px-0" : "justify-between px-2.5",
                     active
-                      ? "bg-sidebar-accent text-foreground shadow-[inset_0_0_0_1px_var(--border)]"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                      ? "glass-nav-active text-foreground"
+                      : "text-muted-foreground hover:bg-foreground/[0.045] hover:text-foreground",
                   )}
                 >
                   <span className="inline-flex items-center gap-2.5">
@@ -261,11 +261,11 @@ export function AppShell({
                     onNavigate(item.path);
                   }}
                   className={cn(
-                    "flex h-9 w-full items-center rounded-[10px] text-[13px] font-medium transition-colors duration-150 cursor-pointer",
+                    "flex h-9 w-full items-center rounded-[12px] text-[13px] font-medium transition-all duration-150 active:scale-[0.985] cursor-pointer",
                     collapsed ? "justify-center px-0" : "justify-between px-2.5",
                     active
-                      ? "bg-sidebar-accent text-foreground shadow-[inset_0_0_0_1px_var(--border)]"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                      ? "glass-nav-active text-foreground"
+                      : "text-muted-foreground hover:bg-foreground/[0.045] hover:text-foreground",
                   )}
                 >
                   <span className="inline-flex items-center gap-2.5">
@@ -302,11 +302,11 @@ export function AppShell({
                     onNavigate(item.path);
                   }}
                   className={cn(
-                    "flex h-9 w-full items-center rounded-[10px] text-[13px] font-medium transition-colors duration-150 cursor-pointer",
+                    "flex h-9 w-full items-center rounded-[12px] text-[13px] font-medium transition-all duration-150 active:scale-[0.985] cursor-pointer",
                     collapsed ? "justify-center px-0" : "justify-between px-2.5",
                     active
-                      ? "bg-sidebar-accent text-foreground shadow-[inset_0_0_0_1px_var(--border)]"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                      ? "glass-nav-active text-foreground"
+                      : "text-muted-foreground hover:bg-foreground/[0.045] hover:text-foreground",
                   )}
                 >
                   <span className="inline-flex items-center gap-2.5">
@@ -414,29 +414,29 @@ export function AppShell({
 
   return (
     <div className="flex min-h-[100svh] bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
-      {/* Desktop Fixed Left Sidebar (lg+ so portrait tablets get full width) */}
+      {/* Desktop Floating Apple Liquid Glass Sidebar (lg+ so portrait tablets get full width) */}
       <aside
         className={cn(
-          "hidden shrink-0 border-r border-sidebar-border transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:block",
+          "hidden shrink-0 transition-[width] duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] lg:fixed lg:top-3 lg:bottom-3 lg:left-3 lg:z-40 lg:block",
           sidebarWidth,
         )}
       >
         {sidebarBody}
       </aside>
 
-      {/* Mobile & Tablet Drawer Overlay */}
+      {/* Mobile & Tablet Floating Apple Liquid Glass Drawer Overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
+        <div className="fixed inset-0 z-50 flex p-3 lg:hidden">
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/45 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative z-10 flex w-[256px] max-w-[82vw] flex-col border-r border-sidebar-border">
+          <div className="relative z-10 flex w-[256px] max-w-[82vw] flex-col">
             <button
               type="button"
               aria-label="Close navigation"
               onClick={() => setMobileOpen(false)}
-              className="absolute top-4 right-3 z-20 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+              className="absolute top-3.5 right-3 z-20 inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground cursor-pointer"
             >
               <X className="size-4" />
             </button>
@@ -446,15 +446,15 @@ export function AppShell({
       )}
 
       {/* Main Workspace Area */}
-      <div className={cn("flex min-w-0 flex-1 flex-col transition-[padding] duration-200", mainPadding)}>
-        {/* Vestra-Grade Breadcrumb Top Bar + Dark/Light Toggle */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-card/90 px-3.5 backdrop-blur-md sm:h-16 sm:gap-4 sm:px-6">
+      <div className={cn("flex min-w-0 flex-1 flex-col transition-[padding] duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]", mainPadding)}>
+        {/* Floating Apple Liquid Glass Top Header Bar */}
+        <header className="glass-panel sticky top-2.5 z-30 mx-3 mt-2.5 flex h-14 items-center justify-between gap-2 rounded-[20px] px-3.5 sm:mx-5 sm:h-15 sm:gap-4 sm:px-5 lg:mx-6 lg:mt-3">
           <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
             <button
               type="button"
               aria-label="Open navigation"
               onClick={() => setMobileOpen(true)}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-border bg-background text-foreground lg:hidden cursor-pointer"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/60 text-foreground transition-colors hover:bg-foreground/5 lg:hidden cursor-pointer"
             >
               <Menu className="size-4" />
             </button>
@@ -482,7 +482,7 @@ export function AppShell({
               <div className="hidden items-center gap-2 md:flex">{headerActions}</div>
             )}
 
-            <span className="tabular-nums-mono hidden items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground lg:inline-flex">
+            <span className="glass-pill tabular-nums-mono hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-muted-foreground lg:inline-flex">
               <span
                 className={cn(
                   "size-1.5 rounded-full",
@@ -551,9 +551,9 @@ export function AppShell({
           </div>
         </header>
 
-        {/* Mobile & Tablet Utility Bar: Always-visible Chain Pill (< lg) + Page Actions (< md) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card/75 px-3.5 py-2 sm:px-6 lg:hidden">
-          <span className="tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] text-muted-foreground">
+        {/* Mobile & Tablet Floating Liquid Glass Utility Bar: Always-visible Chain Pill (< lg) + Page Actions (< md) */}
+        <div className="glass-panel mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 rounded-[16px] px-3.5 py-2 sm:mx-5 sm:px-4 lg:hidden">
+          <span className="glass-pill tabular-nums-mono inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] text-muted-foreground">
             <span
               className={cn(
                 "size-1.5 rounded-full",
