@@ -137,7 +137,7 @@ export function TicketSpecimen({
         ref={cardRef}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
-        className="relative w-full pt-3 [perspective:1100px]"
+        className="relative w-full pt-8 sm:pt-3 [perspective:1100px]"
       >
         <div
           style={{
@@ -151,7 +151,7 @@ export function TicketSpecimen({
           {/* Silhouette-breaking Apple Liquid Glass Overhang Pill (Ethena Pay inspired) */}
           <div
             key={`overhang-${stage}`}
-            className="animate-rise glass-pill absolute -top-5 -right-2 z-20 flex items-center gap-2.5 rounded-full px-3.5 py-2 sm:-right-5"
+            className="animate-rise glass-pill absolute -top-7 right-2 z-20 flex max-w-[calc(100%-16px)] items-center gap-2 rounded-full px-3 py-1.5 sm:-top-5 sm:-right-5 sm:gap-2.5 sm:px-3.5 sm:py-2"
           >
             <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
               {meta.icon === "lock" && <Lock className="size-3" />}

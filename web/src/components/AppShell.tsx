@@ -170,7 +170,14 @@ export function AppShell({
   const paymentsNav = [{ path: "/payments" as const, label: "HSP Payments", icon: CreditCard }];
 
   const sidebarWidth = collapsed ? "w-[72px]" : "w-[236px]";
-  const mainPadding = collapsed ? "md:pl-[72px]" : "md:pl-[236px]";
+  const mainPadding = collapsed ? "lg:pl-[72px]" : "lg:pl-[236px]";
+
+  const networkLabel =
+    ACTIVE_NETWORK.chainId === 133
+      ? "Chain 133 — Testnet"
+      : ACTIVE_NETWORK.chainId === 177
+        ? "Chain 177 — Mainnet (Read-Only)"
+        : `Chain ${ACTIVE_NETWORK.chainId}`;
 
   const sidebarBody = (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -189,7 +196,7 @@ export function AppShell({
             type="button"
             aria-label="Collapse sidebar"
             onClick={() => setCollapsed(true)}
-            className="hidden size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground md:inline-flex cursor-pointer"
+            className="hidden size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground lg:inline-flex cursor-pointer"
           >
             <PanelLeftClose className="size-4" />
           </button>
@@ -407,19 +414,19 @@ export function AppShell({
 
   return (
     <div className="flex min-h-[100svh] bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
-      {/* Desktop Fixed Left Sidebar */}
+      {/* Desktop Fixed Left Sidebar (lg+ so portrait tablets get full width) */}
       <aside
         className={cn(
-          "hidden shrink-0 border-r border-sidebar-border transition-[width] duration-200 md:fixed md:inset-y-0 md:left-0 md:z-40 md:block",
+          "hidden shrink-0 border-r border-sidebar-border transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:block",
           sidebarWidth,
         )}
       >
         {sidebarBody}
       </aside>
 
-      {/* Mobile Drawer Overlay */}
+      {/* Mobile & Tablet Drawer Overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
+        <div className="fixed inset-0 z-50 flex lg:hidden">
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-xs"
             onClick={() => setMobileOpen(false)}
@@ -441,37 +448,39 @@ export function AppShell({
       {/* Main Workspace Area */}
       <div className={cn("flex min-w-0 flex-1 flex-col transition-[padding] duration-200", mainPadding)}>
         {/* Vestra-Grade Breadcrumb Top Bar + Dark/Light Toggle */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-card/90 px-5 backdrop-blur-md sm:px-7">
-          <div className="flex min-w-0 items-center gap-3">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-card/90 px-3.5 backdrop-blur-md sm:h-16 sm:gap-4 sm:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
             <button
               type="button"
               aria-label="Open navigation"
               onClick={() => setMobileOpen(true)}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-border bg-background text-foreground md:hidden"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-border bg-background text-foreground lg:hidden cursor-pointer"
             >
               <Menu className="size-4" />
             </button>
 
             {/* Breadcrumb Trail */}
             <div className="flex min-w-0 flex-col">
-              <div className="flex items-center gap-1.5 text-sm">
-                <span className="hidden text-muted-foreground sm:inline">Dashboard</span>
-                <ChevronRight className="hidden size-3.5 text-muted-foreground/70 sm:inline" />
+              <div className="flex min-w-0 items-center gap-1.5 text-sm">
+                <span className="hidden text-muted-foreground lg:inline">Dashboard</span>
+                <ChevronRight className="hidden size-3.5 text-muted-foreground/70 lg:inline" />
                 <h1 className="truncate font-display text-sm font-semibold tracking-[-0.02em] text-foreground sm:text-[15px]">
                   {title}
                 </h1>
               </div>
               {subtitle && (
-                <span className="tabular-nums-mono truncate text-[11px] text-muted-foreground">
+                <span className="tabular-nums-mono hidden truncate text-[11px] text-muted-foreground sm:block">
                   {subtitle}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Right Utility Cluster: Actions + Network Chip + Dark/Light Toggle + Refresh */}
-          <div className="flex shrink-0 items-center gap-2">
-            {headerActions}
+          {/* Right Utility Cluster: Actions (md+) + Network Chip (lg+) + Wallet + Theme + Refresh */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            {headerActions && (
+              <div className="hidden items-center gap-2 md:flex">{headerActions}</div>
+            )}
 
             <span className="tabular-nums-mono hidden items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground lg:inline-flex">
               <span
@@ -480,11 +489,7 @@ export function AppShell({
                   ACTIVE_NETWORK.isLive ? "bg-status-live" : "bg-amber-400",
                 )}
               />
-              {ACTIVE_NETWORK.chainId === 133
-                ? "Chain 133 — Testnet"
-                : ACTIVE_NETWORK.chainId === 177
-                  ? "Chain 177 — Mainnet (Read-Only)"
-                  : `Chain ${ACTIVE_NETWORK.chainId}`}
+              {networkLabel}
             </span>
 
             {isConnected && address ? (
@@ -545,6 +550,22 @@ export function AppShell({
             )}
           </div>
         </header>
+
+        {/* Mobile & Tablet Utility Bar: Always-visible Chain Pill (< lg) + Page Actions (< md) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card/75 px-3.5 py-2 sm:px-6 lg:hidden">
+          <span className="tabular-nums-mono inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] text-muted-foreground">
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                ACTIVE_NETWORK.isLive ? "bg-status-live" : "bg-amber-400",
+              )}
+            />
+            {networkLabel}
+          </span>
+          {headerActions && (
+            <div className="flex flex-wrap items-center gap-2 md:hidden">{headerActions}</div>
+          )}
+        </div>
 
         {/* Mainnet Deployment Pending Banner */}
         {!ACTIVE_NETWORK.isLive && !activeRoute.startsWith("/agent") && (

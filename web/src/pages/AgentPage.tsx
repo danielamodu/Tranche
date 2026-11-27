@@ -905,7 +905,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                     void handleProposePolicy();
                   }
                 }}
-                placeholder='e.g. "Switch to momentum, take profit 4%, stop loss 2%, max slippage 0.8%"'
+                placeholder='e.g. "Switch to momentum, 4% take profit"'
                 className="h-12 flex-1 rounded-full border border-black/15 bg-white px-5 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
               />
               <div className="flex shrink-0 items-center gap-2">
@@ -1152,7 +1152,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
       {view === "activity" && (
         <div className="flex w-full flex-col gap-5 lg:h-[calc(100svh-120px)] lg:overflow-hidden">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1 rounded-full border border-border bg-card p-1 text-xs">
+            <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-border bg-card p-1 text-xs">
               {(
                 [
                   { id: "decisions", label: `Decisions (${snapshot?.decisions.length ?? 0})` },
@@ -1166,7 +1166,7 @@ export function AgentPage({ view = "overview", onNavigate }: AgentPageProps) {
                   type="button"
                   onClick={() => setActiveTab(t.id)}
                   className={cn(
-                    "rounded-full px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+                    "shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 cursor-pointer",
                     activeTab === t.id
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground",

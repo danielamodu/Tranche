@@ -223,7 +223,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           <div
             aria-hidden="true"
             className={cn(
-              "glass-pill pointer-events-none absolute inset-y-0 left-1/2 w-full max-w-[960px] -translate-x-1/2 rounded-full will-change-[transform,opacity] transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+              "glass-pill pointer-events-none absolute inset-y-0 left-1/2 w-full max-w-[960px] -translate-x-1/2 rounded-full bg-background/90 backdrop-blur-md will-change-[transform,opacity] transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
               scrollState.compact ? "scale-x-100 opacity-100" : "scale-x-[1.12] opacity-0",
             )}
           />
@@ -249,7 +249,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
 
             {/* Center: Section links */}
-            <div className="hidden items-center justify-center gap-1 md:flex">
+            <div className="hidden items-center justify-center gap-1 lg:flex">
               <a
                 href="#mechanism"
                 className="rounded-full px-3.5 py-2 text-sm text-muted-foreground transition-colors duration-200 hover:bg-accent/60 hover:text-foreground"
@@ -776,7 +776,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   <button
                     type="button"
                     onClick={() => onNavigate("/docs")}
-                    className="transition-colors hover:text-foreground cursor-pointer"
+                    className="text-left transition-colors hover:text-foreground cursor-pointer"
                   >
                     Documentation
                   </button>
@@ -785,7 +785,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   <button
                     type="button"
                     onClick={() => onNavigate("/privacy")}
-                    className="transition-colors hover:text-foreground cursor-pointer"
+                    className="text-left transition-colors hover:text-foreground cursor-pointer"
                   >
                     Privacy Policy
                   </button>
@@ -794,7 +794,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   <button
                     type="button"
                     onClick={() => onNavigate("/terms")}
-                    className="transition-colors hover:text-foreground cursor-pointer"
+                    className="text-left transition-colors hover:text-foreground cursor-pointer"
                   >
                     Terms of Use
                   </button>
@@ -803,7 +803,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   <button
                     type="button"
                     onClick={handleLaunchApp}
-                    className="transition-colors hover:text-foreground cursor-pointer"
+                    className="text-left transition-colors hover:text-foreground cursor-pointer"
                   >
                     Launch App
                   </button>

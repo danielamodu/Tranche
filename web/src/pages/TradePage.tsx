@@ -317,8 +317,8 @@ export function TradePage({ onNavigate }: TradePageProps) {
               .
             </p>
           </div>
-          <div className="flex items-center gap-5 text-xs text-muted-foreground">
-            <span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+            <span className="whitespace-nowrap">
               Available:{" "}
               <strong className="tabular-nums-mono font-semibold text-foreground">
                 {loading
@@ -326,13 +326,13 @@ export function TradePage({ onNavigate }: TradePageProps) {
                   : `$${totalNotionalUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
               </strong>
             </span>
-            <span>
+            <span className="whitespace-nowrap">
               Open offers:{" "}
               <strong className="tabular-nums-mono font-semibold text-foreground">
                 {loading ? "—" : activeOffers.length}
               </strong>
             </span>
-            <span>
+            <span className="whitespace-nowrap">
               Tickets minted:{" "}
               <strong className="tabular-nums-mono font-semibold text-foreground">
                 {loading ? "—" : totalTickets}
@@ -376,9 +376,9 @@ export function TradePage({ onNavigate }: TradePageProps) {
             {/* Clean Bordered Table Card with internal scroll */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-border bg-card">
               <div className="hidden shrink-0 grid-cols-12 items-center border-b border-border px-5 py-3 text-xs font-medium text-muted-foreground sm:grid">
-                <span className="col-span-4">Token Pair</span>
+                <span className="col-span-5">Token Pair</span>
                 <span className="col-span-3 text-right">Available</span>
-                <span className="col-span-3 text-right">Locked Price</span>
+                <span className="col-span-2 text-right">Locked Price</span>
                 <span className="col-span-2 text-right">Hold Fee</span>
               </div>
 
@@ -433,7 +433,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
                               : "hover:bg-accent/55",
                           )}
                         >
-                          <div className="col-span-2 flex items-center gap-3 sm:col-span-4">
+                          <div className="col-span-2 flex items-center gap-3 sm:col-span-5">
                             <span
                               className={cn(
                                 "flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
@@ -443,7 +443,7 @@ export function TradePage({ onNavigate }: TradePageProps) {
                               {inv.symbol.replace(/^t/, "").slice(0, 3)}
                             </span>
                             <div className="flex min-w-0 flex-col">
-                              <span className="truncate text-sm font-semibold text-foreground">
+                              <span className="whitespace-nowrap text-sm font-semibold text-foreground">
                                 {inv.symbol} / {pay.symbol}
                               </span>
                               <span className="text-[11px] text-muted-foreground">
@@ -457,16 +457,16 @@ export function TradePage({ onNavigate }: TradePageProps) {
                             <span className="text-[10px] text-muted-foreground sm:hidden">
                               Available
                             </span>
-                            <span className="tabular-nums-mono text-sm font-medium text-foreground">
+                            <span className="tabular-nums-mono whitespace-nowrap text-sm font-medium text-foreground">
                               {formatTokenAmount(offer.availableBalance, inv.decimals)} {inv.symbol}
                             </span>
                           </div>
 
-                          <div className="flex flex-col sm:col-span-3 sm:items-end">
+                          <div className="flex flex-col sm:col-span-2 sm:items-end">
                             <span className="text-[10px] text-muted-foreground sm:hidden">
                               Locked Price
                             </span>
-                            <span className="tabular-nums-mono text-sm font-medium text-foreground">
+                            <span className="tabular-nums-mono whitespace-nowrap text-sm font-medium text-foreground">
                               {priceLabel}
                             </span>
                           </div>

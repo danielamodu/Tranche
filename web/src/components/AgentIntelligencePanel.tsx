@@ -110,7 +110,7 @@ export function AgentIntelligencePanel({ intelligence }: AgentIntelligencePanelP
       )}
 
       {/* Adaptive Strategy & Cross-Venue Evidence */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="flex flex-col gap-1.5 rounded-[12px] border border-border bg-background/50 p-3.5 text-xs">
           <span className="font-medium text-foreground">Adaptive Strategy &amp; Regime</span>
           {adaptiveStrategy ? (
@@ -171,7 +171,7 @@ export function AgentIntelligencePanel({ intelligence }: AgentIntelligencePanelP
       </div>
 
       {/* Evaluation Metrics (strictly measured, never simulated) */}
-      <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs sm:grid-cols-3 lg:grid-cols-5">
         <div>
           <span className="text-[11px] text-muted-foreground">Net P&amp;L (After Fees)</span>
           <div className="tabular-nums-mono mt-0.5 font-semibold text-foreground">
